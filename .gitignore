@@ -1,5 +1,4 @@
 .cursor
-*.txt
 *.cursorignore
 *.sql
 __pycache__

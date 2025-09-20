@@ -1,0 +1,11 @@
+fastapi==0.116.2
+uvicorn==0.36.0
+supabase==2.19.0
+pydantic==2.11.9
+pydantic-settings==2.10.1
+email-validator==2.3.0
+requests==2.32.5
+SQLAlchemy==2.0.36
+alembic==1.13.3
+psycopg[binary]==3.2.2
+python-dotenv==1.1.1
