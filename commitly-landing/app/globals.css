@@ -165,7 +165,7 @@ html, body, #__next { height: 100%; }
 .counter-shadow {
   filter: drop-shadow(0 8px 28px rgba(0,0,0,.55));
 }
-.dot-green { width: 8px; height: 8px; background: #22c55e; border-radius: 999px; }
+.dot-green { width: 8px; height: 8px; background: #22c55e; border-radius: 999px; box-shadow: 0 0 6px rgba(34, 197, 94, 0.75), 0 0 12px rgba(34, 197, 94, 0.45); }
 
 .section-h { font-size: clamp(28px, 3vw, 48px); letter-spacing: -0.02em; color: #d9d9d9; }
 .section-sub { color: #aaa; font-size: clamp(14px, 1.6vw, 22px); }

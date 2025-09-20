@@ -1,9 +1,13 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { createPortal } from 'react-dom'
-const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE
+
+const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE ?? 'https://commitly-m005.onrender.com'
+
+type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
+type SupportStatus = 'idle' | 'success' | 'error'
 
 export default function Page() {
     const [heroEmail, setHeroEmail] = useState('')
@@ -12,8 +16,10 @@ export default function Page() {
     const [message, setMessage] = useState('')
 
     const [waitlistCount, setWaitlistCount] = useState<number | null>(null)
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle')
+    const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false)
+    const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('idle')
+    const [isSubmittingSupport, setIsSubmittingSupport] = useState(false)
+    const [supportStatus, setSupportStatus] = useState<SupportStatus>('idle')
 
     const [showWaitlistModal, setShowWaitlistModal] = useState(false)
     const [showSupportModal, setShowSupportModal] = useState(false)
@@ -40,97 +46,140 @@ export default function Page() {
         return () => window.removeEventListener('scroll', handleScroll)
     }, [])
 
-    useEffect(() => {
-        const fetchCount = async () => {
-            if (!API_BASE) return
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/waitlist/count`)
-                if (!res.ok) return
-                const data = await res.json() as { count?: number }
-                if (typeof data.count === 'number') setWaitlistCount(data.count)
-            } catch { }
+    const fetchWaitlistCount = useCallback(async () => {
+        if (!API_BASE) {
+            console.error('Missing NEXT_PUBLIC_COMMITLY_API_BASE environment variable')
+            return
         }
-        fetchCount()
-        const t = setInterval(fetchCount, 30000)
-        return () => clearInterval(t)
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/waitlist/count`)
+            if (!res.ok) return
+            const data = (await res.json()) as { count?: number }
+            if (typeof data.count === 'number') setWaitlistCount(data.count)
+        } catch (error) {
+            console.error('Failed to fetch waitlist count', error)
+        }
     }, [])
+
+    useEffect(() => {
+        fetchWaitlistCount()
+        const t = setInterval(fetchWaitlistCount, 30_000)
+        return () => clearInterval(t)
+    }, [fetchWaitlistCount])
 
     useEffect(() => {
         const open = showWaitlistModal || showSupportModal
         document.body.classList.toggle('body-locked', open)
     }, [showWaitlistModal, showSupportModal])
 
-    async function submitWaitlist(email: string) {
-        if (!email) return
-        if (!API_BASE) {
-            setSubmitStatus('error')
-            return
-        }
-        setIsSubmitting(true)
-        try {
-            const res = await fetch(`${API_BASE}/api/v1/waitlist/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, source: 'landing' }),
-            })
-            if (!res.ok) throw new Error('failed')
-            setSubmitStatus('success')
-            setWaitlistCount(c => (c ?? 0) + 1)
-        } catch {
-            setSubmitStatus('error')
-        } finally {
-            setIsSubmitting(false)
-            setTimeout(() => setSubmitStatus('idle'), 1600)
-        }
-    }
+    const waitlistButtonLabel = useMemo(() => {
+        if (isSubmittingWaitlist) return 'Joining…'
+        if (waitlistStatus === 'success') return "You're in! 🚀"
+        if (waitlistStatus === 'duplicate') return 'Already joined'
+        if (waitlistStatus === 'error') return 'Try again'
+        return 'Join Waitlist'
+    }, [isSubmittingWaitlist, waitlistStatus])
 
-    const handleHeroSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        const eaddr = heroEmail
-        setHeroEmail('')
-        await submitWaitlist(eaddr)
-    }
+    const supportButtonLabel = useMemo(() => {
+        if (isSubmittingSupport) return 'Sending…'
+        if (supportStatus === 'success') return 'Thanks! We’ll reply soon.'
+        if (supportStatus === 'error') return 'Try again'
+        return 'Send'
+    }, [isSubmittingSupport, supportStatus])
 
-    const handleWaitlistModalSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        const eaddr = waitlistEmail
-        setWaitlistEmail('')
-        await submitWaitlist(eaddr)
-        setTimeout(() => setShowWaitlistModal(false), 600)
-    }
+    const submitWaitlist = useCallback(
+        async (email: string) => {
+            if (!email) return
+            if (!API_BASE) {
+                setWaitlistStatus('error')
+                return
+            }
+            setIsSubmittingWaitlist(true)
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/waitlist/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, source: 'landing' }),
+                })
+                if (res.status === 409) {
+                    setWaitlistStatus('duplicate')
+                    return
+                }
+                if (!res.ok) throw new Error('failed')
+                setWaitlistStatus('success')
+                setWaitlistCount(c => (c ?? 0) + 1)
+                fetchWaitlistCount()
+            } catch (error) {
+                console.error('Failed to submit waitlist entry', error)
+                setWaitlistStatus('error')
+            } finally {
+                setIsSubmittingWaitlist(false)
+                setTimeout(() => setWaitlistStatus('idle'), 2400)
+            }
+        },
+        [fetchWaitlistCount]
+    )
 
-    const handleSupportSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!supportEmail || !message) return
-        if (!API_BASE) {
-            setSubmitStatus('error')
-            return
-        }
-        setIsSubmitting(true)
-        try {
-            const res = await fetch(`${API_BASE}/api/v1/support/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: supportEmail, message }),
-            })
-            if (!res.ok) throw new Error('failed')
-            setSubmitStatus('success')
-            setSupportEmail(''); setMessage('')
-            setTimeout(() => setShowSupportModal(false), 900)
-        } catch {
-            setSubmitStatus('error')
-        } finally {
-            setIsSubmitting(false)
-            setTimeout(() => setSubmitStatus('idle'), 1600)
-        }
-    }
+    const handleHeroSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault()
+            const email = heroEmail
+            setHeroEmail('')
+            await submitWaitlist(email)
+        },
+        [heroEmail, submitWaitlist]
+    )
+
+    const handleWaitlistModalSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault()
+            const email = waitlistEmail
+            setWaitlistEmail('')
+            await submitWaitlist(email)
+            setTimeout(() => setShowWaitlistModal(false), 600)
+        },
+        [submitWaitlist, waitlistEmail]
+    )
+
+    const handleSupportSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault()
+            if (!supportEmail || !message) return
+            if (!API_BASE) {
+                setSupportStatus('error')
+                return
+            }
+            setIsSubmittingSupport(true)
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/support/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: supportEmail, message }),
+                })
+                if (!res.ok) throw new Error('failed')
+                setSupportStatus('success')
+                setSupportEmail('')
+                setMessage('')
+                setTimeout(() => setShowSupportModal(false), 900)
+            } catch (error) {
+                console.error('Failed to submit support request', error)
+                setSupportStatus('error')
+            } finally {
+                setIsSubmittingSupport(false)
+                setTimeout(() => setSupportStatus('idle'), 2400)
+            }
+        },
+        [message, supportEmail]
+    )
 
     return (
         <div className="min-h-screen w-full bg-black">
 
             {/* NAV */}
             <div className="nav-shell">
-                <header className={`nav-pill px-4 sm:px-6 lg:px-2 py-2 transition-all duration-300 ${isScrolled ? 'nav-scrolled' : 'nav-transparent'
+                <header
+                    ref={navRef}
+                    className={`nav-pill px-4 sm:px-6 lg:px-2 py-2 transition-all duration-300 ${isScrolled ? 'nav-scrolled' : 'nav-transparent'
                     }`}>
                     <div className="w-full flex items-center justify-between">
                         <div className="px-2 flex items-center gap-3">
@@ -178,15 +227,27 @@ export default function Page() {
                                     value={heroEmail}
                                     onChange={(e) => setHeroEmail(e.target.value)}
                                 />
-                                <button className="btn-white rounded-none px-5">Join Waitlist</button>
+                                <button
+                                    className="btn-white rounded-none px-5"
+                                    disabled={isSubmittingWaitlist || !heroEmail}
+                                >
+                                    {waitlistButtonLabel}
+                                </button>
                             </div>
                         </form>
 
                         {/* Counter */}
                         <div className="mt-3 counter-shadow inline-flex items-center gap-2">
                             <span className="dot-green" />
-                            <span><span className="text-green-400">{waitlistCount ?? '—'}</span> people already joined</span>
+                            <span><span className="text-green-400">{waitlistCount ?? 0}</span> people already joined</span>
                         </div>
+                        {waitlistStatus !== 'idle' && (
+                            <div className="mt-2 text-sm text-white/80">
+                                {waitlistStatus === 'success' && "You're in! 🚀"}
+                                {waitlistStatus === 'duplicate' && "You're already on the list."}
+                                {waitlistStatus === 'error' && 'Something went wrong. Please try again.'}
+                            </div>
+                        )}
                     </div>
 
                     {/* Editor mock */}
@@ -260,7 +321,12 @@ export default function Page() {
                                         value={heroEmail}
                                         onChange={(e) => setHeroEmail(e.target.value)}
                                     />
-                                    <button className="btn-white rounded-none px-5">Join Waitlist</button>
+                                    <button
+                                        className="btn-white rounded-none px-5"
+                                        disabled={isSubmittingWaitlist || !heroEmail}
+                                    >
+                                        {waitlistButtonLabel}
+                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -304,11 +370,18 @@ export default function Page() {
                                     placeholder="email@domain.com"
                                     value={waitlistEmail}
                                     onChange={(e) => setWaitlistEmail(e.target.value)} />
-                                <button disabled={isSubmitting || !waitlistEmail}
+                                <button disabled={isSubmittingWaitlist || !waitlistEmail}
                                     className="btn-white rounded-none px-5 disabled:opacity-60">
-                                    {isSubmitting ? 'Joining…' : submitStatus === 'success' ? "You're in! 🚀" : submitStatus === 'error' ? 'Try again' : 'Join'}
+                                    {waitlistButtonLabel}
                                 </button>
                             </div>
+                            {waitlistStatus !== 'idle' && (
+                                <p className="text-sm text-white/70">
+                                    {waitlistStatus === 'success' && 'You are on the list! 🚀'}
+                                    {waitlistStatus === 'duplicate' && "Looks like you're already signed up."}
+                                    {waitlistStatus === 'error' && 'Something went wrong. Please try again.'}
+                                </p>
+                            )}
                         </form>
                     </div>
                 </div>, document.body)}
@@ -332,10 +405,16 @@ export default function Page() {
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
                                 required />
-                            <button disabled={isSubmitting || !supportEmail || !message}
+                            <button disabled={isSubmittingSupport || !supportEmail || !message}
                                 className="w-full h-11 rounded-lg bg-white text-black font-medium disabled:opacity-60">
-                                {isSubmitting ? 'Sending…' : submitStatus === 'success' ? 'Thanks! We’ll reply soon.' : submitStatus === 'error' ? 'Try again' : 'Send'}
+                                {supportButtonLabel}
                             </button>
+                            {supportStatus !== 'idle' && (
+                                <p className="text-sm text-white/70">
+                                    {supportStatus === 'success' && 'We received your message.'}
+                                    {supportStatus === 'error' && 'Something went wrong. Please try again.'}
+                                </p>
+                            )}
                         </form>
                     </div>
                 </div>, document.body)}
