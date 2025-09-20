@@ -11,7 +11,7 @@ export default function Page() {
     const [supportEmail, setSupportEmail] = useState('')
     const [message, setMessage] = useState('')
 
-    const [waitlistCount, setWaitlistCount] = useState(234)
+    const [waitlistCount, setWaitlistCount] = useState<number | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle')
 
@@ -75,7 +75,7 @@ export default function Page() {
             })
             if (!res.ok) throw new Error('failed')
             setSubmitStatus('success')
-            setWaitlistCount(c => c + 1)
+            setWaitlistCount(c => (c ?? 0) + 1)
         } catch {
             setSubmitStatus('error')
         } finally {
@@ -185,7 +185,7 @@ export default function Page() {
                         {/* Counter */}
                         <div className="mt-3 counter-shadow inline-flex items-center gap-2">
                             <span className="dot-green" />
-                            <span><span className="text-green-400">{waitlistCount}</span> people already joined</span>
+                            <span><span className="text-green-400">{waitlistCount ?? '—'}</span> people already joined</span>
                         </div>
                     </div>
 
