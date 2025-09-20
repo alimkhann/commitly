@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
 import { createPortal } from 'react-dom'
-import { supabase } from '@/lib/supabase'
+const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE
 
 export default function Page() {
     const [heroEmail, setHeroEmail] = useState('')
@@ -42,9 +42,12 @@ export default function Page() {
 
     useEffect(() => {
         const fetchCount = async () => {
+            if (!API_BASE) return
             try {
-                const { data } = await supabase.rpc('waitlist_count')
-                if (typeof data === 'number') setWaitlistCount(data)
+                const res = await fetch(`${API_BASE}/api/v1/waitlist/count`)
+                if (!res.ok) return
+                const data = await res.json() as { count?: number }
+                if (typeof data.count === 'number') setWaitlistCount(data.count)
             } catch { }
         }
         fetchCount()
@@ -59,10 +62,18 @@ export default function Page() {
 
     async function submitWaitlist(email: string) {
         if (!email) return
+        if (!API_BASE) {
+            setSubmitStatus('error')
+            return
+        }
         setIsSubmitting(true)
         try {
-            const { error } = await supabase.from('waitlist').insert([{ email, source: 'landing' }])
-            if (error) throw error
+            const res = await fetch(`${API_BASE}/api/v1/waitlist/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, source: 'landing' }),
+            })
+            if (!res.ok) throw new Error('failed')
             setSubmitStatus('success')
             setWaitlistCount(c => c + 1)
         } catch {
@@ -91,10 +102,18 @@ export default function Page() {
     const handleSupportSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!supportEmail || !message) return
+        if (!API_BASE) {
+            setSubmitStatus('error')
+            return
+        }
         setIsSubmitting(true)
         try {
-            const { error } = await supabase.from('support').insert([{ email: supportEmail, message, status: 'new' }])
-            if (error) throw error
+            const res = await fetch(`${API_BASE}/api/v1/support/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: supportEmail, message }),
+            })
+            if (!res.ok) throw new Error('failed')
             setSubmitStatus('success')
             setSupportEmail(''); setMessage('')
             setTimeout(() => setShowSupportModal(false), 900)
