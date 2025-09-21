@@ -32,7 +32,9 @@ export default function Navbar({ isScrolled, onSupportClick, onWaitlistClick }: 
                         <div className="text-lg sm:text-2xl font-semibold tracking-[-0.02em]">commitly</div>
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-3">
-                        <LanguageDropdown />
+                        <div className="hidden sm:block">
+                            <LanguageDropdown />
+                        </div>
                         <button 
                             onClick={onSupportClick} 
                             className="border border-white/20 rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm"

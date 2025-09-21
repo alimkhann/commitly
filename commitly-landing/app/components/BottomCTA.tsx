@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { WaitlistForm } from './WaitlistForm'
 import { useLanguage } from '../contexts/LanguageContext'
+import LanguageDropdown from './LanguageDropdown'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 
@@ -57,6 +58,9 @@ export default function BottomCTA({
                     <nav className="flex items-center gap-6 text-base">
                         <a href="/terms" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.terms}</a>
                         <a href="/privacy" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.privacy}</a>
+                        <div className="sm:hidden">
+                            <LanguageDropdown variant="footer" />
+                        </div>
                     </nav>
                 </footer>
             </div>
