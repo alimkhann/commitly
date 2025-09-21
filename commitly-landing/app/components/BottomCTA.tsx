@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { WaitlistForm } from './WaitlistForm'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 
@@ -22,34 +23,24 @@ export default function BottomCTA({
     return (
         <section className="w-full bg-black">
             <div className="max-w-[1344px] mx-auto px-6 sm:px-8 lg:px-20 xl:px-28 2xl:px-40">
-                <div className="flex items-center justify-between gap-8 pb-48">
-                    <div className="flex-1">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-8 pb-24 sm:pb-48">
+                    <div className="flex-1 w-full sm:w-auto">
                         <h2 className="footer-title font-semibold">Join Waitlist</h2>
-                        <form onSubmit={onHeroSubmit} className="mt-6">
-                            <div className="flex w-[min(640px,90vw)] rounded-lg overflow-hidden bg-black/70 shadow-[0_10px_30px_rgba(0,0,0,.45)] ring-1 ring-inset ring-white/10">
-                                <input
-                                    className="input-dark flex-1 px-5"
-                                    placeholder="johndoe@example.com"
-                                    value={heroEmail}
-                                    onChange={(e) => setHeroEmail(e.target.value)}
-                                />
-                                <button
-                                    className="btn-white rounded-none px-5"
-                                    disabled={isSubmittingWaitlist || !heroEmail}
-                                >
-                                    {waitlistButtonLabel}
-                                </button>
-                            </div>
-                        </form>
+                        <WaitlistForm onHeroSubmit={onHeroSubmit} heroEmail={heroEmail} setHeroEmail={setHeroEmail} isSubmittingWaitlist={isSubmittingWaitlist} waitlistButtonLabel={waitlistButtonLabel} />
                     </div>
 
-                    <div className="flex-shrink-0">
+                    <div className="hidden sm:block flex-shrink-0">
                         <Image
                             src="/icons/icon_4x.png"
                             alt="Commitly"
                             width={512}
                             height={512}
                             className="w-56 h-56 md:w-96 md:h-96 opacity-100"
+                            style={{
+                                maxWidth: '100%',
+                                height: 'auto',
+                                aspectRatio: '512/512'
+                            }}
                         />
                     </div>
                 </div>
