@@ -17,26 +17,26 @@ export default function Navbar({ isScrolled, onSupportClick, onWaitlistClick }: 
                 }`}
             >
                 <div className="w-full flex items-center justify-between">
-                    <div className="px-2 flex items-center gap-3">
+                    <div className="px-2 flex items-center gap-2 sm:gap-3">
                         <Image
-                            src="/icon.png"
+                            src="/icons/icon_1x.png"
                             alt="Commitly"
                             width={32}
                             height={32}
-                            className="w-8 h-8"
+                            className="w-6 h-6 sm:w-8 sm:h-8"
                         />
-                        <div className="text-2xl font-semibold tracking-[-0.02em]">commitly</div>
+                        <div className="text-lg sm:text-2xl font-semibold tracking-[-0.02em]">commitly</div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-1.5 sm:gap-3">
                         <button 
                             onClick={onSupportClick} 
-                            className="border border-white/20 rounded-md px-3.5 py-2 text-sm"
+                            className="border border-white/20 rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm"
                         >
                             Support
                         </button>
                         <button 
                             onClick={onWaitlistClick} 
-                            className="btn-white text-sm rounded-md"
+                            className="btn-white text-xs sm:text-sm rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2"
                         >
                             Join waitlist
                         </button>

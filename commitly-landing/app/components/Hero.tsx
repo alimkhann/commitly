@@ -39,15 +39,15 @@ export default function Hero({
 
                     {/* Connected input + button */}
                     <form onSubmit={onHeroSubmit} className="mt-6 flex items-center justify-center">
-                        <div className="flex w-[min(640px,90vw)] rounded-lg overflow-hidden bg-black/70 shadow-[0_10px_30px_rgba(0,0,0,.45)] ring-1 ring-inset ring-white/10">
+                        <div className="flex w-full max-w-[640px] rounded-lg overflow-hidden bg-black/70 shadow-[0_10px_30px_rgba(0,0,0,.45)] ring-1 ring-inset ring-white/10">
                             <input
-                                className="flex-1 px-5 bg-transparent text-white placeholder-white/60 border-none outline-none h-12 text-base"
+                                className="flex-1 px-3 sm:px-5 bg-transparent text-white placeholder-white/60 border-none outline-none h-10 sm:h-12 text-sm sm:text-base"
                                 placeholder="johndoe@example.com"
                                 value={heroEmail}
                                 onChange={(e) => setHeroEmail(e.target.value)}
                             />
                             <button
-                                className="btn-white rounded-none px-5"
+                                className="btn-white rounded-none px-3 sm:px-5 text-sm sm:text-base whitespace-nowrap"
                                 disabled={isSubmittingWaitlist || !heroEmail}
                             >
                                 {waitlistButtonLabel}
@@ -70,7 +70,7 @@ export default function Hero({
                 </div>
 
                 {/* Editor mock */}
-                <div className="max-w-[1180px] mx-auto mt-14 pb-8">
+                <div className="hidden sm:block w-full max-w-[1180px] mx-auto mt-8 sm:mt-14 pb-8 px-4 sm:px-0">
                     <div className="rounded-md overflow-hidden editor-shadow">
                         <Image
                             src="/editor-mock.jpg"
@@ -78,6 +78,12 @@ export default function Hero({
                             height={738}
                             alt="Editor mock"
                             priority
+                            className="w-full h-auto"
+                            style={{
+                                maxWidth: '100%',
+                                height: 'auto',
+                                aspectRatio: '1180/738'
+                            }}
                         />
                     </div>
                 </div>

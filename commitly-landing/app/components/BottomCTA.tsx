@@ -45,11 +45,11 @@ export default function BottomCTA({
 
                     <div className="flex-shrink-0">
                         <Image
-                            src="/icon.png"
+                            src="/icons/icon_4x.png"
                             alt="Commitly"
                             width={512}
                             height={512}
-                            className="w-56 h-56 md:w-96 md:h-96 opacity-60"
+                            className="w-56 h-56 md:w-96 md:h-96 opacity-100"
                         />
                     </div>
                 </div>
