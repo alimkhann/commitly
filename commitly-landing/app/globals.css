@@ -225,3 +225,14 @@ html, body, #__next { height: 100%; }
 }
 
 .body-locked { overflow: hidden; }
+
+/* Hero height adjustments */
+.hero-height {
+  height: calc(100svh - var(--navH, 96px) - 48px);
+}
+
+@media (max-width: 639px) {
+  .hero-height {
+    height: calc(60svh - var(--navH, 96px) - 24px);
+  }
+}

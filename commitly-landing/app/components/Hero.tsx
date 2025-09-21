@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { WaitlistForm } from './WaitlistForm'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 
@@ -26,8 +27,7 @@ export default function Hero({
     return (
         <section className="w-full px-8 pt-8 pb-32">
             <div
-                className="relative bg-hero rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden"
-                style={{ height: 'calc(100svh - var(--navH, 96px) - 48px)' }}
+                className="relative bg-hero rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden hero-height"
             >
                 <div className="gradient-vignette pointer-events-none" />
 
@@ -37,23 +37,7 @@ export default function Hero({
                         Paste a github repo link, and let AI guide you build the project you want.
                     </p>
 
-                    {/* Connected input + button */}
-                    <form onSubmit={onHeroSubmit} className="mt-6 flex items-center justify-center">
-                        <div className="flex w-full max-w-[640px] rounded-lg overflow-hidden bg-black/70 shadow-[0_10px_30px_rgba(0,0,0,.45)] ring-1 ring-inset ring-white/10">
-                            <input
-                                className="flex-1 px-3 sm:px-5 bg-transparent text-white placeholder-white/60 border-none outline-none h-10 sm:h-12 text-sm sm:text-base"
-                                placeholder="johndoe@example.com"
-                                value={heroEmail}
-                                onChange={(e) => setHeroEmail(e.target.value)}
-                            />
-                            <button
-                                className="btn-white rounded-none px-3 sm:px-5 text-sm sm:text-base whitespace-nowrap"
-                                disabled={isSubmittingWaitlist || !heroEmail}
-                            >
-                                {waitlistButtonLabel}
-                            </button>
-                        </div>
-                    </form>
+                    <WaitlistForm onHeroSubmit={onHeroSubmit} heroEmail={heroEmail} setHeroEmail={setHeroEmail} isSubmittingWaitlist={isSubmittingWaitlist} waitlistButtonLabel={waitlistButtonLabel} />
 
                     {/* Counter */}
                     <div className="mt-3 counter-shadow inline-flex items-center gap-2">
