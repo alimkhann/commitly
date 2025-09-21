@@ -233,6 +233,6 @@ html, body, #__next { height: 100%; }
 
 @media (max-width: 639px) {
   .hero-height {
-    height: calc(60svh - var(--navH, 96px) - 24px);
+    height: calc(70svh - var(--navH, 96px) - 24px);
   }
 }
