@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { WaitlistForm } from './WaitlistForm'
+import { useLanguage } from '../contexts/LanguageContext'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 
@@ -24,6 +25,8 @@ export default function Hero({
     waitlistButtonLabel,
     onHeroSubmit
 }: HeroProps) {
+    const { t } = useLanguage()
+
     return (
         <section className="w-full px-8 pt-8 pb-32">
             <div
@@ -32,9 +35,9 @@ export default function Hero({
                 <div className="gradient-vignette pointer-events-none" />
 
                 <div className="text-center max-w-[1100px] mx-auto pt-16 relative z-10">
-                    <h1 className="h1-hero font-semibold">The AI Code Tutor</h1>
+                    <h1 className="h1-hero font-semibold">{t.heroTitle}</h1>
                     <p className="sub-hero mt-3">
-                        Paste a github repo link, and let AI guide you build the project you want.
+                        {t.heroSubtitle}
                     </p>
 
                     <WaitlistForm onHeroSubmit={onHeroSubmit} heroEmail={heroEmail} setHeroEmail={setHeroEmail} isSubmittingWaitlist={isSubmittingWaitlist} waitlistButtonLabel={waitlistButtonLabel} />
@@ -42,13 +45,13 @@ export default function Hero({
                     {/* Counter */}
                     <div className="mt-3 counter-shadow inline-flex items-center gap-2">
                         <span className="dot-green" />
-                        <span><span className="text-green-400">{waitlistCount ?? 0}</span> people already joined</span>
+                        <span><span className="text-green-400">{waitlistCount ?? 0}</span> {t.peopleJoined}</span>
                     </div>
                     {waitlistStatus !== 'idle' && (
                         <div className="mt-2 text-sm text-white/80">
-                            {waitlistStatus === 'success' && "You're in! 🚀"}
-                            {waitlistStatus === 'duplicate' && "You're already on the list."}
-                            {waitlistStatus === 'error' && 'Something went wrong. Please try again.'}
+                            {waitlistStatus === 'success' && t.successMessage}
+                            {waitlistStatus === 'duplicate' && t.duplicateMessage}
+                            {waitlistStatus === 'error' && t.errorMessage}
                         </div>
                     )}
                 </div>

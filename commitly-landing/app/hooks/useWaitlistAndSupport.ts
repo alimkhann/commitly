@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE ?? 'https://commitly-m005.onrender.com'
 
@@ -8,6 +9,7 @@ type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 type SupportStatus = 'idle' | 'success' | 'error'
 
 export function useWaitlistAndSupport() {
+    const { t } = useLanguage()
     const [heroEmail, setHeroEmail] = useState('')
     const [waitlistEmail, setWaitlistEmail] = useState('')
     const [supportEmail, setSupportEmail] = useState('')
@@ -49,19 +51,19 @@ export function useWaitlistAndSupport() {
     }, [showWaitlistModal, showSupportModal])
 
     const waitlistButtonLabel = useMemo(() => {
-        if (isSubmittingWaitlist) return 'Joining…'
-        if (waitlistStatus === 'success') return "You're in! 🚀"
-        if (waitlistStatus === 'duplicate') return 'Already joined'
-        if (waitlistStatus === 'error') return 'Try again'
-        return 'Join Waitlist'
-    }, [isSubmittingWaitlist, waitlistStatus])
+        if (isSubmittingWaitlist) return t.joiningButton
+        if (waitlistStatus === 'success') return t.successMessage
+        if (waitlistStatus === 'duplicate') return t.alreadyJoinedButton
+        if (waitlistStatus === 'error') return t.tryAgainButton
+        return t.joinWaitlistButton
+    }, [isSubmittingWaitlist, waitlistStatus, t])
 
     const supportButtonLabel = useMemo(() => {
-        if (isSubmittingSupport) return 'Sending…'
-        if (supportStatus === 'success') return 'Thanks! We\'ll reply soon.'
-        if (supportStatus === 'error') return 'Try again'
-        return 'Send'
-    }, [isSubmittingSupport, supportStatus])
+        if (isSubmittingSupport) return t.sendingButton
+        if (supportStatus === 'success') return t.thanksButton
+        if (supportStatus === 'error') return t.tryAgainButton
+        return t.sendButton
+    }, [isSubmittingSupport, supportStatus, t])
 
     const submitWaitlist = useCallback(
         async (email: string) => {

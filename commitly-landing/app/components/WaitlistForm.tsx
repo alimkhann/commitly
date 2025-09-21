@@ -1,3 +1,7 @@
+'use client'
+
+import { useLanguage } from '../contexts/LanguageContext'
+
 interface WaitlistFormProps {
     onHeroSubmit: (e: React.FormEvent) => void
     heroEmail: string
@@ -6,9 +10,9 @@ interface WaitlistFormProps {
     waitlistButtonLabel: string
 }
 
-
-
 export const WaitlistForm = ({onHeroSubmit, heroEmail, setHeroEmail, isSubmittingWaitlist, waitlistButtonLabel}: WaitlistFormProps) => {
+    const { t } = useLanguage()
+
     return (
         <>
             {/* Connected input + button */}
@@ -16,7 +20,7 @@ export const WaitlistForm = ({onHeroSubmit, heroEmail, setHeroEmail, isSubmittin
             <div className="flex w-full max-w-[640px] rounded-lg overflow-hidden bg-black/70 shadow-[0_10px_30px_rgba(0,0,0,.45)] ring-1 ring-inset ring-white/10">
                 <input
                     className="flex-1 px-2 sm:px-5 bg-transparent text-white placeholder-white/60 border-none outline-none h-10 sm:h-12 text-xs sm:text-base"
-                    placeholder="johndoe@example.com"
+                    placeholder={t.emailPlaceholder}
                     value={heroEmail}
                     onChange={(e) => setHeroEmail(e.target.value)}
                 />

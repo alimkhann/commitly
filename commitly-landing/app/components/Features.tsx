@@ -1,14 +1,17 @@
 'use client'
 
 import Image from 'next/image'
+import { useLanguage } from '../contexts/LanguageContext'
 
 export default function Features() {
+    const { t } = useLanguage()
+
     return (
         <section className="max-w-[1344px] mx-auto px-6 sm:px-8 lg:px-20 xl:px-28 2xl:px-40 pt-8 md:pt-12 pb-6 space-y-28">
             <div>
                 <div className="text-center mb-6">
-                    <h3 className="section-h">Commit History Roadmap</h3>
-                    <p className="section-sub">Turn any repo's commit history into clear chapters with the key diffs.</p>
+                    <h3 className="section-h">{t.feature1Title}</h3>
+                    <p className="section-sub">{t.feature1Subtitle}</p>
                 </div>
                 <div className="relative bg-card-1 noise feature-card overflow-hidden">
                     <div className="gradient-vignette" />
@@ -20,8 +23,8 @@ export default function Features() {
 
             <div>
                 <div className="text-center mb-6">
-                    <h3 className="section-h">Hands-on tasks &amp; tests</h3>
-                    <p className="section-sub">Small, scoped tasks with failing tests — learn by making red turn green.</p>
+                    <h3 className="section-h">{t.feature2Title}</h3>
+                    <p className="section-sub">{t.feature2Subtitle}</p>
                 </div>
                 <div className="relative bg-card-2 noise feature-card overflow-hidden">
                     <div className="gradient-vignette" />
@@ -33,8 +36,8 @@ export default function Features() {
 
             <div>
                 <div className="text-center mb-6">
-                    <h3 className="section-h">Socratic hints</h3>
-                    <p className="section-sub">Hints first. If you're stuck, reveal a tiny patch — not a wall of code.</p>
+                    <h3 className="section-h">{t.feature3Title}</h3>
+                    <p className="section-sub">{t.feature3Subtitle}</p>
                 </div>
                 <div className="relative bg-card-3 noise feature-card overflow-hidden">
                     <div className="gradient-vignette" />
