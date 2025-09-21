@@ -1,6 +1,8 @@
 'use client'
 
 import Image from 'next/image'
+import { useLanguage } from '../contexts/LanguageContext'
+import LanguageDropdown from './LanguageDropdown'
 
 interface NavbarProps {
     isScrolled: boolean
@@ -9,6 +11,8 @@ interface NavbarProps {
 }
 
 export default function Navbar({ isScrolled, onSupportClick, onWaitlistClick }: NavbarProps) {
+    const { t } = useLanguage()
+
     return (
         <div className="nav-shell">
             <header
@@ -27,18 +31,19 @@ export default function Navbar({ isScrolled, onSupportClick, onWaitlistClick }: 
                         />
                         <div className="text-lg sm:text-2xl font-semibold tracking-[-0.02em]">commitly</div>
                     </div>
-                    <div className="flex gap-1.5 sm:gap-3">
+                    <div className="flex items-center gap-1.5 sm:gap-3">
+                        <LanguageDropdown />
                         <button 
                             onClick={onSupportClick} 
                             className="border border-white/20 rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm"
                         >
-                            Support
+                            {t.support}
                         </button>
                         <button 
                             onClick={onWaitlistClick} 
                             className="btn-white text-xs sm:text-sm rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2"
                         >
-                            Join waitlist
+                            {t.joinWaitlist}
                         </button>
                     </div>
                 </div>

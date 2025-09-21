@@ -4,6 +4,7 @@ import { ReactNode } from 'react'
 import { GeistSans as GeistSans } from 'geist/font/sans'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import { LanguageProvider } from './contexts/LanguageContext'
 
 export const metadata: Metadata = {
   title: 'Commitly - The AI Code Tutor',
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className={`${GeistSans.className} antialiased bg-black text-white`}>
-        {children}
+        <LanguageProvider>
+          {children}
+        </LanguageProvider>
         <Analytics />
         <SpeedInsights />
       </body>
