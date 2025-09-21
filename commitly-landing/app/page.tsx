@@ -7,7 +7,7 @@ import Features from './components/Features'
 import BottomCTA from './components/BottomCTA'
 import WaitlistModal from './components/WaitlistModal'
 import SupportModal from './components/SupportModal'
-import { useWaitlistAndSupport } from './components/useWaitlistAndSupport'
+import { useWaitlistAndSupport } from './hooks/useWaitlistAndSupport'
 
 export default function Page() {
     const [isScrolled, setIsScrolled] = useState(false)
