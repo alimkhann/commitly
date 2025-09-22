@@ -231,8 +231,44 @@ html, body, #__next { height: 100%; }
   height: calc(100svh - var(--navH, 96px) - 48px);
 }
 
-@media (max-width: 639px) {
+@media (max-width: 479px) {
+  .hero-height {
+    height: calc(65svh - var(--navH, 96px) - 20px);
+  }
+}
+
+@media (min-width: 480px) and (max-width: 639px) {
   .hero-height {
     height: calc(70svh - var(--navH, 96px) - 24px);
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .hero-height {
+    height: calc(80svh - var(--navH, 96px) - 32px);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hero-height {
+    height: calc(85svh - var(--navH, 96px) - 36px);
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .hero-height {
+    height: calc(90svh - var(--navH, 96px) - 40px);
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1535px) {
+  .hero-height {
+    height: calc(95svh - var(--navH, 96px) - 44px);
+  }
+}
+
+@media (min-width: 1536px) {
+  .hero-height {
+    height: calc(100svh - var(--navH, 96px) - 48px);
   }
 }
