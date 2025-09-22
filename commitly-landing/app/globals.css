@@ -113,7 +113,7 @@ html, body, #__next { height: 100%; }
 .editor-shadow { box-shadow: 0 10px 40px rgba(0,0,0,.5); }
 
 .h1-hero {
-  font-size: clamp(3.625rem, 1.6250rem + 8.3333vw, 128px);
+  font-size: clamp(2.125rem, 1.1250rem + 6.3333vw, 128px);
   line-height: 0.95;
   letter-spacing: -0.25rem;
   font-weight: 600;
@@ -125,6 +125,7 @@ html, body, #__next { height: 100%; }
   font-weight: 400;
   text-wrap: balance;
 }
+
 
 @media (min-width: 768px) {
   .sub-hero {
@@ -190,7 +191,7 @@ html, body, #__next { height: 100%; }
 .dot-green { width: 8px; height: 8px; background: #22c55e; border-radius: 999px; box-shadow: 0 0 6px rgba(34, 197, 94, 0.75), 0 0 12px rgba(34, 197, 94, 0.45); }
 
 .section-h { font-size: clamp(28px, 3vw, 48px); letter-spacing: -0.02em; color: #d9d9d9; }
-.section-sub { color: #aaa; font-size: clamp(14px, 1.6vw, 22px); }
+.section-sub { color: #aaa; font-size: clamp(14px, 1.5vw, 20px); }
 
 .footer-title { font-size: clamp(44px, 6.2vw, 116px); letter-spacing: -0.02em; }
 

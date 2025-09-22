@@ -13,7 +13,7 @@ export default function LanguageDropdown({ variant = 'navbar' }: LanguageDropdow
     const [isOpen, setIsOpen] = useState(false)
     const dropdownRef = useRef<HTMLDivElement>(null)
 
-    const languages: Language[] = ['en', 'ru', 'zh-TW']
+    const languages: Language[] = ['en', 'zh-TW', 'kz', 'ru']
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {

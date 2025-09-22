@@ -11,7 +11,7 @@ export default function Features() {
             <div>
                 <div className="text-center mb-6">
                     <h3 className="section-h">{t.feature1Title}</h3>
-                    <p className="section-sub">{t.feature1Subtitle}</p>
+                    <p className="section-sub w-[80%] mx-auto">{t.feature1Subtitle}</p>
                 </div>
                 <div className="relative bg-card-1 noise feature-card overflow-hidden">
                     <div className="gradient-vignette" />
@@ -24,7 +24,7 @@ export default function Features() {
             <div>
                 <div className="text-center mb-6">
                     <h3 className="section-h">{t.feature2Title}</h3>
-                    <p className="section-sub">{t.feature2Subtitle}</p>
+                    <p className="section-sub w-[80%] mx-auto">{t.feature2Subtitle}</p>
                 </div>
                 <div className="relative bg-card-2 noise feature-card overflow-hidden">
                     <div className="gradient-vignette" />
@@ -37,7 +37,7 @@ export default function Features() {
             <div>
                 <div className="text-center mb-6">
                     <h3 className="section-h">{t.feature3Title}</h3>
-                    <p className="section-sub">{t.feature3Subtitle}</p>
+                    <p className="section-sub w-[80%] mx-auto">{t.feature3Subtitle}</p>
                 </div>
                 <div className="relative bg-card-3 noise feature-card overflow-hidden">
                     <div className="gradient-vignette" />

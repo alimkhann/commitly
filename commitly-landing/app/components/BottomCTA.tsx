@@ -53,9 +53,7 @@ export default function BottomCTA({
                     <div className="flex items-center gap-2 text-base">
                         <span>{t.copyright}</span>
                         <span>•</span>
-                        <a className="underline-offset-2 hover:underline" href="https://github.com/alimkhann" target="_blank">Alimkhan Yergebayev</a>
-                        <span>•</span>
-                        <a className="underline-offset-2 hover:underline" href="https://github.com/asanbl4" target="_blank">Assanali Batyrkhan</a>
+                        <a className="underline-offset-2 hover:underline" href="https://linkedin.com/in/alimkhan-yergebayev" target="_blank">Contact Us</a>
                     </div>
                     <nav className="flex items-center gap-6 text-base">
                         <a href="/terms" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.terms}</a>

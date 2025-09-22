@@ -1,4 +1,4 @@
-export type Language = 'en' | 'ru' | 'zh-TW'
+export type Language = 'en' | 'ru' | 'zh-TW' | 'kz'
 
 export interface Translations {
   // Navbar
@@ -58,8 +58,10 @@ export const translations: Record<Language, Translations> = {
     joinWaitlist: 'Join waitlist',
     
     // Hero section
-    heroTitle: 'The AI Code Tutor',
-    heroSubtitle: 'Paste a github repo link, and let AI guide you build the project you want.',
+    // heroTitle: 'Do not copy/paste sh*tty code, create one',
+    // heroTitle: 'Don\'t paste sh*tty code—write it.',
+    heroTitle: 'Break down. Learn. Build.',
+    heroSubtitle: 'Commitly turns a GitHub repo into a structured learning path, with hands-on tasks and tiny hints so you learn by building.',
     emailPlaceholder: 'johndoe@example.com',
     peopleJoined: 'people already joined',
     successMessage: "You're in! 🚀",
@@ -68,11 +70,11 @@ export const translations: Record<Language, Translations> = {
     
     // Features section
     feature1Title: 'Commit History Roadmap',
-    feature1Subtitle: "Turn any repo's commit history into clear chapters with the key diffs.",
+    feature1Subtitle: "We turn noisy commit logs into a feature-by-feature storyline. Skim key diffs and milestones so you can follow how the project was actually built.",
     feature2Title: 'Hands-on tasks & tests',
-    feature2Subtitle: 'Small, scoped tasks with failing tests — learn by making red turn green.',
-    feature3Title: 'Socratic hints',
-    feature3Subtitle: "Hints first. If you're stuck, reveal a tiny patch — not a wall of code.",
+    feature2Subtitle: 'Each chapter comes with bite - size tickets and failing tests. Ship the change, watch red turn green, and see your progress stack up like real SWE work.',
+    feature3Title: 'Guiding hints',
+    feature3Subtitle: "Start with questions and nudges - not answers. If you\’re stuck, reveal a tiny patch diff. No walls of code, so you keep ownership of the solution using the Socratic method.",
     
     // Bottom CTA
     joinWaitlistTitle: 'Join Waitlist',
@@ -108,8 +110,8 @@ export const translations: Record<Language, Translations> = {
     joinWaitlist: 'Войти в вейтлист',
     
     // Hero section
-    heroTitle: 'ИИ-наставник по коду',
-    heroSubtitle: 'Вставьте ссылку на GitHub репозиторий, и позвольте ИИ помочь вам создать проект, который вы хотите.',
+    heroTitle: 'Разбирай. Учись. Создавай.',
+    heroSubtitle: 'Commitly превращает репозиторий GitHub в структурированный учебный курс с практическими заданиями и небольшими подсказками, чтобы вы учились, создавая.',
     emailPlaceholder: 'ivan@example.com',
     peopleJoined: 'человек уже записались в очередь',
     successMessage: 'Вы в списке! 🚀',
@@ -118,11 +120,11 @@ export const translations: Record<Language, Translations> = {
     
     // Features section
     feature1Title: 'Дорожная карта истории коммитов',
-    feature1Subtitle: 'Превратите историю коммитов любого репозитория в понятные главы с ключевыми изменениями.',
+    feature1Subtitle: 'Мы превращаем шумные логи коммитов в сюжетную линию, описывающую каждую функцию. Просмотрите ключевые различия и ветки, чтобы понять, как на самом деле был построен проект.',
     feature2Title: 'Практические задачи и тесты',
-    feature2Subtitle: 'Небольшие, ограниченные задачи с падающими тестами — учитесь, делая красное зеленым.',
-    feature3Title: 'Сократические подсказки',
-    feature3Subtitle: 'Сначала подсказки. Если застряли, покажите крошечный патч — не стену кода.',
+    feature2Subtitle: 'Каждая глава сопровождается маленькими задачами. Стройте, наблюдайте, как красное становится зеленым, и следите за своим прогрессом, как в реальной работе разработчика.',
+    feature3Title: 'Подсказки - путеводители',
+    feature3Subtitle: 'Начните с вопросов и подсказок, а не с ответов. Если вы застряли, откройте небольшой патч-дифф. Никаких стен кода, так что вы сохраняете право собственности на решение, используя сократовский метод.',
     
     // Bottom CTA
     joinWaitlistTitle: 'Войти в вейтлист',
@@ -158,8 +160,8 @@ export const translations: Record<Language, Translations> = {
     joinWaitlist: '加入等候名單',
     
     // Hero section
-    heroTitle: 'AI 程式碼導師',
-    heroSubtitle: '貼上 GitHub 儲存庫連結，讓 AI 引導您建立您想要的專案。',
+    heroTitle: '拆解.學習.建構.',
+    heroSubtitle: 'Commitly 將 GitHub 儲存庫轉化為結構化的學習路徑，透過實作任務與精簡提示，讓您在建構中學習。',
     emailPlaceholder: 'example@example.com',
     peopleJoined: '人已加入',
     successMessage: '您已加入！🚀',
@@ -168,11 +170,11 @@ export const translations: Record<Language, Translations> = {
     
     // Features section
     feature1Title: '提交歷史路線圖',
-    feature1Subtitle: '將任何儲存庫的提交歷史轉換為帶有關鍵差異的清晰章節。',
+    feature1Subtitle: '我們將雜亂的提交記錄轉化為功能導向的故事線。快速瀏覽關鍵差異與里程碑，親眼見證專案的實際建構歷程。',
     feature2Title: '實作任務與測試',
-    feature2Subtitle: '小型、範圍明確的任務與失敗的測試 — 透過讓紅色變綠色來學習。',
+    feature2Subtitle: '每章節皆附精簡任務與失敗測試。提交變更、見證紅轉綠，親眼目睹進度累積如真實軟體工程師的工作成果。',
     feature3Title: '蘇格拉底式提示',
-    feature3Subtitle: '先給提示。如果您卡住了，顯示一個小補丁 — 而不是一堵程式碼牆。',
+    feature3Subtitle: '從提問與提示開始，而非直接解答。若遇瓶頸，僅揭露微小補丁差異。無須面對整面程式碼牆，透過蘇格拉底式對話法，讓您全程主導解決方案。',
     
     // Bottom CTA
     joinWaitlistTitle: '加入等候名單',
@@ -201,11 +203,62 @@ export const translations: Record<Language, Translations> = {
     // Common
     loading: '載入中...',
     submit: '提交'
+  },
+  kz: {
+    // Navbar
+    support: 'Қолдау',
+    joinWaitlist: 'Күту тізіміне қосылу',
+    
+    // Hero section
+    heroTitle: 'Талда. Үйрен. Құр.',
+    heroSubtitle: 'Commitly GitHub репозиторийін қолмен жұмыс істеу тапсырмалары мен кішкентай кеңестері бар құрылымдық оқу жолына айналдырады, сонда сіз құру арқылы үйренесіз.',
+    emailPlaceholder: 'example@example.com',
+    peopleJoined: 'адам қосылды',
+    successMessage: 'Сіз тізімде! 🚀',
+    duplicateMessage: 'Сіз қазірдің өзінде тізімдесіз.',
+    errorMessage: 'Қате орын алды. Қайталап көріңіз.',
+    
+    // Features section
+    feature1Title: 'Коммит тарихы жол картасы',
+    feature1Subtitle: 'Біз шулы коммит журналдарын функциялар бойынша сюжеттік сызыққа айналдырамыз. Негізгі айырмашылықтар мен маңызды нүктелерді қарап шығыңыз, сонда жобаның қалай құрылғанын көре аласыз.',
+    feature2Title: 'Қолмен жұмыс істеу тапсырмалары мен тесттер',
+    feature2Subtitle: 'Әр тарау кішкентай тапсырмалар мен сәтсіз тесттермен бірге келеді. Өзгеріс жіберіңіз, қызылдың жасылға айналуын көріңіз және нақты бағдарламашы жұмысы сияқты прогрессіңіздің жиналуын бақылаңыз.',
+    feature3Title: 'Басшылық кеңестер',
+    feature3Subtitle: 'Жауаптардан емес, сұрақтар мен кеңестерден бастаңыз. Егер тұрып қалсаңыз, кішкентай патч айырмашылығын ашыңыз. Код қабырғалары жоқ, сонда сіз Сократ әдісін пайдаланып шешімнің иесі болып қаласыз.',
+    
+    // Bottom CTA
+    joinWaitlistTitle: 'Күту тізіміне қосылу',
+    
+    // Modals
+    joinWaitlistModalTitle: 'Күту тізіміне қосылу',
+    modalEmailPlaceholder: 'email@domain.com',
+    modalSuccessMessage: 'Сіз тізімде! 🚀',
+    modalDuplicateMessage: 'Сіз қазірдің өзінде тіркелген сияқтысыз.',
+    modalErrorMessage: 'Қате орын алды. Қайталап көріңіз.',
+    
+    // Footer
+    copyright: '© 2025 Commitly',
+    terms: 'Шарттар',
+    privacy: 'Құпиялылық',
+    
+    // Button labels
+    joinWaitlistButton: 'Күту тізіміне қосылу',
+    joiningButton: 'Қосылуда…',
+    alreadyJoinedButton: 'Қазірдің өзінде қосылды',
+    tryAgainButton: 'Қайталап көр',
+    sendButton: 'Жіберу',
+    sendingButton: 'Жіберілуде…',
+    thanksButton: 'Рахмет! Жауап береміз.',
+    
+    // Common
+    loading: 'Жүктелуде...',
+    submit: 'Жіберу'
   }
 }
 
 export const languageNames: Record<Language, string> = {
   en: 'English',
-  ru: 'Русский',
-  'zh-TW': '繁體中文'
+  'zh-TW': '繁體中文',
+  kz: 'Қазақша',
+  ru: 'Русский'
 }
