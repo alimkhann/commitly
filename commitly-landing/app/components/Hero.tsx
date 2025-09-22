@@ -30,11 +30,11 @@ export default function Hero({
     return (
         <section className="w-full px-8 pt-8 pb-32">
             <div
-                className="relative bg-hero rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden hero-height"
+                className="relative bg-hero rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col"
             >
                 <div className="gradient-vignette pointer-events-none" />
 
-                <div className="text-center max-w-[1100px] mx-auto pt-16 relative z-10">
+                <div className="text-center max-w-[1100px] mx-auto pt-16 relative z-10 pb-14">
                     <h1 className="h1-hero font-semibold">{t.heroTitle}</h1>
                     <p className="sub-hero mt-3">
                         {t.heroSubtitle}
@@ -57,20 +57,15 @@ export default function Hero({
                 </div>
 
                 {/* Editor mock */}
-                <div className="hidden sm:block w-full max-w-[1180px] mx-auto mt-8 sm:mt-14 pb-8 px-4 sm:px-0">
-                    <div className="rounded-md overflow-hidden editor-shadow">
+                <div className="hidden sm:block w-full max-w-[1180px] mx-auto px-4 sm:px-0" style={{ height: '26.25rem' }}>
+                    <div className="rounded-t-md overflow-hidden editor-shadow h-full">
                         <Image
                             src="/editor-mock.jpg"
                             width={1180}
                             height={738}
                             alt="Editor mock"
                             priority
-                            className="w-full h-auto"
-                            style={{
-                                maxWidth: '100%',
-                                height: 'auto',
-                                aspectRatio: '1180/738'
-                            }}
+                            className="w-full h-full object-cover object-top"
                         />
                     </div>
                 </div>
