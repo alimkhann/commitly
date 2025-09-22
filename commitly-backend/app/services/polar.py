@@ -13,22 +13,47 @@ class PolarService:
     """Creates Polar checkout sessions for donations."""
 
     def __init__(self) -> None:
-        if not settings.polar_access_token or not settings.polar_product_id or not settings.polar_success_url:
-            raise PolarConfigurationError(
-                "Polar configuration is incomplete. Please set POLAR_ACCESS_TOKEN, POLAR_PRODUCT_ID, and POLAR_SUCCESS_URL."
-            )
+        server_flag = (settings.polar_server or "").strip().lower()
+        use_sandbox = settings.polar_sandbox_enabled or server_flag in {"sandbox", "true", "1", "yes"}
 
-        server = settings.polar_server if settings.polar_server in {"production", "sandbox"} else "production"
+        if use_sandbox:
+            access_token = settings.polar_sandbox_access_token
+            product_id = settings.polar_sandbox_product_id
+            success_url = settings.polar_sandbox_success_url or settings.polar_success_url
+            server = "sandbox"
+            config_name = "sandbox"
+        else:
+            access_token = settings.polar_access_token
+            product_id = settings.polar_product_id
+            success_url = settings.polar_success_url
+            server = "production" if server_flag != "sandbox" else "sandbox"
+            config_name = "production"
+
+        missing_fields = [
+            name
+            for name, value in (
+                ("POLAR_ACCESS_TOKEN" if not use_sandbox else "POLAR_SANDBOX_ACCESS_TOKEN", access_token),
+                ("POLAR_PRODUCT_ID" if not use_sandbox else "POLAR_SANDBOX_PRODUCT_ID", product_id),
+                ("POLAR_SUCCESS_URL" if not use_sandbox else "POLAR_SANDBOX_SUCCESS_URL", success_url),
+            )
+            if value is None
+        ]
+        if missing_fields:
+            joined = ", ".join(missing_fields)
+            raise PolarConfigurationError(f"Polar {config_name} configuration is incomplete. Missing: {joined}.")
+
+        self._success_url = str(success_url)
+        self._product_id = str(product_id)
 
         self.client = Polar(
-            access_token=settings.polar_access_token,
+            access_token=access_token,
             server=server,
         )
 
     def create_checkout(self, amount_cents: Optional[int] = None, email: Optional[str] = None) -> dict:
         payload: dict = {
-            "products": [settings.polar_product_id],
-            "success_url": str(settings.polar_success_url),
+            "products": [self._product_id],
+            "success_url": self._success_url,
         }
         # For pay-what-you-want, do not include amount. If provided, validate range (50..99_999_999)
         if amount_cents is not None:

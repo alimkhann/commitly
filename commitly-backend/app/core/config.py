@@ -25,8 +25,14 @@ class Settings(BaseSettings):
     # Polar (donations) configuration
     polar_access_token: Optional[str] = Field(default=None, validation_alias="POLAR_ACCESS_TOKEN")
     polar_success_url: Optional[HttpUrl] = Field(default=None, validation_alias="POLAR_SUCCESS_URL")
-    polar_server: str = Field("production", validation_alias="POLAR_SERVER")  # "production" | "sandbox"
-    polar_product_id: Optional[str] = Field(default=None, validation_alias=("POLAR_PRODUCT_ID"))
+    polar_server: str = Field("production", validation_alias="POLAR_SERVER")  # "production" | "sandbox" | truthy for sandbox
+    polar_product_id: Optional[str] = Field(default=None, validation_alias="POLAR_PRODUCT_ID")
+
+    # Sandbox-specific overrides
+    polar_sandbox_access_token: Optional[str] = Field(default=None, validation_alias="POLAR_SANDBOX_ACCESS_TOKEN")
+    polar_sandbox_success_url: Optional[HttpUrl] = Field(default=None, validation_alias="POLAR_SANDBOX_SUCCESS_URL")
+    polar_sandbox_product_id: Optional[str] = Field(default=None, validation_alias="POLAR_SANDBOX_PRODUCT_ID")
+    polar_sandbox_enabled: bool = Field(False, validation_alias="POLAR_SANDBOX_SERVER")
 
     allowed_origins: List[str] = Field(default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS")
 
