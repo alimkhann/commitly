@@ -4,7 +4,6 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models.support import Support, SupportCreate
 from app.models.waitlist import Waitlist, WaitlistCreate
 
 
@@ -49,15 +48,3 @@ class SupabaseService:
         except SQLAlchemyError as exc:
             raise PersistenceError(str(exc)) from exc
         return result
-
-    def create_support_request(self, payload: SupportCreate) -> Support:
-        ticket = Support(email=payload.email, message=payload.message)
-        self.session.add(ticket)
-        try:
-            self.session.commit()
-        except SQLAlchemyError as exc:
-            self.session.rollback()
-            raise PersistenceError(str(exc)) from exc
-
-        self.session.refresh(ticket)
-        return ticket

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any, List
+from typing import Any, List, Optional
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     supabase_url: HttpUrl = Field(..., validation_alias="SUPABASE_URL")
     supabase_anon_key: str = Field(..., validation_alias="SUPABASE_ANON_KEY")
     database_url: str = Field(..., validation_alias="DATABASE_URL")
+
+    # Polar (donations) configuration
+    polar_access_token: Optional[str] = Field(default=None, validation_alias="POLAR_ACCESS_TOKEN")
+    polar_success_url: Optional[HttpUrl] = Field(default=None, validation_alias="POLAR_SUCCESS_URL")
+    polar_server: str = Field("production", validation_alias="POLAR_SERVER")  # "production" | "sandbox"
+    polar_product_id: Optional[str] = Field(default=None, validation_alias=("POLAR_PRODUCT_ID"))
 
     allowed_origins: List[str] = Field(default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS")
 

@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import waitlist, support
+from app.api import waitlist
+from app.api import donate
 
 app = FastAPI(
     title=settings.project_name,
@@ -26,9 +27,9 @@ app.include_router(
 )
 
 app.include_router(
-    support.router,
-    prefix=f"{settings.api_v1_str}/support",
-    tags=["support"]
+    donate.router,
+    prefix=f"{settings.api_v1_str}/donate",
+    tags=["donate"]
 )
 
 @app.get("/")
