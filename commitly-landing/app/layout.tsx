@@ -9,8 +9,12 @@ import { LanguageProvider } from './contexts/LanguageContext'
 export const metadata: Metadata = {
   title: 'Commitly - The AI Code Tutor',
   description: 'Paste a GitHub repo link, and let AI guide you to build the project you want. Join the waitlist for early access.',
-  icons: [{ rel: 'icon', url: '/icons/icon_05x.png' }],
-  viewport: "width=device-width, initial-scale=1.0"
+  icons: [{ rel: 'icon', url: '/icons/icon_05x.png' }]
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
