@@ -105,7 +105,7 @@ export const translations: Record<Language, Translations> = {
   ru: {
     // Navbar
     support: 'Поддержка',
-    joinWaitlist: 'Записаться в очередь',
+    joinWaitlist: 'Войти в вейтлист',
     
     // Hero section
     heroTitle: 'ИИ-наставник по коду',
@@ -125,10 +125,10 @@ export const translations: Record<Language, Translations> = {
     feature3Subtitle: 'Сначала подсказки. Если застряли, покажите крошечный патч — не стену кода.',
     
     // Bottom CTA
-    joinWaitlistTitle: 'Записаться в очередь',
+    joinWaitlistTitle: 'Войти в вейтлист',
     
     // Modals
-    joinWaitlistModalTitle: 'Записаться в очередь',
+    joinWaitlistModalTitle: 'Войти в вейтлист',
     modalEmailPlaceholder: 'email@domain.com',
     modalSuccessMessage: 'Вы в списке! 🚀',
     modalDuplicateMessage: 'Похоже, вы уже зарегистрированы.',
@@ -140,9 +140,9 @@ export const translations: Record<Language, Translations> = {
     privacy: 'Конфиденциальность',
     
     // Button labels
-    joinWaitlistButton: 'Записаться в очередь',
-    joiningButton: 'Записываемся…',
-    alreadyJoinedButton: 'Уже записались',
+    joinWaitlistButton: 'Войти в вейтлист',
+    joiningButton: 'Вход…',
+    alreadyJoinedButton: 'Уже вошли',
     tryAgainButton: 'Попробовать снова',
     sendButton: 'Отправить',
     sendingButton: 'Отправляем…',
