@@ -38,6 +38,6 @@ class PolarService:
         if email:
             payload["customer_email"] = email
 
-        result = self.client.checkouts.create(payload)
+        result = self.client.checkouts.create(request=payload)
         # result contains url and id; return a simple dict
         return {"id": result.id, "url": result.url}
