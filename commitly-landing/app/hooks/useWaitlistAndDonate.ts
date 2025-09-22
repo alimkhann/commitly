@@ -3,26 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE ?? 'https://commitly-m005.onrender.com'
+const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE ?? 'http://localhost:8000'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
-type SupportStatus = 'idle' | 'success' | 'error'
 
-export function useWaitlistAndSupport() {
+export function useWaitlistAndDonate() {
     const { t } = useLanguage()
     const [heroEmail, setHeroEmail] = useState('')
     const [waitlistEmail, setWaitlistEmail] = useState('')
-    const [supportEmail, setSupportEmail] = useState('')
-    const [message, setMessage] = useState('')
 
     const [waitlistCount, setWaitlistCount] = useState<number | null>(null)
     const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false)
     const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('idle')
-    const [isSubmittingSupport, setIsSubmittingSupport] = useState(false)
-    const [supportStatus, setSupportStatus] = useState<SupportStatus>('idle')
 
     const [showWaitlistModal, setShowWaitlistModal] = useState(false)
-    const [showSupportModal, setShowSupportModal] = useState(false)
 
     const fetchWaitlistCount = useCallback(async () => {
         if (!API_BASE) {
@@ -46,9 +40,9 @@ export function useWaitlistAndSupport() {
     }, [fetchWaitlistCount])
 
     useEffect(() => {
-        const open = showWaitlistModal || showSupportModal
+        const open = showWaitlistModal
         document.body.classList.toggle('body-locked', open)
-    }, [showWaitlistModal, showSupportModal])
+    }, [showWaitlistModal])
 
     const waitlistButtonLabel = useMemo(() => {
         if (isSubmittingWaitlist) return t.joiningButton
@@ -57,13 +51,6 @@ export function useWaitlistAndSupport() {
         if (waitlistStatus === 'error') return t.tryAgainButton
         return t.joinWaitlistButton
     }, [isSubmittingWaitlist, waitlistStatus, t])
-
-    const supportButtonLabel = useMemo(() => {
-        if (isSubmittingSupport) return t.sendingButton
-        if (supportStatus === 'success') return t.thanksButton
-        if (supportStatus === 'error') return t.tryAgainButton
-        return t.sendButton
-    }, [isSubmittingSupport, supportStatus, t])
 
     const submitWaitlist = useCallback(
         async (email: string) => {
@@ -119,64 +106,46 @@ export function useWaitlistAndSupport() {
         [submitWaitlist, waitlistEmail]
     )
 
-    const handleSupportSubmit = useCallback(
-        async (e: React.FormEvent) => {
-            e.preventDefault()
-            if (!supportEmail || !message) return
-            if (!API_BASE) {
-                setSupportStatus('error')
-                return
-            }
-            setIsSubmittingSupport(true)
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/support/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: supportEmail, message }),
-                })
-                if (!res.ok) throw new Error('failed')
-                setSupportStatus('success')
-                setSupportEmail('')
-                setMessage('')
-                setTimeout(() => setShowSupportModal(false), 900)
-            } catch (error) {
-                console.error('Failed to submit support request', error)
-                setSupportStatus('error')
-            } finally {
-                setIsSubmittingSupport(false)
-                setTimeout(() => setSupportStatus('idle'), 2400)
-            }
-        },
-        [message, supportEmail]
-    )
+    const donate = useCallback(async () => {
+        if (!API_BASE) return
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/donate/checkout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}), // pay-what-you-want by default
+            })
+            if (!res.ok) throw new Error('Failed to create checkout')
+            const data = (await res.json()) as { url: string }
+            if (data.url) window.location.href = data.url
+        } catch (err) {
+            console.error('Donation checkout failed', err)
+        }
+    }, [])
 
     return {
-        // State
+        // emails
         heroEmail,
         setHeroEmail,
         waitlistEmail,
         setWaitlistEmail,
-        supportEmail,
-        setSupportEmail,
-        message,
-        setMessage,
+
+        // counts & states
         waitlistCount,
         isSubmittingWaitlist,
         waitlistStatus,
-        isSubmittingSupport,
-        supportStatus,
+
+        // ui states
         showWaitlistModal,
         setShowWaitlistModal,
-        showSupportModal,
-        setShowSupportModal,
-        
-        // Computed
+
+        // labels
         waitlistButtonLabel,
-        supportButtonLabel,
-        
-        // Handlers
+
+        // handlers
         handleHeroSubmit,
         handleWaitlistModalSubmit,
-        handleSupportSubmit,
+
+        // donations
+        donate,
     }
 }

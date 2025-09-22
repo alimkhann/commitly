@@ -35,8 +35,8 @@ export default function LanguageDropdown({ variant = 'navbar' }: LanguageDropdow
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className={`flex items-center gap-1 transition-colors ${
-                    isFooter 
-                        ? 'px-2 py-1 text-xs text-[#d9d9d9] hover:text-white hover:underline underline-offset-2' 
+                    isFooter
+                        ? 'px-2 py-1 text-xs text-[#d9d9d9] hover:text-white hover:underline underline-offset-2'
                         : 'px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-white/20 rounded-md hover:bg-white/10'
                 }`}
             >

@@ -6,8 +6,7 @@ import Hero from './components/Hero'
 import Features from './components/Features'
 import BottomCTA from './components/BottomCTA'
 import WaitlistModal from './components/WaitlistModal'
-import SupportModal from './components/SupportModal'
-import { useWaitlistAndSupport } from './hooks/useWaitlistAndSupport'
+import { useWaitlistAndDonate } from './hooks/useWaitlistAndDonate'
 
 export default function Page() {
     const [isScrolled, setIsScrolled] = useState(false)
@@ -18,25 +17,16 @@ export default function Page() {
         setHeroEmail,
         waitlistEmail,
         setWaitlistEmail,
-        supportEmail,
-        setSupportEmail,
-        message,
-        setMessage,
         waitlistCount,
         isSubmittingWaitlist,
         waitlistStatus,
-        isSubmittingSupport,
-        supportStatus,
         showWaitlistModal,
         setShowWaitlistModal,
-        showSupportModal,
-        setShowSupportModal,
         waitlistButtonLabel,
-        supportButtonLabel,
         handleHeroSubmit,
         handleWaitlistModalSubmit,
-        handleSupportSubmit,
-    } = useWaitlistAndSupport()
+        donate,
+    } = useWaitlistAndDonate()
 
     useEffect(() => {
         const setVar = () => {
@@ -61,7 +51,7 @@ export default function Page() {
         <div className="min-h-screen w-full bg-black">
             <Navbar
                 isScrolled={isScrolled}
-                onSupportClick={() => setShowSupportModal(true)}
+                onDonateClick={donate}
                 onWaitlistClick={() => setShowWaitlistModal(true)}
             />
 
@@ -94,19 +84,6 @@ export default function Page() {
                 waitlistButtonLabel={waitlistButtonLabel}
                 onClose={() => setShowWaitlistModal(false)}
                 onSubmit={handleWaitlistModalSubmit}
-            />
-
-            <SupportModal
-                show={showSupportModal}
-                supportEmail={supportEmail}
-                setSupportEmail={setSupportEmail}
-                message={message}
-                setMessage={setMessage}
-                supportStatus={supportStatus}
-                isSubmittingSupport={isSubmittingSupport}
-                supportButtonLabel={supportButtonLabel}
-                onClose={() => setShowSupportModal(false)}
-                onSubmit={handleSupportSubmit}
             />
         </div>
     )
