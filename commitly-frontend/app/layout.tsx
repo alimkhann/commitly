@@ -1,0 +1,29 @@
+import './globals.css'
+import "@fontsource/teachers"
+import type { Metadata } from 'next'
+import { ReactNode } from 'react'
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+
+export const metadata: Metadata = {
+  title: 'Commitly - The AI Code Tutor',
+  description: 'Paste a GitHub repo link, and let AI guide you to build the project you want.',
+  icons: [{ rel: 'icon', url: '/icons/icon_05x.png' }]
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="antialiased bg-black text-white" style={{ fontFamily: 'Teachers' }}>
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
+    </html>
+  )
+}
