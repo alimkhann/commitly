@@ -93,19 +93,19 @@ export default function SearchPage() {
                 </p>
               </div>
 
-              {/* Niggachain.ai */}
+              {/* Tencent */}
               <div className="flex gap-2.5 items-center justify-center relative">
                 <div className="w-8 h-7 flex items-center justify-center">
                   <Image
                     src="/icons/hammer_white.svg"
-                    alt="Niggachain.ai"
+                    alt="Tencent"
                     width={32}
                     height={30}
                     className="w-8 h-7"
                   />
                 </div>
                 <p className="font-teachers font-normal text-white text-[32px] whitespace-nowrap">
-                  Niggachain.ai
+                  Tencent
                 </p>
               </div>
             </div>

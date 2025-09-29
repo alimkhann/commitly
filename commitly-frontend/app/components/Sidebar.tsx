@@ -11,7 +11,7 @@ const USERNAME = 'zhanbo'
 const REPOS = [
   { name: 'Deepseek', id: 'deepseek' },
   { name: 'VSCode', id: 'vscode' },
-  { name: 'Niggachain.ai', id: 'niggachain-ai' }
+  { name: 'Tencent', id: 'tencent' }
 ]
 
 const Logo = ({ onClick }: { onClick?: () => void }) => (
@@ -27,7 +27,7 @@ const Logo = ({ onClick }: { onClick?: () => void }) => (
 )
 
 const CollapseButton = ({ onClick, title }: { onClick: () => void; title: string }) => (
-  <button 
+  <button
     onClick={onClick}
     className="relative w-8 h-8 hover:bg-white/15 rounded transition-colors"
     title={title}
@@ -43,19 +43,19 @@ const CollapseButton = ({ onClick, title }: { onClick: () => void; title: string
 )
 
 const NewRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
-  <Link 
+  <Link
     className={`${isCollapsed ? 'w-full h-12 flex items-center justify-start' : 'flex gap-2.5 items-center w-full h-12'} hover:bg-white/15 rounded transition-colors p-1`}
     title="New repo"
     href="/"
   >
-    <div className="w-8 h-8 flex items-center justify-center">
+    <div className="w-8 h-8 flex items-center justify-center shrink-0">
 
       <Image
         src="/icons/hammer_white.svg"
         alt="New repo"
         width={32}
         height={32}
-        className="w-8 h-8"
+        className="w-8 h-8 shrink-0"
         />
     </div>
     {!isCollapsed && (
@@ -67,18 +67,18 @@ const NewRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
 )
 
 const SearchRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
-  <Link 
+  <Link
     href="/search"
     className={`${isCollapsed ? 'w-full h-12 flex items-center justify-start' : 'flex gap-2.5 items-center w-full h-12'} hover:bg-white/15 rounded transition-colors p-1`}
     title="Search repo"
   >
-    <div className="w-8 h-8 flex items-center justify-center">
+    <div className="w-8 h-8 flex items-center justify-center shrink-0">
       <Image
         src="/icons/magnifyingglass_white.svg"
         alt="Search repo"
         width={32}
         height={32}
-        className="w-8 h-8"
+        className="w-8 h-8 shrink-0"
       />
     </div>
     {!isCollapsed && (
@@ -91,7 +91,7 @@ const SearchRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
 
 const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
   const pathname = usePathname()
-  
+
   // Determine if a repo is active based on current path
   const isRepoActive = (repoId: string) => {
     return pathname.startsWith(`/repo/${repoId}`)
@@ -100,7 +100,7 @@ const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
   return (
     <div className="flex flex-col gap-2.5 items-start w-full">
       {!isCollapsed && (
-        <> 
+        <>
         <p className="font-teachers font-normal text-white text-[24px] whitespace-nowrap">
           Repos
         </p>
@@ -140,7 +140,7 @@ const AccountSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
   if (isCollapsed) {
     return (
       <div className="flex gap-2.5 items-center p-1 w-full border-t border-white shadow-lg">
-        <button 
+        <button
           onClick={toggleAccount}
           className="relative w-8 h-8 hover:bg-white/15 rounded transition-colors"
         >
@@ -238,7 +238,7 @@ const AccountSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
       </div>
 
       {/* Account Button */}
-      <button 
+      <button
         onClick={toggleAccount}
         className="flex gap-2.5 items-center px-4 py-2 rounded border border-white w-full hover:bg-white/15 transition-colors"
       >
