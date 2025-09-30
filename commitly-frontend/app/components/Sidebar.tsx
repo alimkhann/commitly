@@ -140,21 +140,18 @@ const AccountSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
   if (isCollapsed) {
     return (
       <div className="flex gap-2.5 items-center p-1 w-full border-t border-white shadow-lg">
-        <button
-          onClick={toggleAccount}
-          className="relative w-8 h-8 hover:bg-white/15 rounded transition-colors"
-        >
+        <div className="relative w-8 h-8">
           <div className="w-8 h-8 bg-gray-400 rounded-full"></div>
-        </button>
+        </div>
       </div>
     )
   }
-
+  console.log(isAccountOpen, isCollapsed)
   return (
     <div className="relative flex flex-col items-start w-full border-t border-white pt-4 shadow-lg">
       {/* Account Options Dropdown - Absolute positioned overlay */}
-      <div className={`absolute bottom-full left-0 right-0 mb-2 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg transition-all duration-300 ease-in-out z-10 ${
-        isAccountOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+      <div className={`absolute bottom-full left-0 right-0 mb-2 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg z-10 ${
+        isAccountOpen && !isCollapsed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
       }`}>
         {/* Profile with Email */}
         <div className="flex gap-2.5 items-center w-full">
