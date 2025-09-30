@@ -19,19 +19,19 @@ export default function Home() {
             className="w-24 h-24"
           />
         </div>
-        <p className="font-teachers font-bold text-white text-[64px] whitespace-nowrap">
+        <p className="font-teachers font-bold text-white text-responsive-6xl whitespace-nowrap">
           commitly
         </p>
       </div>
 
       {/* Textfield */}
-      <div className="bg-white flex items-center justify-between px-4 py-2 rounded w-[570px] border border-white">
+      <div className="bg-white flex items-center justify-between px-3 py-1.5 rounded w-[30rem] max-w-[90vw] border border-white">
         <input
           type="text"
           placeholder="paste a github repo link"
           value={repoLink}
           onChange={(e) => setRepoLink(e.target.value)}
-          className="font-teachers font-normal text-black text-[32px] flex-1 bg-transparent border-none outline-none placeholder:text-black"
+          className="font-teachers font-normal text-black text-responsive-4xl flex-1 bg-transparent border-none outline-none placeholder:text-black"
         />
         <div className="w-8 h-7 flex items-center justify-center">
           <Image

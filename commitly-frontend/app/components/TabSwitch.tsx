@@ -23,7 +23,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
             : 'text-white hover:bg-white/15'
         }`}
       >
-        <p className={`font-teachers font-bold text-[20px] whitespace-nowrap ${
+        <p className={`font-teachers font-extrabold text-responsive-2xl whitespace-nowrap ${
           isTimelineActive ? 'text-black' : 'text-white'
         }`}>
           timeline
@@ -38,7 +38,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
             : 'text-white hover:bg-white/15'
         }`}
       >
-        <p className={`font-teachers font-bold text-[20px] whitespace-nowrap ${
+        <p className={`font-teachers font-extrabold text-responsive-2xl whitespace-nowrap ${
           isGuideActive ? 'text-black' : 'text-white'
         }`}>
           guide

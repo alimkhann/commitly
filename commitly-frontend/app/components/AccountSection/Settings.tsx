@@ -29,20 +29,20 @@ export default function Settings({ onClose }: SettingsProps) {
           <div className="space-y-4">
             {/* Theme Setting */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Theme
               </p>
-              <div className="flex gap-2.5 items-center justify-center">
-                <p className="font-teachers font-normal text-white text-[24px]">
+              <div className="flex gap-2 items-center justify-center">
+                <p className="font-teachers font-normal text-white text-responsive-3xl">
                   System
                 </p>
-                <div className="w-5 h-3 flex items-center justify-center">
+                <div className="w-4 h-3 flex items-center justify-center">
                   <Image
                     src="/icons/cross_white.svg"
                     alt="Dropdown"
-                    width={20}
-                    height={12}
-                    className="w-5 h-3"
+                    width={16}
+                    height={10}
+                    className="w-4 h-3"
                   />
                 </div>
               </div>
@@ -50,20 +50,20 @@ export default function Settings({ onClose }: SettingsProps) {
 
             {/* Language Setting */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Language
               </p>
-              <div className="flex gap-2.5 items-center justify-center">
-                <p className="font-teachers font-normal text-white text-[24px]">
+              <div className="flex gap-2 items-center justify-center">
+                <p className="font-teachers font-normal text-white text-responsive-3xl">
                   Auto-detect
                 </p>
-                <div className="w-5 h-3 flex items-center justify-center">
+                <div className="w-4 h-3 flex items-center justify-center">
                   <Image
                     src="/icons/cross_white.svg"
                     alt="Dropdown"
-                    width={20}
-                    height={12}
-                    className="w-5 h-3"
+                    width={16}
+                    height={10}
+                    className="w-4 h-3"
                   />
                 </div>
               </div>
@@ -76,7 +76,7 @@ export default function Settings({ onClose }: SettingsProps) {
           <div className="space-y-4">
             {/* Responses Setting */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Responses
               </p>
               <ToggleSwitch
@@ -87,7 +87,7 @@ export default function Settings({ onClose }: SettingsProps) {
             </div>
             
             {/* Description */}
-            <p className="font-teachers font-normal text-[#a6a6a6] text-[24px]">
+            <p className="font-teachers font-normal text-[#a6a6a6] text-responsive-3xl">
               Get notified when commitly responds to requests that take time, like timeline creation.
             </p>
           </div>
@@ -98,7 +98,7 @@ export default function Settings({ onClose }: SettingsProps) {
           <div className="space-y-4">
             {/* Multi-factor authentication */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Multi-factor authentication
               </p>
               <ToggleSwitch
@@ -108,26 +108,26 @@ export default function Settings({ onClose }: SettingsProps) {
             </div>
             
             {/* MFA Description */}
-            <p className="font-teachers font-normal text-[#a6a6a6] text-[24px]">
+            <p className="font-teachers font-normal text-[#a6a6a6] text-responsive-3xl">
               Require an extra security challenge when logging in. If you are unable to pass this challenge, you will have the option to recover your account via email.
             </p>
 
             {/* Log out of this device */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Log out of this device
               </p>
-              <button className="px-4 py-2 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-[20px]">
+              <button className="px-3 py-1.5 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-responsive-base">
                 Log out
               </button>
             </div>
 
             {/* Log out of all devices */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Log out of all devices
               </p>
-              <button className="px-4 py-2 border border-[#ba2623] text-[#ba2623] hover:bg-[#ba2623]/15 rounded transition-colors font-teachers text-[20px]">
+              <button className="px-3 py-1.5 border border-[#ba2623] text-[#ba2623] hover:bg-[#ba2623]/15 rounded transition-colors font-teachers text-responsive-base">
                 Log out all
               </button>
             </div>
@@ -139,63 +139,63 @@ export default function Settings({ onClose }: SettingsProps) {
           <div className="space-y-4">
             {/* Free Plan */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Free Plan
               </p>
-              <button className="flex gap-2.5 items-center px-3 py-2 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-[24px]">
+              <button className="flex gap-2 items-center px-2.5 py-1.5 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-responsive-3xl">
                 Manage
                 <Image
                   src="/icons/cross_white.svg"
                   alt="Dropdown"
-                  width={20}
-                  height={12}
-                  className="w-5 h-3"
+                  width={16}
+                  height={10}
+                  className="w-4 h-3"
                 />
               </button>
             </div>
 
             {/* Plan Features */}
-            <p className="font-teachers font-normal text-white text-[24px]">
+            <p className="font-teachers font-normal text-white text-responsive-3xl">
               Your plan includes:
             </p>
-            <div className="space-y-2">
-              <p className="font-teachers font-normal text-white text-[24px]">
+            <div className="space-y-1.5">
+              <p className="font-teachers font-normal text-white text-responsive-3xl">
                 feat
               </p>
-              <p className="font-teachers font-normal text-white text-[24px]">
+              <p className="font-teachers font-normal text-white text-responsive-3xl">
                 feat
               </p>
-              <p className="font-teachers font-normal text-white text-[24px]">
+              <p className="font-teachers font-normal text-white text-responsive-3xl">
                 feat
               </p>
             </div>
 
             {/* Payment */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Payment
               </p>
-              <button className="px-3 py-2 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-[24px]">
+              <button className="px-2.5 py-1.5 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-responsive-3xl">
                 Manage
               </button>
             </div>
 
             {/* Delete Account */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Delete Account
               </p>
-              <button className="px-3 py-2 border border-[#ba2623] text-[#ba2623] hover:bg-[#ba2623]/15 rounded transition-colors font-teachers text-[24px]">
+              <button className="px-2.5 py-1.5 border border-[#ba2623] text-[#ba2623] hover:bg-[#ba2623]/15 rounded transition-colors font-teachers text-responsive-3xl">
                 Delete
               </button>
             </div>
 
             {/* Email */}
             <div className="flex items-center justify-between">
-              <p className="font-teachers font-normal text-white text-[32px]">
+              <p className="font-teachers font-normal text-white text-responsive-4xl">
                 Email
               </p>
-              <p className="font-teachers font-normal text-white text-[20px]">
+              <p className="font-teachers font-normal text-white text-responsive-base">
                 zhanbo@gmail.com
               </p>
             </div>
@@ -209,22 +209,22 @@ export default function Settings({ onClose }: SettingsProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-black border border-white rounded w-[960px] h-[600px] flex flex-col">
+      <div className="bg-black border border-white rounded w-responsive-dialog h-responsive-dialog flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white">
-          <p className="font-teachers font-normal text-white text-[32px]">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-white">
+          <p className="font-teachers font-normal text-white text-responsive-4xl">
             Settings
           </p>
           <button
             onClick={onClose}
-            className="w-4 h-4 flex items-center justify-center hover:bg-white/15 rounded transition-colors"
+            className="w-3 h-3 flex items-center justify-center hover:bg-white/15 rounded transition-colors"
           >
             <Image
               src="/icons/cross_white.svg"
               alt="Close"
-              width={16}
-              height={16}
-              className="w-4 h-4"
+              width={12}
+              height={12}
+              className="w-3 h-3"
             />
           </button>
         </div>
@@ -253,7 +253,7 @@ export default function Settings({ onClose }: SettingsProps) {
                       className="w-7 h-7"
                     />
                   </div>
-                  <p className={`font-teachers font-normal text-[32px] ${
+                  <p className={`font-teachers font-normal text-responsive-4xl ${
                     activeSection === section.id ? 'text-black' : 'text-white'
                   }`}>
                     {section.name}

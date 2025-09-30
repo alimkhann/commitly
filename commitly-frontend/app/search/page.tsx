@@ -10,7 +10,7 @@ export default function SearchPage() {
   return (
     <div className="flex flex-col items-center justify-center gap-2.5 h-full">
           {/* Search Menu */}
-          <div className="flex flex-col gap-2.5 items-start pb-4 pt-0 px-0 relative rounded border border-white w-[960px]">
+          <div className="flex flex-col gap-2 items-start pb-3 pt-0 px-0 relative rounded border border-white w-responsive-search max-w-[90vw]">
             {/* Top Section */}
             <div className="flex items-center justify-between pl-4 pr-5 py-2 relative w-full border-b border-white">
               <input
@@ -18,7 +18,7 @@ export default function SearchPage() {
                 placeholder="Search repos..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="font-teachers font-normal text-white text-[32px] bg-transparent border-none outline-none placeholder:text-white flex-1"
+                className="font-teachers font-normal text-white text-responsive-4xl bg-transparent border-none outline-none placeholder:text-white flex-1"
               />
                 <div className="w-4 h-4 flex items-center justify-center">
                   <span className="text-white text-lg">×</span>
@@ -61,7 +61,7 @@ export default function SearchPage() {
                     className="w-8 h-7"
                   />
                 </div>
-                <p className="font-teachers font-normal text-white text-[32px] whitespace-nowrap">
+                <p className="font-teachers font-normal text-white text-responsive-4xl whitespace-nowrap">
                   Deepseek
                 </p>
               </div>

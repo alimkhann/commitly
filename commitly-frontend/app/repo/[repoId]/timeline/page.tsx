@@ -14,7 +14,7 @@ export default function RepoTimelinePage() {
       
       {/* Timeline Content */}
       <div className="flex flex-col items-center justify-between min-h-0 px-64 py-8 relative w-full flex-1">
-        <p className="font-teachers font-bold text-white text-[32px] whitespace-nowrap">
+        <p className="font-teachers font-bold text-white text-responsive-4xl whitespace-nowrap">
           это пока хз как делать
         </p>
       </div>

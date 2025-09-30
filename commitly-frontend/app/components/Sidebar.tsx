@@ -58,7 +58,7 @@ const NewRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
         />
     </div>
     {!isCollapsed && (
-      <p className="font-teachers font-normal text-white text-[32px] whitespace-nowrap">
+      <p className="font-teachers font-normal text-white text-responsive-4xl whitespace-nowrap">
         New repo
       </p>
     )}
@@ -81,7 +81,7 @@ const SearchRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
       />
     </div>
     {!isCollapsed && (
-      <p className="font-teachers font-normal text-white text-[32px] whitespace-nowrap">
+      <p className="font-teachers font-normal text-white text-responsive-4xl whitespace-nowrap">
         Search repo
       </p>
     )}
@@ -97,14 +97,14 @@ const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
   }
 
   return (
-    <div className="flex flex-col gap-2.5 items-start w-full">
+    <div className="flex flex-col gap-2 items-start w-full">
       {!isCollapsed && (
         <>
-        <p className="font-teachers font-normal text-white text-[24px] whitespace-nowrap">
+        <p className="font-teachers font-normal text-white text-responsive-3xl whitespace-nowrap">
           Repos
         </p>
 
-        <div className="flex flex-col gap-2.5 w-full">
+        <div className="flex flex-col gap-2 w-full">
           {REPOS.map((repo) => (
             <Link
               key={repo.id}
@@ -115,7 +115,7 @@ const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
                   : 'border border-white text-white hover:bg-white/15'
               }`}
             >
-              <p className={`font-teachers font-normal text-[24px] whitespace-nowrap ${
+              <p className={`font-teachers font-normal text-responsive-3xl whitespace-nowrap ${
                 isRepoActive(repo.id) ? 'text-black' : 'text-white'
               }`}>
                 {repo.name}
@@ -137,10 +137,10 @@ export default function Sidebar() {
   }
 
   return (
-    <div className={`bg-black h-full relative border-r border-white transition-[width] duration-300 ease-in-out ${isCollapsed ? 'w-[68px]' : 'w-[300px]'}`}>
-      <div className="flex flex-col h-full items-start justify-between p-[10px]">
+    <div className={`bg-black h-full relative border-r border-white transition-[width] duration-300 ease-in-out ${isCollapsed ? 'w-responsive-sidebar-collapsed' : 'w-responsive-sidebar'}`}>
+      <div className="flex flex-col h-full items-start justify-between p-2.5">
         {/* Top Section */}
-        <div className="flex flex-col flex-1 gap-16 items-start w-full overflow-hidden">
+        <div className="flex flex-col gap-12 items-start w-full">
           {/* Logo and collapse */}
           <div className={`flex items-center w-full ${isCollapsed ? 'justify-start pl-0 pr-0' : 'justify-between pl-0 pr-3'}`}>
             {isCollapsed ? (
@@ -160,7 +160,7 @@ export default function Sidebar() {
           </div>
 
           {/* Sidebar Chat Options */}
-          <div className={`flex flex-col gap-2.5 w-full ${isCollapsed ? 'items-center' : 'items-start'}`}>
+          <div className={`flex flex-col gap-2 w-full ${isCollapsed ? 'items-center' : 'items-start'}`}>
             <NewRepoButton isCollapsed={isCollapsed} />
             <SearchRepoButton isCollapsed={isCollapsed} />
           </div>
