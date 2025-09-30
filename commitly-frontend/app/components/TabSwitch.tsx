@@ -17,13 +17,13 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
     <div className="flex gap-0 items-start p-1 relative rounded border border-white">
       <Link
         href={`/repo/${repoId}/timeline`}
-        className={`flex gap-2.5 items-center justify-center px-0 py-0 relative rounded w-32 transition-colors ${
+        className={`flex gap-2 items-center justify-center px-0 py-0 relative rounded w-28 transition-colors ${
           isTimelineActive
             ? 'bg-white text-black'
             : 'text-white hover:bg-white/15'
         }`}
       >
-        <p className={`font-teachers font-bold text-[24px] whitespace-nowrap ${
+        <p className={`font-teachers font-bold text-[20px] whitespace-nowrap ${
           isTimelineActive ? 'text-black' : 'text-white'
         }`}>
           timeline
@@ -32,13 +32,13 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
       
       <Link
         href={`/repo/${repoId}/guide`}
-        className={`flex gap-2.5 items-center justify-center px-0 py-0 relative rounded w-32 transition-colors ${
+        className={`flex gap-2 items-center justify-center px-0 py-0 relative rounded w-28 transition-colors ${
           isGuideActive
             ? 'bg-white text-black'
             : 'text-white hover:bg-white/15'
         }`}
       >
-        <p className={`font-teachers font-bold text-[24px] whitespace-nowrap ${
+        <p className={`font-teachers font-bold text-[20px] whitespace-nowrap ${
           isGuideActive ? 'text-black' : 'text-white'
         }`}>
           guide
