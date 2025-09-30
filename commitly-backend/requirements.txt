@@ -10,3 +10,4 @@ alembic==1.13.3
 psycopg[binary]==3.2.2
 python-dotenv==1.1.1
 polar-sdk==0.24.0
+openai==1.52.2

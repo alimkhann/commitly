@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export const viewport = {
   width: 'device-width',
-  initialScale: 1,
+  initialScale: 0.9,
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <div className="bg-black relative size-full min-h-screen">
           <div className="flex h-screen">
             <Sidebar />
-            <div className="flex-1">
+            <div className="flex-1 h-full overflow-y-auto">
               {children}
             </div>
           </div>

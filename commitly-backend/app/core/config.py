@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Any, List, Optional
+from uuid import UUID
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,7 +21,15 @@ class Settings(BaseSettings):
 
     supabase_url: HttpUrl = Field(..., validation_alias="SUPABASE_URL")
     supabase_anon_key: str = Field(..., validation_alias="SUPABASE_ANON_KEY")
+    supabase_service_role_key: Optional[str] = Field(default=None, validation_alias="SUPABASE_SERVICE_ROLE_KEY")
     database_url: str = Field(..., validation_alias="DATABASE_URL")
+
+    openai_api_key: Optional[str] = Field(default=None, validation_alias="OPENAI_API_KEY")
+    openai_model: Optional[str] = Field(default=None, validation_alias="OPENAI_MODEL")
+
+    github_default_token: Optional[str] = Field(default=None, validation_alias="GITHUB_DEFAULT_TOKEN")
+
+    public_user_id: UUID = Field(default=UUID("00000000-0000-0000-0000-000000000000"), validation_alias="PUBLIC_USER_ID")
 
     # Polar (donations) configuration
     polar_access_token: Optional[str] = Field(default=None, validation_alias="POLAR_ACCESS_TOKEN")
@@ -38,36 +47,20 @@ class Settings(BaseSettings):
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
-    def parse_origins(cls, value: Any) -> List[str]:
-        match value:
-            case None:
-                return ["*"]
-            case str() as raw:
-                cleaned = raw.strip()
-                if not cleaned:
-                    return ["*"]
-                if cleaned.startswith("["):
-                    try:
-                        import json
-
-                        data = json.loads(cleaned)
-                        if isinstance(data, list):
-                            cleaned_list = [origin.strip() for origin in data if isinstance(origin, str) and origin.strip()]
-                            return cleaned_list or ["*"]
-                    except json.JSONDecodeError:
-                        pass
-                parts = [origin.strip() for origin in cleaned.split(",") if origin.strip()]
-                return parts or ["*"]
-            case list() as sequence:
-                cleaned_list = [origin.strip() for origin in sequence if isinstance(origin, str) and origin.strip()]
-                return cleaned_list or ["*"]
-        return ["*"]
+    def _parse_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            try:
+                # Accept JSON-like list string
+                import json
+                return json.loads(v)
+            except Exception:
+                return [v]
+        return v
 
 
-@lru_cache
+@lru_cache()
 def get_settings() -> Settings:
-    """Return a cached instance of the application settings."""
-    return Settings()
+    return Settings()  # type: ignore[call-arg]
 
 
 settings = get_settings()

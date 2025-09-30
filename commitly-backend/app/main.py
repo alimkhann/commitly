@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import waitlist
 from app.api import donate
+from app.api import repos
+from app.api import agent
+from app.api import account
 
 app = FastAPI(
     title=settings.project_name,
@@ -30,6 +33,24 @@ app.include_router(
     donate.router,
     prefix=f"{settings.api_v1_str}/donate",
     tags=["donate"]
+)
+
+app.include_router(
+    repos.router,
+    prefix=f"{settings.api_v1_str}/repos",
+    tags=["repos"]
+)
+
+app.include_router(
+    agent.router,
+    prefix=f"{settings.api_v1_str}/agent",
+    tags=["agent"]
+)
+
+app.include_router(
+    account.router,
+    prefix=f"{settings.api_v1_str}/account",
+    tags=["account"]
 )
 
 @app.get("/")
