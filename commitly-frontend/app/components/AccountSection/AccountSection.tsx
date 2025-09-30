@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import { useState } from 'react'
 import Settings from './Settings'
-import UpgradePlan from './UpgradePlan'
 import ReportBug from '../ReportBug'
 import { useRouter } from 'next/navigation'
 
@@ -32,8 +31,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   }
 
   const openUpgradePlan = () => {
-    setIsUpgradePlanOpen(true)
     setIsAccountOpen(false)
+    router.push('/plans')
   }
 
   // Show submenu when either help button or submenu is hovered
@@ -288,10 +287,6 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
         <Settings onClose={() => setIsSettingsOpen(false)} />
       )}
 
-      {/* Upgrade Plan Dialog */}
-      {isUpgradePlanOpen && (
-        <UpgradePlan onClose={() => setIsUpgradePlanOpen(false)} />
-      )}
       {/* Report Bug Modal */}
       <ReportBug isOpen={isReportBugOpen} onClose={() => setIsReportBugOpen(false)} />
     </>

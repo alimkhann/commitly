@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 
-const HIDE_SIDEBAR_PREFIXES = ['/help-center', '/release-notes', '/policies']
+const HIDE_SIDEBAR_PREFIXES = ['/help-center', '/release-notes', '/policies', '/plans']
 
 export default function SidebarWrapper() {
     const pathname = usePathname() || '/'
