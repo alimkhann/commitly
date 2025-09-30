@@ -51,7 +51,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           <div className="flex gap-2.5 items-center w-full">
             <div className="w-6 h-6 flex items-center justify-center">
               <Image
-                src="/icons/profile.svg"
+                src="/icons/profile_white.svg"
                 alt="Profile"
                 width={24}
                 height={24}
@@ -89,7 +89,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           >
             <div className="w-6 h-6 flex items-center justify-center">
               <Image
-                src="/icons/settings.svg"
+                src="/icons/settings_white.svg"
                 alt="Settings"
                 width={24}
                 height={24}
