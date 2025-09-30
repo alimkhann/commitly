@@ -153,7 +153,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
                   <div className="w-6 h-6 flex items-center justify-center">
                     <Image
-                      src="/icons/flag_white.svg"
+                      src="/icons/help.svg"
                       alt="Help Center"
                       width={24}
                       height={24}
@@ -178,7 +178,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
                   <div className="w-6 h-6 flex items-center justify-center">
                     <Image
-                      src="/icons/note_text_white.svg"
+                      src="/icons/pencil_line_white.svg"
                       alt="Release Notes"
                       width={24}
                       height={24}
@@ -203,7 +203,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
                   <div className="w-6 h-6 flex items-center justify-center">
                     <Image
-                      src="/icons/pencil_line_white.svg"
+                      src="/icons/note_text_white.svg"
                       alt="Terms & Policies"
                       width={24}
                       height={24}
@@ -228,7 +228,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
                   <div className="w-6 h-6 flex items-center justify-center">
                     <Image
-                      src="/icons/hammer_white.svg"
+                      src="/icons/flag_white.svg"
                       alt="Report Bug"
                       width={24}
                       height={24}
