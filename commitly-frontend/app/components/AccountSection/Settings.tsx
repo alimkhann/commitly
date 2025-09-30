@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState } from 'react'
+import ToggleSwitch from '../ToggleSwitch'
 
 interface SettingsProps {
   onClose: () => void
@@ -11,12 +12,14 @@ type SettingsSection = 'general' | 'notifications' | 'security' | 'account'
 
 export default function Settings({ onClose }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general')
+  const [responsesEnabled, setResponsesEnabled] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
 
   const settingsSections = [
-    { id: 'general' as const, name: 'General', icon: '/icons/settings.svg' },
-    { id: 'notifications' as const, name: 'Notifications', icon: '/icons/help.svg' }, // Using help icon as placeholder
-    { id: 'security' as const, name: 'Security', icon: '/icons/help.svg' }, // Using help icon as placeholder
-    { id: 'account' as const, name: 'Account', icon: '/icons/profile.svg' }
+    { id: 'general' as const, name: 'General', icon: '/icons/settings_white.svg' },
+    { id: 'notifications' as const, name: 'Notifications', icon: '/icons/notifications_white.svg' },
+    { id: 'security' as const, name: 'Security', icon: '/icons/keys_white.svg' },
+    { id: 'account' as const, name: 'Account', icon: '/icons/profile_white.svg' }
   ]
 
   const renderSettingsContent = () => {
@@ -35,7 +38,7 @@ export default function Settings({ onClose }: SettingsProps) {
                 </p>
                 <div className="w-5 h-3 flex items-center justify-center">
                   <Image
-                    src="/icons/collapse.svg"
+                    src="/icons/cross_white.svg"
                     alt="Dropdown"
                     width={20}
                     height={12}
@@ -56,7 +59,7 @@ export default function Settings({ onClose }: SettingsProps) {
                 </p>
                 <div className="w-5 h-3 flex items-center justify-center">
                   <Image
-                    src="/icons/collapse.svg"
+                    src="/icons/cross_white.svg"
                     alt="Dropdown"
                     width={20}
                     height={12}
@@ -71,11 +74,21 @@ export default function Settings({ onClose }: SettingsProps) {
       case 'notifications':
         return (
           <div className="space-y-4">
-            <p className="font-teachers font-normal text-white text-[32px]">
-              Notification Settings
-            </p>
-            <p className="font-teachers font-normal text-white/70 text-[20px]">
-              Configure your notification preferences here.
+            {/* Responses Setting */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Responses
+              </p>
+              <ToggleSwitch
+                isOn={responsesEnabled}
+                onToggle={() => setResponsesEnabled(!responsesEnabled)}
+                // label={responsesEnabled ? 'Push' : undefined}
+              />
+            </div>
+            
+            {/* Description */}
+            <p className="font-teachers font-normal text-[#a6a6a6] text-[24px]">
+              Get notified when commitly responds to requests that take time, like timeline creation.
             </p>
           </div>
         )
@@ -83,24 +96,109 @@ export default function Settings({ onClose }: SettingsProps) {
       case 'security':
         return (
           <div className="space-y-4">
-            <p className="font-teachers font-normal text-white text-[32px]">
-              Security Settings
+            {/* Multi-factor authentication */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Multi-factor authentication
+              </p>
+              <ToggleSwitch
+                isOn={mfaEnabled}
+                onToggle={() => setMfaEnabled(!mfaEnabled)}
+              />
+            </div>
+            
+            {/* MFA Description */}
+            <p className="font-teachers font-normal text-[#a6a6a6] text-[24px]">
+              Require an extra security challenge when logging in. If you are unable to pass this challenge, you will have the option to recover your account via email.
             </p>
-            <p className="font-teachers font-normal text-white/70 text-[20px]">
-              Manage your security settings and authentication.
-            </p>
+
+            {/* Log out of this device */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Log out of this device
+              </p>
+              <button className="px-4 py-2 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-[20px]">
+                Log out
+              </button>
+            </div>
+
+            {/* Log out of all devices */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Log out of all devices
+              </p>
+              <button className="px-4 py-2 border border-[#ba2623] text-[#ba2623] hover:bg-[#ba2623]/15 rounded transition-colors font-teachers text-[20px]">
+                Log out all
+              </button>
+            </div>
           </div>
         )
       
       case 'account':
         return (
           <div className="space-y-4">
-            <p className="font-teachers font-normal text-white text-[32px]">
-              Account Settings
+            {/* Free Plan */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Free Plan
+              </p>
+              <button className="flex gap-2.5 items-center px-3 py-2 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-[24px]">
+                Manage
+                <Image
+                  src="/icons/cross_white.svg"
+                  alt="Dropdown"
+                  width={20}
+                  height={12}
+                  className="w-5 h-3"
+                />
+              </button>
+            </div>
+
+            {/* Plan Features */}
+            <p className="font-teachers font-normal text-white text-[24px]">
+              Your plan includes:
             </p>
-            <p className="font-teachers font-normal text-white/70 text-[20px]">
-              Manage your account information and preferences.
-            </p>
+            <div className="space-y-2">
+              <p className="font-teachers font-normal text-white text-[24px]">
+                feat
+              </p>
+              <p className="font-teachers font-normal text-white text-[24px]">
+                feat
+              </p>
+              <p className="font-teachers font-normal text-white text-[24px]">
+                feat
+              </p>
+            </div>
+
+            {/* Payment */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Payment
+              </p>
+              <button className="px-3 py-2 border border-white text-white hover:bg-white/15 rounded transition-colors font-teachers text-[24px]">
+                Manage
+              </button>
+            </div>
+
+            {/* Delete Account */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Delete Account
+              </p>
+              <button className="px-3 py-2 border border-[#ba2623] text-[#ba2623] hover:bg-[#ba2623]/15 rounded transition-colors font-teachers text-[24px]">
+                Delete
+              </button>
+            </div>
+
+            {/* Email */}
+            <div className="flex items-center justify-between">
+              <p className="font-teachers font-normal text-white text-[32px]">
+                Email
+              </p>
+              <p className="font-teachers font-normal text-white text-[20px]">
+                zhanbo@gmail.com
+              </p>
+            </div>
           </div>
         )
       
@@ -122,7 +220,7 @@ export default function Settings({ onClose }: SettingsProps) {
             className="w-4 h-4 flex items-center justify-center hover:bg-white/15 rounded transition-colors"
           >
             <Image
-              src="/icons/collapse.svg"
+              src="/icons/cross_white.svg"
               alt="Close"
               width={16}
               height={16}
@@ -135,24 +233,24 @@ export default function Settings({ onClose }: SettingsProps) {
         <div className="flex flex-1">
           {/* Sidebar */}
           <div className="w-1/3 border-r border-white p-2">
-            <div className="space-y-2">
+            <div className="space-y-0">
               {settingsSections.map((section) => (
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  className={`w-full flex gap-2.5 items-center px-1 py-1 rounded transition-colors ${
+                  className={`w-full flex gap-2.5 items-center px-1 py-0 rounded transition-colors ${
                     activeSection === section.id
                       ? 'bg-white text-black'
                       : 'text-white hover:bg-white/15'
                   }`}
                 >
-                  <div className="w-6 h-6 flex items-center justify-center">
+                  <div className="w-7 h-7 flex items-center justify-center">
                     <Image
-                      src={section.icon}
+                      src={activeSection === section.id ? section.icon.replace('white', 'black') : section.icon}
                       alt={section.name}
-                      width={24}
-                      height={24}
-                      className="w-6 h-6"
+                      width={30}
+                      height={30}
+                      className="w-7 h-7"
                     />
                   </div>
                   <p className={`font-teachers font-normal text-[32px] ${
