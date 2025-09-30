@@ -17,6 +17,11 @@
   --text-3xl: calc(1.875rem * var(--scale-factor));
   --text-4xl: calc(2.25rem * var(--scale-factor));
   --text-5xl: calc(3rem * var(--scale-factor));
+  --text-6xl: calc(4rem * var(--scale-factor));
+  --text-7xl: calc(5rem * var(--scale-factor));
+  --text-8xl: calc(6rem * var(--scale-factor));
+  --text-9xl: calc(7rem * var(--scale-factor));
+  --text-10xl: calc(8rem * var(--scale-factor));
   
   /* Responsive spacing */
   --space-1: calc(0.25rem * var(--scale-factor));
@@ -33,7 +38,7 @@
   --sidebar-collapsed: calc(5.3125rem * var(--scale-factor));
   --dialog-width: calc(75rem * var(--scale-factor));
   --dialog-height: calc(46.875rem * var(--scale-factor));
-  --search-width: calc(60rem * var(--scale-factor));
+  --search-width: calc(50rem * var(--scale-factor));
 }
 
 /* Apply responsive scaling to body */
@@ -50,12 +55,12 @@ body {
 .text-responsive-2xl { font-size: var(--text-2xl); }
 .text-responsive-3xl { font-size: var(--text-3xl); }
 .text-responsive-4xl { font-size: var(--text-4xl); }
-.text-responsive-5xl { font-size: calc(4rem * var(--scale-factor)); } 
-.text-responsive-6xl { font-size: calc(5rem * var(--scale-factor)); }
-.text-responsive-7xl { font-size: calc(6rem * var(--scale-factor)); }
-.text-responsive-8xl { font-size: calc(7rem * var(--scale-factor)); }
-.text-responsive-9xl { font-size: calc(8rem * var(--scale-factor)); }
-.text-responsive-10xl { font-size: calc(9rem * var(--scale-factor)); }
+.text-responsive-5xl { font-size: calc(var(--text-5xl)); } 
+.text-responsive-6xl { font-size: calc(var(--text-6xl)); }
+.text-responsive-7xl { font-size: calc(var(--text-7xl)); }
+.text-responsive-8xl { font-size: calc(var(--text-8xl)); }
+.text-responsive-9xl { font-size: calc(var(--text-9xl)); }
+.text-responsive-10xl { font-size: calc(var(--text-10xl)); }
 
 /* Responsive spacing utilities */
 .space-responsive-1 > * + * { margin-top: var(--space-1); }

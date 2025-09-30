@@ -25,7 +25,7 @@ export default function Home() {
       </div>
 
       {/* Textfield */}
-      <div className="bg-white flex items-center justify-between px-3 py-1.5 rounded w-[30rem] max-w-[90vw] border border-white">
+      <div className="bg-white flex items-center justify-between px-3 py-1.5 rounded w-responsive-search border border-white">
         <input
           type="text"
           placeholder="paste a github repo link"
