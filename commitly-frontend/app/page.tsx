@@ -11,39 +11,39 @@ export default function Home() {
     <div className="bg-black relative size-full min-h-screen">
       <div className="flex h-screen">
         <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-2.5 h-full">
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 h-full">
           {/* Name Logo */}
-          <div className="flex gap-2 items-center justify-center">
-            <div className="relative w-24 h-24">
+          <div className="flex gap-1.5 items-center justify-center">
+            <div className="relative w-20 h-20">
               <Image
                 src="/logos/logo_4x.png"
                 alt="Commitly Logo"
-                width={96}
-                height={96}
-                className="w-24 h-24"
+                width={80}
+                height={80}
+                className="w-20 h-20"
               />
             </div>
-            <p className="font-teachers font-bold text-white text-[64px] whitespace-nowrap">
+            <p className="font-teachers font-bold text-white text-[52px] whitespace-nowrap">
               commitly
             </p>
           </div>
 
           {/* Textfield */}
-          <div className="bg-white flex items-center justify-between px-4 py-2 rounded w-[570px] border border-white">
+          <div className="bg-white flex items-center justify-between px-3 py-1.5 rounded w-[456px] border border-white">
             <input
               type="text"
               placeholder="paste a github repo link"
               value={repoLink}
               onChange={(e) => setRepoLink(e.target.value)}
-              className="font-teachers font-normal text-black text-[32px] flex-1 bg-transparent border-none outline-none placeholder:text-black"
+              className="font-teachers font-normal text-black text-[26px] flex-1 bg-transparent border-none outline-none placeholder:text-black"
             />
-            <div className="w-8 h-7 flex items-center justify-center">
+            <div className="w-6 h-5 flex items-center justify-center">
               <Image
                 src="/icons/hammer_black.svg"
                 alt="Submit"
-                width={32}
-                height={30}
-                className="w-8 h-7"
+                width={26}
+                height={24}
+                className="w-6 h-5"
               />
             </div>
           </div>

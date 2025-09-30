@@ -15,13 +15,13 @@ const REPOS = [
 ]
 
 const Logo = ({ onClick }: { onClick?: () => void }) => (
-  <div className="relative w-12 h-12">
+  <div className="relative w-10 h-10">
     <Image
       src="/logos/logo_4x.png"
       alt="Commitly Logo"
-      width={48}
-      height={48}
-      className="w-12 h-12"
+      width={40}
+      height={40}
+      className="w-10 h-10"
     />
   </div>
 )
@@ -29,37 +29,37 @@ const Logo = ({ onClick }: { onClick?: () => void }) => (
 const CollapseButton = ({ onClick, title }: { onClick: () => void; title: string }) => (
   <button
     onClick={onClick}
-    className="relative w-8 h-8 hover:bg-white/15 rounded transition-colors"
+    className="relative w-6 h-6 hover:bg-white/15 rounded transition-colors"
     title={title}
   >
     <Image
       src="/icons/collapse.svg"
       alt="Collapse"
-      width={32}
-      height={32}
-      className="w-8 h-8"
+      width={26}
+      height={26}
+      className="w-6 h-6"
     />
   </button>
 )
 
 const NewRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
   <Link
-    className={`${isCollapsed ? 'w-full h-12 flex items-center justify-start' : 'flex gap-2.5 items-center w-full h-12'} hover:bg-white/15 rounded transition-colors p-1`}
+    className={`${isCollapsed ? 'w-full h-10 flex items-center justify-start' : 'flex gap-2 items-center w-full h-10'} hover:bg-white/15 rounded transition-colors p-1`}
     title="New repo"
     href="/"
   >
-    <div className="w-8 h-8 flex items-center justify-center shrink-0">
+    <div className="w-6 h-6 flex items-center justify-center shrink-0">
 
       <Image
         src="/icons/hammer_white.svg"
         alt="New repo"
-        width={32}
-        height={32}
-        className="w-8 h-8 shrink-0"
+        width={26}
+        height={26}
+        className="w-6 h-6 shrink-0"
         />
     </div>
     {!isCollapsed && (
-      <p className="font-teachers font-normal text-white text-[32px] whitespace-nowrap">
+      <p className="font-teachers font-normal text-white text-[26px] whitespace-nowrap">
         New repo
       </p>
     )}
@@ -69,20 +69,20 @@ const NewRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
 const SearchRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
   <Link
     href="/search"
-    className={`${isCollapsed ? 'w-full h-12 flex items-center justify-start' : 'flex gap-2.5 items-center w-full h-12'} hover:bg-white/15 rounded transition-colors p-1`}
+    className={`${isCollapsed ? 'w-full h-10 flex items-center justify-start' : 'flex gap-2 items-center w-full h-10'} hover:bg-white/15 rounded transition-colors p-1`}
     title="Search repo"
   >
-    <div className="w-8 h-8 flex items-center justify-center shrink-0">
+    <div className="w-6 h-6 flex items-center justify-center shrink-0">
       <Image
         src="/icons/magnifyingglass_white.svg"
         alt="Search repo"
-        width={32}
-        height={32}
-        className="w-8 h-8 shrink-0"
+        width={26}
+        height={26}
+        className="w-6 h-6 shrink-0"
       />
     </div>
     {!isCollapsed && (
-      <p className="font-teachers font-normal text-white text-[32px] whitespace-nowrap">
+      <p className="font-teachers font-normal text-white text-[26px] whitespace-nowrap">
         Search repo
       </p>
     )}
@@ -98,14 +98,14 @@ const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
   }
 
   return (
-    <div className="flex flex-col gap-2.5 items-start w-full">
+    <div className="flex flex-col gap-2 items-start w-full">
       {!isCollapsed && (
         <>
-        <p className="font-teachers font-normal text-white text-[24px] whitespace-nowrap">
+        <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
           Repos
         </p>
 
-        <div className="flex flex-col gap-2.5 w-full">
+        <div className="flex flex-col gap-2 w-full">
           {REPOS.map((repo) => (
             <Link
               key={repo.id}
@@ -116,7 +116,7 @@ const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
                   : 'border border-white text-white hover:bg-white/15'
               }`}
             >
-              <p className={`font-teachers font-normal text-[24px] whitespace-nowrap ${
+              <p className={`font-teachers font-normal text-[20px] whitespace-nowrap ${
                 isRepoActive(repo.id) ? 'text-black' : 'text-white'
               }`}>
                 {repo.name}
@@ -139,99 +139,99 @@ const AccountSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
 
   if (isCollapsed) {
     return (
-      <div className="flex gap-2.5 items-center p-1 w-full border-t border-white shadow-lg">
+      <div className="flex gap-2 items-center p-1 w-full border-t border-white shadow-lg">
         <button
           onClick={toggleAccount}
-          className="relative w-8 h-8 hover:bg-white/15 rounded transition-colors"
+          className="relative w-6 h-6 hover:bg-white/15 rounded transition-colors"
         >
-          <div className="w-8 h-8 bg-gray-400 rounded-full"></div>
+          <div className="w-6 h-6 bg-gray-400 rounded-full"></div>
         </button>
       </div>
     )
   }
 
   return (
-    <div className="relative flex flex-col items-start w-full border-t border-white pt-4 shadow-lg">
+    <div className="relative flex flex-col items-start w-full border-t border-white pt-3 shadow-lg">
       {/* Account Options Dropdown - Absolute positioned overlay */}
-      <div className={`absolute bottom-full left-0 right-0 mb-2 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg transition-all duration-300 ease-in-out z-10 ${
+      <div className={`absolute bottom-full left-0 right-0 mb-2 flex flex-col gap-2 items-start px-3 py-2.5 rounded border border-white bg-black shadow-lg transition-all duration-300 ease-in-out z-10 ${
         isAccountOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
       }`}>
         {/* Profile with Email */}
-        <div className="flex gap-2.5 items-center w-full">
-          <div className="w-6 h-6 flex items-center justify-center">
+        <div className="flex gap-2 items-center w-full">
+          <div className="w-5 h-5 flex items-center justify-center">
             <Image
               src="/icons/profile.svg"
               alt="Profile"
-              width={24}
-              height={24}
-              className="w-6 h-6"
+              width={20}
+              height={20}
+              className="w-5 h-5"
             />
           </div>
-          <p className="font-teachers font-normal text-white/70 text-[20px] whitespace-nowrap">
+          <p className="font-teachers font-normal text-white/70 text-[16px] whitespace-nowrap">
             zhanbo@gmail.com
           </p>
         </div>
 
         {/* Upgrade Plan */}
-        <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-          <div className="w-6 h-6 flex items-center justify-center">
+        <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+          <div className="w-5 h-5 flex items-center justify-center">
             <Image
               src="/icons/upgrade_plan.svg"
               alt="Upgrade Plan"
-              width={24}
-              height={24}
-              className="w-6 h-6"
+              width={20}
+              height={20}
+              className="w-5 h-5"
             />
           </div>
-          <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+          <p className="font-teachers font-normal text-white text-[16px] whitespace-nowrap">
             upgrade plan
           </p>
         </button>
 
         {/* Settings */}
-        <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-          <div className="w-6 h-6 flex items-center justify-center">
+        <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+          <div className="w-5 h-5 flex items-center justify-center">
             <Image
               src="/icons/settings.svg"
               alt="Settings"
-              width={24}
-              height={24}
-              className="w-6 h-6"
+              width={20}
+              height={20}
+              className="w-5 h-5"
             />
           </div>
-          <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+          <p className="font-teachers font-normal text-white text-[16px] whitespace-nowrap">
             settings
           </p>
         </button>
 
         {/* Help */}
-        <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-          <div className="w-6 h-6 flex items-center justify-center">
+        <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+          <div className="w-5 h-5 flex items-center justify-center">
             <Image
               src="/icons/help.svg"
               alt="Help"
-              width={24}
-              height={24}
-              className="w-6 h-6"
+              width={20}
+              height={20}
+              className="w-5 h-5"
             />
           </div>
-          <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+          <p className="font-teachers font-normal text-white text-[16px] whitespace-nowrap">
             help
           </p>
         </button>
 
         {/* Log Out */}
-        <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-          <div className="w-6 h-6 flex items-center justify-center">
+        <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+          <div className="w-5 h-5 flex items-center justify-center">
             <Image
               src="/icons/logout.svg"
               alt="Log Out"
-              width={24}
-              height={24}
-              className="w-6 h-6"
+              width={20}
+              height={20}
+              className="w-5 h-5"
             />
           </div>
-          <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+          <p className="font-teachers font-normal text-white text-[16px] whitespace-nowrap">
             log out
           </p>
         </button>
@@ -240,12 +240,12 @@ const AccountSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
       {/* Account Button */}
       <button
         onClick={toggleAccount}
-        className="flex gap-2.5 items-center px-4 py-2 rounded border border-white w-full hover:bg-white/15 transition-colors"
+        className="flex gap-2 items-center px-3 py-1.5 rounded border border-white w-full hover:bg-white/15 transition-colors"
       >
-        <div className="relative w-8 h-8">
-          <div className="w-8 h-8 bg-gray-400 rounded-full"></div>
+        <div className="relative w-6 h-6">
+          <div className="w-6 h-6 bg-gray-400 rounded-full"></div>
         </div>
-        <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+        <p className="font-teachers font-normal text-white text-[16px] whitespace-nowrap">
           {USERNAME}
         </p>
       </button>
@@ -261,12 +261,12 @@ export default function Sidebar() {
   }
 
   return (
-    <div className={`bg-black h-full relative border-r border-white transition-[width] duration-300 ease-in-out ${isCollapsed ? 'w-[68px]' : 'w-[300px]'}`}>
-      <div className="flex flex-col h-full items-start justify-between p-[10px]">
+    <div className={`bg-black h-full relative border-r border-white transition-[width] duration-300 ease-in-out ${isCollapsed ? 'w-[54px]' : 'w-[240px]'}`}>
+      <div className="flex flex-col h-full items-start justify-between p-[8px]">
         {/* Top Section */}
-        <div className="flex flex-col gap-16 items-start w-full">
+        <div className="flex flex-col gap-12 items-start w-full">
           {/* Logo and collapse */}
-          <div className={`flex items-center w-full ${isCollapsed ? 'justify-center' : 'justify-between pl-0 pr-3'}`}>
+          <div className={`flex items-center w-full ${isCollapsed ? 'justify-center' : 'justify-between pl-0 pr-2'}`}>
             {isCollapsed ? (
               <button onClick={toggleCollapse}>
                 <div className="flex items-center justify-start w-full">
@@ -284,7 +284,7 @@ export default function Sidebar() {
           </div>
 
           {/* Sidebar Chat Options */}
-          <div className={`flex flex-col gap-2.5 w-full ${isCollapsed ? 'items-center' : 'items-start'}`}>
+          <div className={`flex flex-col gap-2 w-full ${isCollapsed ? 'items-center' : 'items-start'}`}>
             <NewRepoButton isCollapsed={isCollapsed} />
             <SearchRepoButton isCollapsed={isCollapsed} />
           </div>
