@@ -19,8 +19,12 @@ cd commitly-backend
 pip3 install -r requirements.txt
 ```
 ```bash
-source venv/bin/activate
+python -m venv venv
 ```
+```bash if you have Windows use this
+source venv/Scripts/activate
+
+source venv/bin/activate
 ```bash
 uvicorn app.main:app
 ```
