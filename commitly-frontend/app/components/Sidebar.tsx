@@ -6,8 +6,6 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import AccountSection from './AccountSection/AccountSection'
 
-const USERNAME = 'zhanbo'
-
 // Repo data mapping
 const REPOS = [
   { name: 'Deepseek', id: 'deepseek' },
@@ -142,11 +140,11 @@ export default function Sidebar() {
     <div className={`bg-black h-full relative border-r border-white transition-[width] duration-300 ease-in-out ${isCollapsed ? 'w-[68px]' : 'w-[300px]'}`}>
       <div className="flex flex-col h-full items-start justify-between p-[10px]">
         {/* Top Section */}
-        <div className="flex flex-col gap-16 items-start w-full">
+        <div className="flex flex-col flex-1 gap-16 items-start w-full overflow-hidden">
           {/* Logo and collapse */}
-          <div className={`flex items-center w-full ${isCollapsed ? 'justify-center' : 'justify-between pl-0 pr-3'}`}>
+          <div className={`flex items-center w-full ${isCollapsed ? 'justify-start pl-0 pr-0' : 'justify-between pl-0 pr-3'}`}>
             {isCollapsed ? (
-              <button onClick={toggleCollapse}>
+              <button onClick={toggleCollapse} className="flex items-center justify-start w-full">
                 <div className="flex items-center justify-start w-full">
                   <Logo />
                 </div>
@@ -168,7 +166,9 @@ export default function Sidebar() {
           </div>
 
           {/* Repos Section */}
-          <ReposSection isCollapsed={isCollapsed} />
+          <div className={`w-full flex-1 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto pr-1'}`}>
+            <ReposSection isCollapsed={isCollapsed} />
+          </div>
         </div>
 
         {/* Account Section */}
