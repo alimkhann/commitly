@@ -4,6 +4,8 @@ import Image from 'next/image'
 import { useState } from 'react'
 import Settings from './Settings'
 import UpgradePlan from './UpgradePlan'
+import ReportBug from '../ReportBug'
+import { useRouter } from 'next/navigation'
 
 const USERNAME = 'zhanbo'
 
@@ -17,6 +19,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const [isUpgradePlanOpen, setIsUpgradePlanOpen] = useState(false)
   const [isHelpHovered, setIsHelpHovered] = useState(false)
   const [isHelpSubmenuHovered, setIsHelpSubmenuHovered] = useState(false)
+  const [isReportBugOpen, setIsReportBugOpen] = useState(false)
+  const router = useRouter()
 
   const toggleAccount = () => {
     setIsAccountOpen(!isAccountOpen)
@@ -57,7 +61,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             } ${isAccountOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}`}
         >
           {/* Profile with Email */}
-          <div className="flex gap-2.5 items-center w-full p-1">
+          <div className="flex gap-2.5 items-center w-full">
             <div className="w-6 h-6 flex items-center justify-center">
               <Image
                 src="/icons/profile_white.svg"
@@ -67,7 +71,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 className="w-6 h-6"
               />
             </div>
-            <p className="font-teachers font-normal text-white/70 text-responsive-xl whitespace-nowrap">
+            <p className="font-teachers font-normal text-white/70 text-[20px] whitespace-nowrap">
               zhanbo@gmail.com
             </p>
           </div>
@@ -75,18 +79,18 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           {/* Upgrade Plan */}
           <button
             onClick={openUpgradePlan}
-            className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
+            className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
           >
-            <div className="w-5 h-5 flex items-center justify-center">
+            <div className="w-6 h-6 flex items-center justify-center">
               <Image
                 src="/icons/upgrade_plan.svg"
                 alt="Upgrade Plan"
-                width={20}
-                height={20}
-                className="w-5 h-5"
+                width={24}
+                height={24}
+                className="w-6 h-6"
               />
             </div>
-            <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
               upgrade plan
             </p>
           </button>
@@ -94,18 +98,18 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           {/* Settings */}
           <button
             onClick={openSettings}
-            className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
+            className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
           >
-            <div className="w-5 h-5 flex items-center justify-center">
+            <div className="w-6 h-6 flex items-center justify-center">
               <Image
                 src="/icons/settings_white.svg"
                 alt="Settings"
-                width={20}
-                height={20}
-                className="w-5 h-5"
+                width={24}
+                height={24}
+                className="w-6 h-6"
               />
             </div>
-            <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
               settings
             </p>
           </button>
@@ -113,20 +117,20 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           {/* Help with Submenu */}
           <div className="relative w-full">
             <button
-              className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
+              className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
               onMouseEnter={() => setIsHelpHovered(true)}
               onMouseLeave={() => setIsHelpHovered(false)}
             >
-              <div className="w-5 h-5 flex items-center justify-center">
+              <div className="w-6 h-6 flex items-center justify-center">
                 <Image
                   src="/icons/help.svg"
                   alt="Help"
-                  width={20}
-                  height={20}
-                  className="w-5 h-5"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6"
                 />
               </div>
-              <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+              <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
                 help
               </p>
               {showHelpSubmenu && (
@@ -134,8 +138,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                   <Image
                     src="/icons/chevron_right_white.svg"
                     alt="arrow right"
-                    width={12}
-                    height={12}
+                    width={16}
+                    height={16}
                     className="w-4 h-4"
                   />
                 </div>
@@ -145,22 +149,22 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             {/* Help Submenu */}
             {showHelpSubmenu && (
               <div
-                className="absolute left-full ml-0 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg min-w-[260px] -top-[144px]"
+                className="absolute left-full ml-0 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg min-w-[260px] -top-[164px]"
                 onMouseEnter={() => setIsHelpSubmenuHovered(true)}
                 onMouseLeave={() => setIsHelpSubmenuHovered(false)}
               >
                 {/* Help Center */}
-                <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
-                  <div className="w-5 h-5 flex items-center justify-center">
+                <button onClick={() => { setIsAccountOpen(false); router.push('/help-center') }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
+                  <div className="w-6 h-6 flex items-center justify-center">
                     <Image
                       src="/icons/help.svg"
                       alt="Help Center"
-                      width={20}
-                      height={20}
-                      className="w-5 h-5"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
                     />
                   </div>
-                  <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
                     help center
                   </p>
                   <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -175,17 +179,17 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 </button>
 
                 {/* Release Notes */}
-                <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
-                  <div className="w-5 h-5 flex items-center justify-center">
+                <button onClick={() => { setIsAccountOpen(false); router.push('/release-notes') }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
+                  <div className="w-6 h-6 flex items-center justify-center">
                     <Image
                       src="/icons/pencil_line_white.svg"
                       alt="Release Notes"
-                      width={20}
-                      height={20}
-                      className="w-5 h-5"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
                     />
                   </div>
-                  <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
                     release notes
                   </p>
                   <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -200,17 +204,17 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 </button>
 
                 {/* Terms & Policies */}
-                <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
-                  <div className="w-5 h-5 flex items-center justify-center">
+                <button onClick={() => { setIsAccountOpen(false); router.push('/policies') }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
+                  <div className="w-6 h-6 flex items-center justify-center">
                     <Image
                       src="/icons/note_text_white.svg"
                       alt="Terms & Policies"
-                      width={20}
-                      height={20}
-                      className="w-5 h-5"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
                     />
                   </div>
-                  <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
                     terms & policies
                   </p>
                   <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -225,17 +229,17 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 </button>
 
                 {/* Report Bug - Same level as help */}
-                <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+                <button onClick={() => { setIsAccountOpen(false); setIsReportBugOpen(true) }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
                   <div className="w-6 h-6 flex items-center justify-center">
                     <Image
                       src="/icons/flag_white.svg"
                       alt="Report Bug"
-                      width={20}
-                      height={20}
-                      className="w-5 h-5"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
                     />
                   </div>
-                  <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
                     report bug
                   </p>
                 </button>
@@ -244,17 +248,17 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           </div>
 
           {/* Log Out */}
-          <button className="flex gap-2 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-            <div className="w-5 h-5 flex items-center justify-center">
+          <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+            <div className="w-6 h-6 flex items-center justify-center">
               <Image
                 src="/icons/logout.svg"
                 alt="Log Out"
-                width={20}
-                height={20}
-                className="w-5 h-5"
+                width={24}
+                height={24}
+                className="w-6 h-6"
               />
             </div>
-            <p className="font-teachers font-normal text-white text-responsive-xl whitespace-nowrap">
+            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
               log out
             </p>
           </button>
@@ -264,11 +268,11 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
         <button
           onClick={toggleAccount}
           className={`${isCollapsed
-            ? 'flex items-center justify-start w-full px-1.5 py-2 rounded'
-            : 'flex items-center gap-2.5 px-1.5 py-2 rounded w-full'
+            ? 'flex items-center justify-center w-10 h-10 rounded-full mx-auto'
+            : 'flex items-center gap-2.5 px-4 py-2 rounded w-full'
             } ${isAccountOpen ? 'border border-white' : 'border border-transparent'} hover:bg-white/15 transition-colors`}
         >
-          <div className={`relative w-8 h-8`}>
+          <div className="relative w-8 h-8">
             <div className="w-8 h-8 bg-gray-400 rounded-full"></div>
           </div>
           {!isCollapsed && (
@@ -288,6 +292,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
       {isUpgradePlanOpen && (
         <UpgradePlan onClose={() => setIsUpgradePlanOpen(false)} />
       )}
+      {/* Report Bug Modal */}
+      <ReportBug isOpen={isReportBugOpen} onClose={() => setIsReportBugOpen(false)} />
     </>
   )
 }

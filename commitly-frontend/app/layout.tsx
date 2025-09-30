@@ -4,11 +4,11 @@ import type { Metadata } from 'next'
 import { ReactNode } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import Sidebar from './components/Sidebar'
+import SidebarWrapper from './components/SidebarWrapper'
 
 export const metadata: Metadata = {
-  title: 'Commitly - The AI Code Tutor',
-  description: 'Paste a GitHub repo link, and let AI guide you to build the project you want.',
+  title: 'commitly',
+  description: 'commitly turns a GitHub repo into a structured learning path, with hands-on tasks and tiny hints so you learn by building.',
   icons: [{ rel: 'icon', url: '/icons/icon_05x.png' }]
 }
 
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="antialiased bg-black text-white" style={{ fontFamily: 'Teachers' }}>
         <div className="bg-black relative size-full min-h-screen">
           <div className="flex h-screen">
-            <Sidebar />
+            <SidebarWrapper />
             <div className="flex-1">
               {children}
             </div>
