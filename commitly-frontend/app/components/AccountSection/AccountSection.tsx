@@ -15,6 +15,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isUpgradePlanOpen, setIsUpgradePlanOpen] = useState(false)
+  const [isHelpHovered, setIsHelpHovered] = useState(false)
+  const [isHelpSubmenuHovered, setIsHelpSubmenuHovered] = useState(false)
 
   const toggleAccount = () => {
     setIsAccountOpen(!isAccountOpen)
@@ -29,6 +31,9 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
     setIsUpgradePlanOpen(true)
     setIsAccountOpen(false)
   }
+
+  // Show submenu when either help button or submenu is hovered
+  const showHelpSubmenu = isHelpHovered || isHelpSubmenuHovered
 
   return (
     <>
@@ -105,21 +110,138 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             </p>
           </button>
 
-          {/* Help */}
-          <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-            <div className="w-6 h-6 flex items-center justify-center">
-              <Image
-                src="/icons/help.svg"
-                alt="Help"
-                width={24}
-                height={24}
-                className="w-6 h-6"
-              />
-            </div>
-            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-              help
-            </p>
-          </button>
+          {/* Help with Submenu */}
+          <div className="relative w-full">
+            <button
+              className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
+              onMouseEnter={() => setIsHelpHovered(true)}
+              onMouseLeave={() => setIsHelpHovered(false)}
+            >
+              <div className="w-6 h-6 flex items-center justify-center">
+                <Image
+                  src="/icons/help.svg"
+                  alt="Help"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6"
+                />
+              </div>
+              <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+                help
+              </p>
+              {showHelpSubmenu && (
+                <div className="ml-auto flex items-center">
+                  <Image
+                    src="/icons/chevron_right_white.svg"
+                    alt="arrow right"
+                    width={16}
+                    height={16}
+                    className="w-4 h-4"
+                  />
+                </div>
+              )}
+            </button>
+
+            {/* Help Submenu */}
+            {showHelpSubmenu && (
+              <div
+                className="absolute left-full ml-0 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg min-w-[260px] -top-[164px]"
+                onMouseEnter={() => setIsHelpSubmenuHovered(true)}
+                onMouseLeave={() => setIsHelpSubmenuHovered(false)}
+              >
+                {/* Help Center */}
+                <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <Image
+                      src="/icons/flag_white.svg"
+                      alt="Help Center"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
+                    />
+                  </div>
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+                    help center
+                  </p>
+                  <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Image
+                      src="/icons/diagonal_arrow_white.svg"
+                      alt="external link"
+                      width={16}
+                      height={16}
+                      className="w-4 h-4"
+                    />
+                  </div>
+                </button>
+
+                {/* Release Notes */}
+                <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <Image
+                      src="/icons/note_text_white.svg"
+                      alt="Release Notes"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
+                    />
+                  </div>
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+                    release notes
+                  </p>
+                  <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Image
+                      src="/icons/diagonal_arrow_white.svg"
+                      alt="external link"
+                      width={16}
+                      height={16}
+                      className="w-4 h-4"
+                    />
+                  </div>
+                </button>
+
+                {/* Terms & Policies */}
+                <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <Image
+                      src="/icons/pencil_line_white.svg"
+                      alt="Terms & Policies"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
+                    />
+                  </div>
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+                    terms & policies
+                  </p>
+                  <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Image
+                      src="/icons/diagonal_arrow_white.svg"
+                      alt="external link"
+                      width={16}
+                      height={16}
+                      className="w-4 h-4"
+                    />
+                  </div>
+                </button>
+
+                {/* Report Bug - Same level as help */}
+                <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <Image
+                      src="/icons/hammer_white.svg"
+                      alt="Report Bug"
+                      width={24}
+                      height={24}
+                      className="w-6 h-6"
+                    />
+                  </div>
+                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
+                    report bug
+                  </p>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Log Out */}
           <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
@@ -142,8 +264,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
         <button
           onClick={toggleAccount}
           className={`${isCollapsed
-            ? 'flex items-center justify-start w-full py-1.5 rounded pl-1.5'
-            : 'flex items-center gap-2.5 px-1.5 py-1.5 rounded w-full'
+            ? 'flex items-center justify-center w-10 h-10 rounded-full mx-auto'
+            : 'flex items-center gap-2.5 px-4 py-2 rounded w-full'
             } ${isAccountOpen ? 'border border-white' : 'border border-transparent'} hover:bg-white/15 transition-colors`}
         >
           <div className="relative w-8 h-8">
