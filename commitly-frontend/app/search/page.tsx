@@ -3,16 +3,12 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import Sidebar from '../components/Sidebar'
 
 export default function SearchPage() {
   const [searchQuery, setSearchQuery] = useState('')
 
   return (
-    <div className="bg-black relative size-full min-h-screen">
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-2.5 h-full">
+    <div className="flex flex-col items-center justify-center gap-2.5 h-full">
           {/* Search Menu */}
           <div className="flex flex-col gap-2.5 items-start pb-4 pt-0 px-0 relative rounded border border-white w-[960px]">
             {/* Top Section */}
@@ -110,8 +106,6 @@ export default function SearchPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
     </div>
   )
 }

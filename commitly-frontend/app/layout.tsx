@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { ReactNode } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import Sidebar from './components/Sidebar'
 
 export const metadata: Metadata = {
   title: 'Commitly - The AI Code Tutor',
@@ -20,7 +21,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="antialiased bg-black text-white" style={{ fontFamily: 'Teachers' }}>
-        {children}
+        <div className="bg-black relative size-full min-h-screen">
+          <div className="flex h-screen">
+            <Sidebar />
+            <div className="flex-1">
+              {children}
+            </div>
+          </div>
+        </div>
         <Analytics />
         <SpeedInsights />
       </body>
