@@ -2,6 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Responsive scaling for different monitor sizes */
+:root {
+  /* Base scale factor - 80% of original size */
+  --scale-factor: 0.8;
+  
+  /* Responsive font sizes */
+  --text-xs: calc(0.75rem * var(--scale-factor));
+  --text-sm: calc(0.875rem * var(--scale-factor));
+  --text-base: calc(1rem * var(--scale-factor));
+  --text-lg: calc(1.125rem * var(--scale-factor));
+  --text-xl: calc(1.25rem * var(--scale-factor));
+  --text-2xl: calc(1.5rem * var(--scale-factor));
+  --text-3xl: calc(1.875rem * var(--scale-factor));
+  --text-4xl: calc(2.25rem * var(--scale-factor));
+  --text-5xl: calc(3rem * var(--scale-factor));
+  
+  /* Responsive spacing */
+  --space-1: calc(0.25rem * var(--scale-factor));
+  --space-2: calc(0.5rem * var(--scale-factor));
+  --space-3: calc(0.75rem * var(--scale-factor));
+  --space-4: calc(1rem * var(--scale-factor));
+  --space-6: calc(1.5rem * var(--scale-factor));
+  --space-8: calc(2rem * var(--scale-factor));
+  --space-12: calc(3rem * var(--scale-factor));
+  --space-16: calc(4rem * var(--scale-factor));
+  
+  /* Responsive dimensions */
+  --sidebar-width: calc(23.4375rem * var(--scale-factor));
+  --sidebar-collapsed: calc(5.3125rem * var(--scale-factor));
+  --dialog-width: calc(75rem * var(--scale-factor));
+  --dialog-height: calc(46.875rem * var(--scale-factor));
+  --search-width: calc(60rem * var(--scale-factor));
+}
+
+/* Apply responsive scaling to body */
+body {
+  font-size: var(--text-base);
+}
+
+/* Responsive utility classes */
+.text-responsive-xs { font-size: var(--text-xs); }
+.text-responsive-sm { font-size: var(--text-sm); }
+.text-responsive-base { font-size: var(--text-base); }
+.text-responsive-lg { font-size: var(--text-lg); }
+.text-responsive-xl { font-size: var(--text-xl); }
+.text-responsive-2xl { font-size: var(--text-2xl); }
+.text-responsive-3xl { font-size: var(--text-3xl); }
+.text-responsive-4xl { font-size: var(--text-4xl); }
+.text-responsive-5xl { font-size: calc(4rem * var(--scale-factor)); } 
+.text-responsive-6xl { font-size: calc(5rem * var(--scale-factor)); }
+.text-responsive-7xl { font-size: calc(6rem * var(--scale-factor)); }
+.text-responsive-8xl { font-size: calc(7rem * var(--scale-factor)); }
+.text-responsive-9xl { font-size: calc(8rem * var(--scale-factor)); }
+.text-responsive-10xl { font-size: calc(9rem * var(--scale-factor)); }
+
+/* Responsive spacing utilities */
+.space-responsive-1 > * + * { margin-top: var(--space-1); }
+.space-responsive-2 > * + * { margin-top: var(--space-2); }
+.space-responsive-3 > * + * { margin-top: var(--space-3); }
+.space-responsive-4 > * + * { margin-top: var(--space-4); }
+.space-responsive-6 > * + * { margin-top: var(--space-6); }
+.space-responsive-8 > * + * { margin-top: var(--space-8); }
+.space-responsive-12 > * + * { margin-top: var(--space-12); }
+.space-responsive-16 > * + * { margin-top: var(--space-16); }
+
+/* Responsive width utilities */
+.w-responsive-sidebar { width: var(--sidebar-width); }
+.w-responsive-sidebar-collapsed { width: var(--sidebar-collapsed); }
+.w-responsive-dialog { width: var(--dialog-width); }
+.w-responsive-search { width: var(--search-width); }
+.h-responsive-dialog { height: var(--dialog-height); }
+
 html, body, #__next { height: 100%; }
 *:focus { outline: none; }
 
