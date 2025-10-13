@@ -21,10 +21,13 @@ pip3 install -r requirements.txt
 ```bash
 python -m venv venv
 ```
-```bash if you have Windows use this
-source venv/Scripts/activate
-
+```bash
+macOS
 source venv/bin/activate
+
+Windows
+source venv/Scripts/activate
+```
 ```bash
 uvicorn app.main:app
 ```
