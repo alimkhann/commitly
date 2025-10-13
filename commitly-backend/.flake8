@@ -6,6 +6,9 @@ exclude = .git,__pycache__,venv,.venv,migrations,alembic,conftest.py
 # For Black compatibility
 extend-ignore = E203, W503, I101
 
+per-file-ignores =
+    main.py:F401
+
 # import order plugin (flake8-import-order)
 import-order-style = google
 
