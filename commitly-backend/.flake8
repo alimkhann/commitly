@@ -1,7 +1,7 @@
 [flake8]
 application-import-names = app
 max-line-length = 88
-exclude = .git,__pycache__,venv,.venv,migrations,alembic
+exclude = .git,__pycache__,venv,.venv,migrations,alembic,conftest.py
 
 # For Black compatibility
 extend-ignore = E203, W503, I101

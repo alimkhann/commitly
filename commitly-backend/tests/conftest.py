@@ -1,6 +1,11 @@
 from collections.abc import Generator
 import os
 
+# Ensure required env vars are set before importing the app/settings
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
+os.environ.setdefault("SUPABASE_URL", "http://localhost:8000")
+os.environ.setdefault("SUPABASE_ANON_KEY", "anon")
+
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy.orm import Session
@@ -8,11 +13,6 @@ from sqlalchemy.orm import Session
 from app.core.database import Base, SessionLocal, engine, get_db
 from app.main import app
 from app.models.waitlist import Waitlist
-
-# Ensure required env vars are set before importing the app/settings
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
-os.environ.setdefault("SUPABASE_URL", "http://localhost:8000")
-os.environ.setdefault("SUPABASE_ANON_KEY", "anon")
 
 # Create tables once for the test database
 Base.metadata.create_all(bind=engine)
