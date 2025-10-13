@@ -2,6 +2,7 @@
 *.cursorignore
 cursor-logs.md
 *.sql
+__pypackages__/
 __pycache__
 venv
 
@@ -117,6 +118,7 @@ temp/
 
 # Editor directories and files
 .vscode/*
+.DS_Store
 !.vscode/extensions.json
 .idea
 *.suo

@@ -7,12 +7,12 @@ import sys
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.core.config import settings
+from app.core.database import Base
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
-
-from app.core.config import settings  # noqa: E402
-from app.core.database import Base  # noqa: E402
 
 config = context.config
 
