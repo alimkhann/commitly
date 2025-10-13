@@ -11,7 +11,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 revision: str = "6b3b2a7f804c"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
@@ -23,7 +22,9 @@ def upgrade() -> None:
         "waitlist",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("email", sa.String(length=255), nullable=False),
-        sa.Column("source", sa.String(length=100), nullable=False, server_default="landing"),
+        sa.Column(
+            "source", sa.String(length=100), nullable=False, server_default="landing"
+        ),
         sa.Column(
             "created_at",
             sa.TIMESTAMP(timezone=True),
@@ -60,7 +61,9 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'waitlist' AND policyname = 'Allow public insert on waitlist'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'waitlist'
+                AND policyname = 'Allow public insert on waitlist'
             ) THEN
                 CREATE POLICY "Allow public insert on waitlist"
                 ON waitlist FOR INSERT
@@ -75,7 +78,9 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'waitlist' AND policyname = 'Allow public select count on waitlist'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'waitlist'
+                AND policyname = 'Allow public select count on waitlist'
             ) THEN
                 CREATE POLICY "Allow public select count on waitlist"
                 ON waitlist FOR SELECT
@@ -90,7 +95,9 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support' AND policyname = 'Allow public insert on support'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'support'
+                AND policyname = 'Allow public insert on support'
             ) THEN
                 CREATE POLICY "Allow public insert on support"
                 ON support FOR INSERT
@@ -105,7 +112,9 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support' AND policyname = 'Allow public select on support'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'support'
+                AND policyname = 'Allow public select on support'
             ) THEN
                 CREATE POLICY "Allow public select on support"
                 ON support FOR SELECT
@@ -134,10 +143,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS public.waitlist_count();")
 
-    op.execute("DROP POLICY IF EXISTS \"Allow public insert on support\" ON support;")
-    op.execute("DROP POLICY IF EXISTS \"Allow public select on support\" ON support;")
-    op.execute("DROP POLICY IF EXISTS \"Allow public insert on waitlist\" ON waitlist;")
-    op.execute("DROP POLICY IF EXISTS \"Allow public select count on waitlist\" ON waitlist;")
+    op.execute('DROP POLICY IF EXISTS "Allow public insert on support" ON support;')
+    op.execute('DROP POLICY IF EXISTS "Allow public select on support" ON support;')
+    op.execute('DROP POLICY IF EXISTS "Allow public insert on waitlist" ON waitlist;')
+    op.execute(
+        'DROP POLICY IF EXISTS "Allow public select count on waitlist" ON waitlist;'
+    )
 
     op.drop_index("ix_support_status", table_name="support")
     op.drop_index("ix_support_email", table_name="support")

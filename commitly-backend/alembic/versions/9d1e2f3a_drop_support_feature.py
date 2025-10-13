@@ -11,7 +11,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 revision: str = "9d1e2f3a"
 down_revision: Union[str, Sequence[str], None] = "6b3b2a7f804c"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -25,12 +24,16 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support' AND policyname = 'Allow public insert on support'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'support'
+                AND policyname = 'Allow public insert on support'
             ) THEN
                 DROP POLICY "Allow public insert on support" ON public.support;
             END IF;
             IF EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support' AND policyname = 'Allow public select on support'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'support'
+                AND policyname = 'Allow public select on support'
             ) THEN
                 DROP POLICY "Allow public select on support" ON public.support;
             END IF;
@@ -74,7 +77,9 @@ def downgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support' AND policyname = 'Allow public insert on support'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'support'
+                AND policyname = 'Allow public insert on support'
             ) THEN
                 CREATE POLICY "Allow public insert on support"
                 ON support FOR INSERT
@@ -90,7 +95,9 @@ def downgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'support' AND policyname = 'Allow public select on support'
+                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
+                AND tablename = 'support'
+                AND policyname = 'Allow public select on support'
             ) THEN
                 CREATE POLICY "Allow public select on support"
                 ON support FOR SELECT

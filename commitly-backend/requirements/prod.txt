@@ -1,0 +1,35 @@
+# Runtime (FastAPI app)
+fastapi==0.116.2
+uvicorn==0.36.0
+
+# Config and validation
+pydantic==2.11.9
+pydantic-settings==2.10.1
+email-validator==2.3.0
+python-dotenv==1.1.1
+
+# HTTP + utils
+requests==2.32.5
+
+# Database
+SQLAlchemy==2.0.36
+alembic==1.13.3
+psycopg[binary]==3.2.2
+
+# External services
+supabase==2.19.0
+polar-sdk==0.24.0
+
+# Optional: caching (uncomment if used)
+# redis==5.0.8
+# fastapi-cache2==0.2.1
+
+# Optional: AI/RAG core (leave commented until ready)
+# openai==1.46.0
+# pydantic-ai==0.0.15
+# httpx==0.27.2
+# numpy==2.1.2
+# sentence-transformers==3.2.1
+# faiss-cpu==1.8.0.post1
+# pgvector==0.2.5  # SQLAlchemy integration for pgvector
+# tenacity==9.0.0  # robust retries for API calls

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     api_v1_str: str = Field("/api/v1", validation_alias="API_V1_STR")
@@ -23,18 +24,34 @@ class Settings(BaseSettings):
     database_url: str = Field(..., validation_alias="DATABASE_URL")
 
     # Polar (donations) configuration
-    polar_access_token: Optional[str] = Field(default=None, validation_alias="POLAR_ACCESS_TOKEN")
-    polar_success_url: Optional[HttpUrl] = Field(default=None, validation_alias="POLAR_SUCCESS_URL")
-    polar_server: str = Field("production", validation_alias="POLAR_SERVER")  # "production" | "sandbox" | truthy for sandbox
-    polar_product_id: Optional[str] = Field(default=None, validation_alias="POLAR_PRODUCT_ID")
+    polar_access_token: Optional[str] = Field(
+        default=None, validation_alias="POLAR_ACCESS_TOKEN"
+    )
+    polar_success_url: Optional[HttpUrl] = Field(
+        default=None, validation_alias="POLAR_SUCCESS_URL"
+    )
+    polar_server: str = Field(
+        "production", validation_alias="POLAR_SERVER"
+    )  # "production" | "sandbox" | truthy for sandbox
+    polar_product_id: Optional[str] = Field(
+        default=None, validation_alias="POLAR_PRODUCT_ID"
+    )
 
     # Sandbox-specific overrides
-    polar_sandbox_access_token: Optional[str] = Field(default=None, validation_alias="POLAR_SANDBOX_ACCESS_TOKEN")
-    polar_sandbox_success_url: Optional[HttpUrl] = Field(default=None, validation_alias="POLAR_SANDBOX_SUCCESS_URL")
-    polar_sandbox_product_id: Optional[str] = Field(default=None, validation_alias="POLAR_SANDBOX_PRODUCT_ID")
+    polar_sandbox_access_token: Optional[str] = Field(
+        default=None, validation_alias="POLAR_SANDBOX_ACCESS_TOKEN"
+    )
+    polar_sandbox_success_url: Optional[HttpUrl] = Field(
+        default=None, validation_alias="POLAR_SANDBOX_SUCCESS_URL"
+    )
+    polar_sandbox_product_id: Optional[str] = Field(
+        default=None, validation_alias="POLAR_SANDBOX_PRODUCT_ID"
+    )
     polar_sandbox_enabled: bool = Field(False, validation_alias="POLAR_SANDBOX_SERVER")
 
-    allowed_origins: List[str] = Field(default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS")
+    allowed_origins: List[str] = Field(
+        default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS"
+    )
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
@@ -52,14 +69,24 @@ class Settings(BaseSettings):
 
                         data = json.loads(cleaned)
                         if isinstance(data, list):
-                            cleaned_list = [origin.strip() for origin in data if isinstance(origin, str) and origin.strip()]
+                            cleaned_list = [
+                                origin.strip()
+                                for origin in data
+                                if isinstance(origin, str) and origin.strip()
+                            ]
                             return cleaned_list or ["*"]
                     except json.JSONDecodeError:
                         pass
-                parts = [origin.strip() for origin in cleaned.split(",") if origin.strip()]
+                parts = [
+                    origin.strip() for origin in cleaned.split(",") if origin.strip()
+                ]
                 return parts or ["*"]
             case list() as sequence:
-                cleaned_list = [origin.strip() for origin in sequence if isinstance(origin, str) and origin.strip()]
+                cleaned_list = [
+                    origin.strip()
+                    for origin in sequence
+                    if isinstance(origin, str) and origin.strip()
+                ]
                 return cleaned_list or ["*"]
         return ["*"]
 

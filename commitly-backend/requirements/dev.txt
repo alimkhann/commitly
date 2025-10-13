@@ -1,0 +1,20 @@
+# Development dependencies (includes test deps)
+-r test.txt
+
+# Formatters / linters
+black==25.9.0
+isort==6.1.0
+flake8==7.3.0
+flake8-import-order==0.19.2
+flake8-quotes==3.4.0
+pep8-naming==0.15.1
+
+# Typing
+mypy==1.11.2
+types-requests==2.32.0.20240907
+
+# Pre-commit hooks (optional)
+pre-commit==4.0.1
+
+# Local tools (optional)
+python-dotenv==1.1.1

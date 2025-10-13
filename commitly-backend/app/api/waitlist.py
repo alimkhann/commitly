@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.waitlist import WaitlistCreate, WaitlistResponse, WaitlistCountResponse
+from app.models.waitlist import WaitlistCountResponse, WaitlistCreate, WaitlistResponse
 from app.services.supabase import DuplicateEntryError, PersistenceError, SupabaseService
 
 router = APIRouter()
@@ -13,7 +13,9 @@ router = APIRouter()
     response_model=WaitlistResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def join_waitlist(payload: WaitlistCreate, session: Session = Depends(get_db)) -> WaitlistResponse:
+def join_waitlist(
+    payload: WaitlistCreate, session: Session = Depends(get_db)
+) -> WaitlistResponse:
     service = SupabaseService(session)
     try:
         entry = service.add_to_waitlist(payload)
@@ -23,7 +25,9 @@ def join_waitlist(payload: WaitlistCreate, session: Session = Depends(get_db)) -
             detail="This email is already on the waitlist.",
         )
     except PersistenceError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+        )
 
     return WaitlistResponse.model_validate(entry)
 
@@ -34,6 +38,8 @@ def get_waitlist_count(session: Session = Depends(get_db)) -> WaitlistCountRespo
     try:
         count = service.waitlist_count()
     except PersistenceError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+        )
 
     return WaitlistCountResponse(count=count)
