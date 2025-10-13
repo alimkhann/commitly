@@ -1,15 +1,15 @@
-name: CI
+name: Commitly Backend CI
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'commitly-backend/**'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/commitly-backend-ci.yml'
   pull_request:
     paths:
       - 'commitly-backend/**'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/commitly-backend-ci.yml'
 
 jobs:
   lint:
@@ -90,4 +90,5 @@ jobs:
       - name: Run pytest
         run: |
           pytest -q
+
 

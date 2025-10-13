@@ -4,6 +4,7 @@ cursor-logs.md
 *.sql
 __pypackages__/
 __pycache__
+.pytest_cache/
 venv
 
 # Dependencies
