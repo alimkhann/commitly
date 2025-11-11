@@ -1,33 +1,81 @@
+import Link from "next/link"
+import { ArrowRight, Headphones, Mail } from "lucide-react"
+
+import { helpCards } from "@/data/help-center"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+
 export default function HelpCenterPage() {
-    return (
-        <main className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
-            <section className="w-full max-w-[900px] flex flex-col items-center gap-12">
-                <h1 className="font-teachers font-bold text-[40px] sm:text-[56px] md:text-[64px] leading-tight text-center">
-                    Help center
-                </h1>
+  return (
+    <main className="min-h-screen w-full bg-background px-6 py-16">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-12">
+        <header className="grid gap-6 rounded-3xl border border-border/60 bg-card/80 p-8 shadow-2xl shadow-black/30 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <p className="text-sm uppercase tracking-[0.35em] text-primary">
+              Support
+            </p>
+            <h1 className="mt-2 text-4xl font-semibold">How can we help?</h1>
+            <p className="mt-3 text-base text-muted-foreground">
+              Browse guides, track product changes, or reach a human. Commitly support stays
+              close to the product team, so every ticket helps improve the roadmap.
+            </p>
+          </div>
+          <div className="space-y-3 rounded-2xl border border-border/50 bg-background/40 p-4">
+            <div className="flex items-center gap-3">
+              <Headphones className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Live support</p>
+                <p className="text-xs text-muted-foreground">Mon‒Fri, 9am–6pm UTC</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Mail className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Email</p>
+                <p className="text-xs text-muted-foreground">support@commitly.dev</p>
+              </div>
+            </div>
+          </div>
+        </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
-                    <a href="/policies" className="border border-white rounded p-5 hover:bg-white/10 transition-colors">
-                        <h2 className="font-teachers text-[22px] sm:text-[24px] mb-2">Terms & policies</h2>
-                        <p className="text-white/80 text-[16px] sm:text-[18px]">Legal, privacy, data use, and security.</p>
-                    </a>
+        <section className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold tracking-wide text-primary uppercase">
+              Library
+            </p>
+            <h2 className="text-2xl font-semibold">Start with the essentials</h2>
+          </div>
 
-                    <a href="/release-notes" className="border border-white rounded p-5 hover:bg-white/10 transition-colors">
-                        <h2 className="font-teachers text-[22px] sm:text-[24px] mb-2">Release notes</h2>
-                        <p className="text-white/80 text-[16px] sm:text-[18px]">What changed in each version.</p>
-                    </a>
-
-                    <a href="/help-center/getting-started" className="border border-white rounded p-5 hover:bg-white/10 transition-colors">
-                        <h2 className="font-teachers text-[22px] sm:text-[24px] mb-2">Getting started</h2>
-                        <p className="text-white/80 text-[16px] sm:text-[18px]">Basics to help you set up.</p>
-                    </a>
-
-                    <a href="/help-center/faq" className="border border-white rounded p-5 hover:bg-white/10 transition-colors">
-                        <h2 className="font-teachers text-[22px] sm:text-[24px] mb-2">FAQ</h2>
-                        <p className="text-white/80 text-[16px] sm:text-[18px]">Answers to common questions.</p>
-                    </a>
-                </div>
-            </section>
-        </main>
-    )
+          <div className="grid gap-6 md:grid-cols-2">
+            {helpCards.map((card) => (
+              <Card
+                key={card.title}
+                className="border-border/60 bg-card/80 shadow-lg shadow-black/25"
+              >
+                <CardHeader>
+                  <CardTitle>{card.title}</CardTitle>
+                  <CardDescription>{card.description}</CardDescription>
+                </CardHeader>
+                <CardFooter>
+                  <Button variant="ghost" className="w-full justify-between" asChild>
+                    <Link href={card.href}>
+                      <span>Open guide</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </section>
+      </div>
+    </main>
+  )
 }

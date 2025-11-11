@@ -1,29 +1,37 @@
+import { policyMeta } from "@/data/policies"
+
 export default function TermsOfUsePage() {
-    return (
-        <main className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
-            <article className="w-full max-w-[900px] flex flex-col gap-6">
-                <header>
-                    <h1 className="font-teachers font-bold text-[40px] sm:text-[56px] md:text-[64px] leading-tight">Terms of use</h1>
-                    <p className="text-white/70">Last updated: 2025-09-30</p>
-                </header>
-                <section className="prose prose-invert max-w-none">
-                    <p>
-                        These Terms of Use ("Terms") govern your access to and use of Commitly, including any
-                        content, functionality, and services offered on or through Commitly. By accessing or using
-                        Commitly, you agree to be bound by these Terms.
-                    </p>
-                    <h2>Use of the Service</h2>
-                    <p>
-                        You agree to use the service only for lawful purposes and in accordance with these Terms.
-                        You are responsible for your conduct and any content you provide.
-                    </p>
-                    <h2>Intellectual Property</h2>
-                    <p>
-                        The service and its original content, features, and functionality are owned by Commitly and
-                        are protected by international copyright, trademark, and other intellectual property laws.
-                    </p>
-                </section>
-            </article>
-        </main>
-    )
+  return (
+    <main className="min-h-screen w-full bg-background px-6 py-16">
+      <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <header className="space-y-2">
+          <p className="text-sm uppercase tracking-[0.3em] text-primary">Legal</p>
+          <h1 className="text-4xl font-semibold">Terms of use</h1>
+          <p className="text-sm text-muted-foreground">
+            Last updated {policyMeta.updated}
+          </p>
+        </header>
+        <section className="space-y-4 text-base leading-relaxed text-muted-foreground">
+          <p>
+            These Terms of Use (“Terms”) govern how you access and use commitly, the timeline builder,
+            our API, and any related services. By using the product you agree to these Terms, including
+            updates we may post in this document. If you do not agree, don’t use the service.
+          </p>
+          <h2 className="text-xl font-semibold text-foreground">Use of the service</h2>
+          <p>
+            You may only use commitly for lawful purposes. You are responsible for the repositories you
+            import, the content you submit, and ensuring you have rights to grant us access to that content.
+            We may suspend accounts that abuse rate limits, attempt to reverse engineer the service, or
+            otherwise disrupt other users.
+          </p>
+          <h2 className="text-xl font-semibold text-foreground">Intellectual property</h2>
+          <p>
+            Commitly retains ownership of the platform, documentation, and brand assets. You retain
+            ownership of your code and data. We request limited access to analyze a repo and build timelines,
+            and we delete derived data once you remove the repo from commitly.
+          </p>
+        </section>
+      </article>
+    </main>
+  )
 }

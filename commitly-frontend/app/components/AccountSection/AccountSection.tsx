@@ -1,294 +1,152 @@
-'use client'
+"use client"
 
-import Image from 'next/image'
-import { useState } from 'react'
-import Settings from './Settings'
-import ReportBug from '../ReportBug'
-import { useRouter } from 'next/navigation'
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import {
+  Bug,
+  ExternalLink,
+  HelpCircle,
+  LogOut,
+  Settings,
+  Sparkles,
+} from "lucide-react"
 
-const USERNAME = 'zhanbo'
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
-interface AccountSectionProps {
+import ReportBug from "../ReportBug"
+import SettingsDialog from "./Settings"
+
+type AccountSectionProps = {
   isCollapsed: boolean
 }
 
 export default function AccountSection({ isCollapsed }: AccountSectionProps) {
-  const [isAccountOpen, setIsAccountOpen] = useState(false)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isUpgradePlanOpen, setIsUpgradePlanOpen] = useState(false)
-  const [isHelpHovered, setIsHelpHovered] = useState(false)
-  const [isHelpSubmenuHovered, setIsHelpSubmenuHovered] = useState(false)
-  const [isReportBugOpen, setIsReportBugOpen] = useState(false)
   const router = useRouter()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [reportBugOpen, setReportBugOpen] = useState(false)
 
-  const toggleAccount = () => {
-    setIsAccountOpen(!isAccountOpen)
+  const user = {
+    name: "zhanbo",
+    email: "zhanbo@commitly.dev",
+    plan: "Free plan",
   }
-
-  const openSettings = () => {
-    setIsSettingsOpen(true)
-    setIsAccountOpen(false)
-  }
-
-  const openUpgradePlan = () => {
-    setIsAccountOpen(false)
-    router.push('/plans')
-  }
-
-  // Show submenu when either help button or submenu is hovered
-  const showHelpSubmenu = isHelpHovered || isHelpSubmenuHovered
 
   return (
     <>
-      {isAccountOpen && (
-        <div
-          className="fixed inset-0 z-[5] bg-transparent"
-          onClick={(event) => {
-            event.stopPropagation()
-            setIsAccountOpen(false)
-          }}
-          aria-hidden="true"
-        />
-      )}
       <div
-        className={`relative z-[10] flex flex-col w-full shadow-lg ${isCollapsed ? 'items-start pt-2 pl-0' : 'items-start pt-4'
-          }`}
+        className={cn(
+          "border-t border-border/40 px-4 py-4",
+          isCollapsed && "px-2"
+        )}
       >
-        {/* Account Options Dropdown - Absolute positioned overlay */}
-        <div
-          className={`absolute bottom-full mb-2 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg transition-all duration-300 ease-in-out ${isCollapsed ? 'left-0 min-w-[240px]' : 'left-0 right-0'
-            } ${isAccountOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}`}
-        >
-          {/* Profile with Email */}
-          <div className="flex gap-2.5 items-center w-full">
-            <div className="w-6 h-6 flex items-center justify-center">
-              <Image
-                src="/icons/profile_white.svg"
-                alt="Profile"
-                width={24}
-                height={24}
-                className="w-6 h-6"
-              />
-            </div>
-            <p className="font-teachers font-normal text-white/70 text-[20px] whitespace-nowrap">
-              zhanbo@gmail.com
-            </p>
-          </div>
-
-          {/* Upgrade Plan */}
-          <button
-            onClick={openUpgradePlan}
-            className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
-          >
-            <div className="w-6 h-6 flex items-center justify-center">
-              <Image
-                src="/icons/upgrade_plan.svg"
-                alt="Upgrade Plan"
-                width={24}
-                height={24}
-                className="w-6 h-6"
-              />
-            </div>
-            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-              upgrade plan
-            </p>
-          </button>
-
-          {/* Settings */}
-          <button
-            onClick={openSettings}
-            className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
-          >
-            <div className="w-6 h-6 flex items-center justify-center">
-              <Image
-                src="/icons/settings_white.svg"
-                alt="Settings"
-                width={24}
-                height={24}
-                className="w-6 h-6"
-              />
-            </div>
-            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-              settings
-            </p>
-          </button>
-
-          {/* Help with Submenu */}
-          <div className="relative w-full">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
-              className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1"
-              onMouseEnter={() => setIsHelpHovered(true)}
-              onMouseLeave={() => setIsHelpHovered(false)}
-            >
-              <div className="w-6 h-6 flex items-center justify-center">
-                <Image
-                  src="/icons/help.svg"
-                  alt="Help"
-                  width={24}
-                  height={24}
-                  className="w-6 h-6"
-                />
-              </div>
-              <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-                help
-              </p>
-              {showHelpSubmenu && (
-                <div className="ml-auto flex items-center">
-                  <Image
-                    src="/icons/chevron_right_white.svg"
-                    alt="arrow right"
-                    width={16}
-                    height={16}
-                    className="w-4 h-4"
-                  />
-                </div>
+              type="button"
+              className={cn(
+                "flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-2 transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isCollapsed
+                  ? "flex-col bg-transparent hover:bg-muted/30"
+                  : "justify-between bg-card/50 hover:bg-muted/30"
               )}
-            </button>
-
-            {/* Help Submenu */}
-            {showHelpSubmenu && (
+              aria-label="Open workspace menu"
+            >
               <div
-                className="absolute left-full ml-0 flex flex-col gap-2.5 items-start px-4 py-3 rounded border border-white bg-black shadow-lg min-w-[260px] -top-[164px]"
-                onMouseEnter={() => setIsHelpSubmenuHovered(true)}
-                onMouseLeave={() => setIsHelpSubmenuHovered(false)}
+                className={cn(
+                  "flex items-center gap-3",
+                  isCollapsed && "flex-col"
+                )}
               >
-                {/* Help Center */}
-                <button onClick={() => { setIsAccountOpen(false); router.push('/help-center') }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
-                  <div className="w-6 h-6 flex items-center justify-center">
-                    <Image
-                      src="/icons/help.svg"
-                      alt="Help Center"
-                      width={24}
-                      height={24}
-                      className="w-6 h-6"
-                    />
+                <Avatar className="h-11 w-11 bg-muted">
+                  <AvatarImage alt={user.name} src="" />
+                  <AvatarFallback className="text-sm uppercase">
+                    {user.name.slice(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+                {!isCollapsed && (
+                  <div className="text-left">
+                    <p className="text-sm font-semibold leading-tight">
+                      {user.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{user.plan}</p>
                   </div>
-                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-                    help center
-                  </p>
-                  <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Image
-                      src="/icons/diagonal_arrow_white.svg"
-                      alt="external link"
-                      width={16}
-                      height={16}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                </button>
-
-                {/* Release Notes */}
-                <button onClick={() => { setIsAccountOpen(false); router.push('/release-notes') }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
-                  <div className="w-6 h-6 flex items-center justify-center">
-                    <Image
-                      src="/icons/pencil_line_white.svg"
-                      alt="Release Notes"
-                      width={24}
-                      height={24}
-                      className="w-6 h-6"
-                    />
-                  </div>
-                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-                    release notes
-                  </p>
-                  <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Image
-                      src="/icons/diagonal_arrow_white.svg"
-                      alt="external link"
-                      width={16}
-                      height={16}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                </button>
-
-                {/* Terms & Policies */}
-                <button onClick={() => { setIsAccountOpen(false); router.push('/policies') }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1 group">
-                  <div className="w-6 h-6 flex items-center justify-center">
-                    <Image
-                      src="/icons/note_text_white.svg"
-                      alt="Terms & Policies"
-                      width={24}
-                      height={24}
-                      className="w-6 h-6"
-                    />
-                  </div>
-                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-                    terms & policies
-                  </p>
-                  <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Image
-                      src="/icons/diagonal_arrow_white.svg"
-                      alt="external link"
-                      width={16}
-                      height={16}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                </button>
-
-                {/* Report Bug - Same level as help */}
-                <button onClick={() => { setIsAccountOpen(false); setIsReportBugOpen(true) }} className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-                  <div className="w-6 h-6 flex items-center justify-center">
-                    <Image
-                      src="/icons/flag_white.svg"
-                      alt="Report Bug"
-                      width={24}
-                      height={24}
-                      className="w-6 h-6"
-                    />
-                  </div>
-                  <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-                    report bug
-                  </p>
-                </button>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* Log Out */}
-          <button className="flex gap-2.5 items-center w-full hover:bg-white/15 rounded transition-colors p-1">
-            <div className="w-6 h-6 flex items-center justify-center">
-              <Image
-                src="/icons/logout.svg"
-                alt="Log Out"
-                width={24}
-                height={24}
-                className="w-6 h-6"
-              />
-            </div>
-            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-              log out
-            </p>
-          </button>
-        </div>
-
-        {/* Account Button */}
-        <button
-          onClick={toggleAccount}
-          className={`${isCollapsed
-            ? 'flex items-center justify-center w-10 h-10 rounded-full mx-auto'
-            : 'flex items-center gap-2.5 px-4 py-2 rounded w-full'
-            } ${isAccountOpen ? 'border border-white' : 'border border-transparent'} hover:bg-white/15 transition-colors`}
-        >
-          <div className="relative w-8 h-8">
-            <div className="w-8 h-8 bg-gray-400 rounded-full"></div>
-          </div>
-          {!isCollapsed && (
-            <p className="font-teachers font-normal text-white text-[20px] whitespace-nowrap">
-              {USERNAME}
-            </p>
-          )}
-        </button>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent
+              side="top"
+              align="center"
+              sideOffset={16}
+              className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/60 bg-card/95 p-3 shadow-2xl backdrop-blur"
+            >
+              <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/plans")}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Upgrade plan
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Help & resources
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent
+                    side="left"
+                    align="start"
+                    sideOffset={12}
+                    className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/60 bg-card/95 shadow-xl backdrop-blur"
+                  >
+                    <DropdownMenuItem onClick={() => router.push("/help-center")}>
+                      Help center
+                      <ExternalLink className="ml-auto h-3.5 w-3.5" />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push("/release-notes")}>
+                      Release notes
+                      <ExternalLink className="ml-auto h-3.5 w-3.5" />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push("/policies")}>
+                      Terms & policies
+                      <ExternalLink className="ml-auto h-3.5 w-3.5" />
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setReportBugOpen(true)}>
+                      <Bug className="mr-2 h-4 w-4" />
+                      Report a bug
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive">
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenu>
       </div>
 
-      {/* Settings Dialog */}
-      {isSettingsOpen && (
-        <Settings onClose={() => setIsSettingsOpen(false)} />
-      )}
-
-      {/* Report Bug Modal */}
-      <ReportBug isOpen={isReportBugOpen} onClose={() => setIsReportBugOpen(false)} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ReportBug open={reportBugOpen} onOpenChange={setReportBugOpen} />
     </>
   )
 }

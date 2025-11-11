@@ -1,92 +1,95 @@
-'use client'
+"use client"
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
+import { Check, X } from "lucide-react"
+
+import { plans } from "@/data/plans"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 
 export default function PlansPage() {
-    const router = useRouter()
-    return (
-        <main className="min-h-screen w-full bg-black text-white px-6 py-8">
-            <div className="max-w-[1856px] mx-auto">
-                <div className="flex items-start justify-between">
-                    <div />
-                    <button
-                        aria-label="Close"
-                        onClick={() => router.back()}
-                        className="p-2 hover:bg-white/10 rounded"
-                    >
-                        <svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M3 3L13 13M13 3L3 13" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-                        </svg>
-                    </button>
+  const router = useRouter()
+
+  return (
+    <main className="min-h-screen w-full bg-gradient-to-b from-background via-background/80 to-background px-6 py-12 text-white">
+      <div className="mx-auto flex max-w-6xl flex-col gap-10">
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <p className="text-sm uppercase tracking-[0.3em] text-primary">
+              Pricing
+            </p>
+            <h1 className="text-4xl font-semibold leading-tight">
+              Upgrade your workspace when you&apos;re ready.
+            </h1>
+            <p className="text-base text-muted-foreground">
+              Pick a plan that matches how often you turn repos into guided build plans.
+              All tiers include the dark UI and shadcn component kit.
+            </p>
+          </div>
+          <Button variant="ghost" onClick={() => router.back()}>
+            Close
+            <X className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          {plans.map((plan) => (
+            <Card
+              key={plan.id}
+              className={`flex flex-col border border-border/60 bg-card/80 shadow-2xl shadow-black/30 ${
+                plan.highlighted ? "ring-2 ring-primary" : ""
+              }`}
+            >
+              <CardHeader className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                  {plan.highlighted && (
+                    <Badge variant="accent" className="text-xs uppercase">
+                      Popular
+                    </Badge>
+                  )}
                 </div>
-
-                <h1 className="font-teachers font-normal text-[40px] sm:text-[48px] text-center mt-8">Upgrade your plan</h1>
-
-                <div className="w-[1344px] mx-auto mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-                    {/* Free */}
-                    <section className="border-2 border-white rounded p-8 h-full flex flex-col gap-6">
-                        <h2 className="font-teachers font-bold text-[32px]">Free</h2>
-                        <div className="flex items-end gap-2">
-                            <span className="text-[#A6A6A6] text-[20px]">$</span>
-                            <span className="text-[64px] leading-none">0</span>
-                            <div className="text-[#A6A6A6] text-[16px] leading-tight">
-                                <div>USD/</div>
-                                <div>month</div>
-                            </div>
-                        </div>
-                        <p className="font-teachers text-[24px]">Plan description</p>
-                        <button className="w-full bg-[#AFAFAF] text-black rounded py-2 text-[24px]">Current Plan</button>
-                        <ul className="mt-2 space-y-3 text-[20px]">
-                            <li>Plan feat 1</li>
-                            <li>Plan feat 2</li>
-                            <li>Plan feat 3</li>
-                            <li>Plan feat 4</li>
-                        </ul>
-                    </section>
-
-                    {/* Pro */}
-                    <section className="border-2 border-white rounded p-8 h-full flex flex-col gap-6">
-                        <h2 className="font-teachers font-bold text-[32px]">Pro</h2>
-                        <div className="flex items-end gap-2">
-                            <span className="text-[#A6A6A6] text-[20px]">$</span>
-                            <span className="text-[64px] leading-none">15</span>
-                            <div className="text-[#A6A6A6] text-[16px] leading-tight">
-                                <div>USD/</div>
-                                <div>month</div>
-                            </div>
-                        </div>
-                        <p className="font-teachers text-[24px]">Plan description</p>
-                        <button className="w-full bg-white text-black rounded py-2 text-[24px]">Get Pro</button>
-                        <ul className="mt-2 space-y-3 text-[20px]">
-                            <li>All free feats included</li>
-                            <li>Plan feat 1</li>
-                            <li>Plan feat 2</li>
-                            <li>Plan feat 3</li>
-                        </ul>
-                    </section>
-
-                    {/* Ultra */}
-                    <section className="border-2 border-white rounded p-8 h-full flex flex-col gap-6">
-                        <h2 className="font-teachers font-bold text-[32px]">Ultra</h2>
-                        <div className="flex items-end gap-2">
-                            <span className="text-[#A6A6A6] text-[20px]">$</span>
-                            <span className="text-[64px] leading-none">100</span>
-                            <div className="text-[#A6A6A6] text-[16px] leading-tight">
-                                <div>USD/</div>
-                                <div>month</div>
-                            </div>
-                        </div>
-                        <p className="font-teachers text-[24px]">Plan description</p>
-                        <button className="w-full bg-white text-black rounded py-2 text-[24px]">Get Ultra</button>
-                        <ul className="mt-2 space-y-3 text-[20px]">
-                            <li>All pro feats included</li>
-                            <li>Plan feat 1</li>
-                            <li>Plan feat 2</li>
-                            <li>Plan feat 3</li>
-                        </ul>
-                    </section>
+                <CardDescription>{plan.description}</CardDescription>
+                <div className="flex items-baseline gap-1 text-4xl font-semibold">
+                  ${plan.price}
+                  <span className="text-base font-normal text-muted-foreground">
+                    /month
+                  </span>
                 </div>
-            </div>
-        </main>
-    )
+              </CardHeader>
+              <CardContent className="flex-1">
+                <Button
+                  className="w-full font-semibold"
+                  variant={plan.highlighted ? "default" : "secondary"}
+                >
+                  {plan.cta}
+                </Button>
+                <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-primary" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+              <CardFooter className="text-xs text-muted-foreground">
+                {plan.id === "free"
+                  ? "Includes unlimited mock timelines on public repos."
+                  : "Cancel anytime. We prorate upgrades."}
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </main>
+  )
 }

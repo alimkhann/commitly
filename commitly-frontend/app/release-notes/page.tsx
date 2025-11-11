@@ -1,26 +1,56 @@
-export default function ReleaseNotesPage() {
-    return (
-        <main className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
-            <section className="w-full max-w-[900px] flex flex-col items-center gap-10">
-                <h1 className="font-teachers font-bold text-[40px] sm:text-[56px] md:text-[64px] leading-tight text-center">
-                    Release notes
-                </h1>
+import { releaseNotes } from "@/data/release-notes"
+import { Badge } from "@/components/ui/badge"
 
-                <div className="w-full flex flex-col gap-6">
-                    {/* Example entry */}
-                    <article className="border border-white rounded p-5 sm:p-6">
-                        <header className="flex items-center justify-between">
-                            <h2 className="font-teachers text-[22px] sm:text-[24px]">v0.1.0</h2>
-                            <time className="text-white/70 text-[14px]">2025-09-30</time>
-                        </header>
-                        <ul className="list-disc pl-5 mt-3 space-y-2 text-white/90 text-[16px] sm:text-[18px]">
-                            <li>Initial dark-themed release notes page.</li>
-                            <li>Added policies and help center stub pages.</li>
-                            <li>Report bug modal component scaffold.</li>
-                        </ul>
-                    </article>
+export default function ReleaseNotesPage() {
+  return (
+    <main className="min-h-screen w-full bg-background px-6 py-16">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-12">
+        <header className="rounded-3xl border border-border/60 bg-card/80 p-8 shadow-2xl shadow-black/30">
+          <p className="text-sm uppercase tracking-[0.35em] text-primary">Changelog</p>
+          <h1 className="mt-3 text-4xl font-semibold">Release notes</h1>
+          <p className="mt-3 text-base text-muted-foreground">
+            Product updates, bug fixes, and design refreshes. We ship weekly, collect feedback
+            in the app, and keep the roadmap transparent.
+          </p>
+        </header>
+
+        <section className="space-y-8">
+          {releaseNotes.map((entry, index) => (
+            <article
+              key={entry.version}
+              className="grid gap-4 rounded-3xl border border-border/60 bg-card/70 p-6 shadow-lg shadow-black/25 md:grid-cols-[1fr_2fr]"
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{entry.date}</span>
+                  {entry.channel && (
+                    <Badge variant="outline" className="text-xs uppercase">
+                      {entry.channel}
+                    </Badge>
+                  )}
                 </div>
-            </section>
-        </main>
-    )
+                <h2 className="text-2xl font-semibold">{entry.version}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Release {index + 1} of {releaseNotes.length} in this series.
+                </p>
+              </div>
+
+              <div>
+                <ul className="space-y-3 text-sm text-muted-foreground">
+                  {entry.highlights.map((item) => (
+                    <li
+                      key={item}
+                      className="rounded-2xl border border-border/40 bg-background/40 p-3"
+                    >
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </article>
+          ))}
+        </section>
+      </div>
+    </main>
+  )
 }

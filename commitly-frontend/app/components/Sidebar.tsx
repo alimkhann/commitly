@@ -1,179 +1,182 @@
-'use client'
+"use client"
 
-import Image from 'next/image'
-import Link from 'next/link'
-import { useState } from 'react'
-import { usePathname } from 'next/navigation'
-import AccountSection from './AccountSection/AccountSection'
+import Image from "next/image"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { useMemo, useState } from "react"
+import { ChevronLeft, Hammer, Search } from "lucide-react"
 
-// Repo data mapping
-const REPOS = [
-  { name: 'Deepseek', id: 'deepseek' },
-  { name: 'VSCode', id: 'vscode' },
-  { name: 'Tencent', id: 'tencent' }
-]
+import { repos } from "@/data/repos"
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
-const Logo = ({ onClick }: { onClick?: () => void }) => (
-  <div className="relative w-12 h-12">
-    <Image
-      src="/logos/logo_4x.png"
-      alt="Commitly Logo"
-      width={48}
-      height={48}
-      className="w-12 h-12"
-    />
-  </div>
-)
-
-const CollapseButton = ({ onClick, title }: { onClick: () => void; title: string }) => (
-  <button
-    onClick={onClick}
-    className="relative w-8 h-8 hover:bg-white/15 rounded transition-colors"
-    title={title}
-  >
-    <Image
-      src="/icons/collapse.svg"
-      alt="Collapse"
-      width={32}
-      height={32}
-      className="w-8 h-8"
-    />
-  </button>
-)
-
-const NewRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
-  <Link
-    className={`${isCollapsed ? 'w-full h-12 flex items-center justify-start' : 'flex gap-2.5 items-center w-full h-12'} hover:bg-white/15 rounded transition-colors p-1`}
-    title="New repo"
-    href="/"
-  >
-    <div className="w-8 h-8 flex items-center justify-center shrink-0">
-
-      <Image
-        src="/icons/hammer_white.svg"
-        alt="New repo"
-        width={32}
-        height={32}
-        className="w-8 h-8 shrink-0"
-        />
-    </div>
-    {!isCollapsed && (
-      <p className="font-teachers font-normal text-white text-responsive-4xl whitespace-nowrap">
-        New repo
-      </p>
-    )}
-  </Link>
-)
-
-const SearchRepoButton = ({ isCollapsed }: { isCollapsed: boolean }) => (
-  <Link
-    href="/search"
-    className={`${isCollapsed ? 'w-full h-12 flex items-center justify-start' : 'flex gap-2.5 items-center w-full h-12'} hover:bg-white/15 rounded transition-colors p-1`}
-    title="Search repo"
-  >
-    <div className="w-8 h-8 flex items-center justify-center shrink-0">
-      <Image
-        src="/icons/magnifyingglass_white.svg"
-        alt="Search repo"
-        width={32}
-        height={32}
-        className="w-8 h-8 shrink-0"
-      />
-    </div>
-    {!isCollapsed && (
-      <p className="font-teachers font-normal text-white text-responsive-4xl whitespace-nowrap">
-        Search repo
-      </p>
-    )}
-  </Link>
-)
-
-const ReposSection = ({ isCollapsed }: { isCollapsed: boolean }) => {
-  const pathname = usePathname()
-
-  // Determine if a repo is active based on current path
-  const isRepoActive = (repoId: string) => {
-    return pathname.startsWith(`/repo/${repoId}`)
-  }
-
-  return (
-    <div className="flex flex-col gap-2 items-start w-full">
-      {!isCollapsed && (
-        <>
-        <p className="font-teachers font-normal text-white text-responsive-3xl whitespace-nowrap">
-          Repos
-        </p>
-
-        <div className="flex flex-col gap-2 w-full">
-          {REPOS.map((repo) => (
-            <Link
-              key={repo.id}
-              href={`/repo/${repo.id}/timeline`}
-              className={`flex items-center px-2 py-1 rounded w-full transition-colors ${
-                isRepoActive(repo.id)
-                  ? 'bg-white text-black'
-                  : 'border border-white text-white hover:bg-white/15'
-              }`}
-            >
-              <p className={`font-teachers font-normal text-responsive-3xl whitespace-nowrap ${
-                isRepoActive(repo.id) ? 'text-black' : 'text-white'
-              }`}>
-                {repo.name}
-              </p>
-            </Link>
-          ))}
-        </div>
-        </>
-      )}
-    </div>
-  )
-}
+import AccountSection from "./AccountSection/AccountSection"
 
 export default function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const pathname = usePathname()
+  const [collapsed, setCollapsed] = useState(false)
+  const toggleCollapse = () => setCollapsed((prev) => !prev)
 
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed)
-  }
+  const activeRepoId = useMemo(() => {
+    if (!pathname) return null
+    const segments = pathname.split("/")
+    return segments[1] === "repo" ? segments[2] ?? null : null
+  }, [pathname])
 
   return (
-    <div className={`bg-black h-full relative border-r border-white transition-[width] duration-300 ease-in-out ${isCollapsed ? 'w-responsive-sidebar-collapsed' : 'w-responsive-sidebar'}`}>
-      <div className="flex flex-col h-full items-start justify-between p-2.5">
-        {/* Top Section */}
-        <div className="flex flex-col gap-12 items-start w-full">
-          {/* Logo and collapse */}
-          <div className={`flex items-center w-full ${isCollapsed ? 'justify-start pl-0 pr-0' : 'justify-between pl-0 pr-3'}`}>
-            {isCollapsed ? (
-              <button onClick={toggleCollapse} className="flex items-center justify-start w-full">
-                <div className="flex items-center justify-start w-full">
-                  <Logo />
-                </div>
-              </button>
-            ) : (
-              <>
-                <Link href="/">
-                  <Logo />
-                </Link>
-                <CollapseButton onClick={toggleCollapse} title="Collapse sidebar" />
-              </>
+    <div
+      className={cn(
+        "flex h-screen flex-col overflow-y-auto border-border/50 bg-card/80 backdrop-blur-xl",
+        collapsed ? "w-[96px]" : "w-[320px]"
+      )}
+    >
+      <div className="flex flex-1 flex-col gap-6 p-4">
+        <div
+          className={cn(
+            "flex items-center justify-between",
+            collapsed && "flex-col gap-3"
+          )}
+        >
+          <div className="flex items-center justify-between w-full">
+            <button
+              type="button"
+              className="group relative flex h-14 w-14 items-center justify-center rounded-xl transition-colors hover:bg-muted/30"
+              aria-label="Home"
+              onClick={() => {
+                if (collapsed) {
+                  setCollapsed(false)
+                } else {
+                  window.location.href = "/"
+                }
+              }}
+            >
+              <div className="relative h-16 w-16">
+                <Image
+                  src="/logos/logo_4x.png"
+                  alt="commitly"
+                  fill
+                  className={cn(
+                    "rounded-lg object-contain transition-opacity duration-150",
+                    collapsed && "group-hover:opacity-0"
+                  )}
+                />
+              </div>
+              {collapsed && (
+                <ChevronLeft className="absolute h-4 w-4 rotate-180 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+              )}
+            </button>
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                onClick={toggleCollapse}
+                aria-label="Collapse sidebar"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
             )}
-          </div>
-
-          {/* Sidebar Chat Options */}
-          <div className={`flex flex-col gap-2 w-full ${isCollapsed ? 'items-center' : 'items-start'}`}>
-            <NewRepoButton isCollapsed={isCollapsed} />
-            <SearchRepoButton isCollapsed={isCollapsed} />
-          </div>
-
-          {/* Repos Section */}
-          <div className={`w-full flex-1 ${isCollapsed ? 'overflow-visible' : 'overflow-y-auto pr-1'}`}>
-            <ReposSection isCollapsed={isCollapsed} />
           </div>
         </div>
 
-        {/* Account Section */}
-        <AccountSection isCollapsed={isCollapsed} />
+        <div className="space-y-2">
+          <Button
+            size="lg"
+            className={cn(
+              "h-14 w-full justify-start gap-3 rounded-xl text-base",
+              collapsed && "justify-center px-0"
+            )}
+            asChild
+          >
+            <Link href="/">
+              <Hammer className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
+              {!collapsed && <span>New repo timeline</span>}
+            </Link>
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            className={cn(
+              "h-14 w-full justify-start gap-3 rounded-xl text-base",
+              collapsed && "justify-center px-0"
+            )}
+            asChild
+          >
+            <Link href="/search">
+              <Search className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
+              {!collapsed && <span>Search repos</span>}
+            </Link>
+          </Button>
+        </div>
+
+        {!collapsed && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Active repos
+              </p>
+              <Badge variant="outline" className="font-normal text-[11px]">
+                synced
+              </Badge>
+            </div>
+            <ScrollArea className="h-full max-h-[45vh]">
+              <div className="flex flex-col gap-2 pr-3">
+                {repos.map((repo) => {
+                  const isActive = activeRepoId === repo.id
+                  return (
+                    <Link
+                      key={repo.id}
+                      href={`/repo/${repo.id}/timeline`}
+                      className={cn(
+                        "group rounded-xl border border-transparent bg-transparent px-3 py-3 transition-colors",
+                        isActive
+                          ? "border-primary/80 bg-primary/10"
+                          : "hover:border-border/70 hover:bg-card/60"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium leading-tight">
+                            {repo.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {repo.language} • {repo.stars}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={isActive ? "accent" : "secondary"}
+                          className="text-[11px]"
+                        >
+                          {repo.progress}%
+                        </Badge>
+                      </div>
+                      <div className="mt-3 h-1.5 rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${repo.progress}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
+                        {repo.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-muted/60 px-2 py-0.5"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
       </div>
+      <AccountSection isCollapsed={collapsed} />
     </div>
   )
 }

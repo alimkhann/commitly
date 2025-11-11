@@ -1,60 +1,101 @@
-import { useEffect } from 'react'
+"use client"
 
-interface ReportBugProps {
-    isOpen: boolean
-    onClose: () => void
+import { useState } from "react"
+import { AlertTriangle, Paperclip } from "lucide-react"
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+
+type ReportBugProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-export default function ReportBug({ isOpen, onClose }: ReportBugProps) {
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose()
-        }
-        document.addEventListener('keydown', onKey)
-        return () => document.removeEventListener('keydown', onKey)
-    }, [onClose])
+export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
+  const [includeScreenshot, setIncludeScreenshot] = useState(true)
 
-    if (!isOpen) return null
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl space-y-6">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <DialogTitle>Report an issue</DialogTitle>
+          </div>
+          <DialogDescription>
+            Share what went wrong so we can reproduce and fix it quickly. Attaching
+            screenshots or logs helps shorten the cycle.
+          </DialogDescription>
+        </DialogHeader>
 
-    return (
-        <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="bug-title" className="text-sm font-medium">
+              Title
+            </label>
+            <Input
+              id="bug-title"
+              placeholder="Streaming output stops after a few tokens"
+            />
+          </div>
 
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-                <div className="relative w-full max-w-[800px] bg-black text-white rounded border border-white">
-                    {/* Top */}
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-white">
-                        <h3 className="font-teachers text-[24px] sm:text-[28px]">What happened?</h3>
-                        <button aria-label="Close" onClick={onClose} className="p-1 hover:bg-white/10 rounded">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3 3L13 13M13 3L3 13" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-                            </svg>
-                        </button>
-                    </div>
+          <div className="space-y-2">
+            <label htmlFor="bug-description" className="text-sm font-medium">
+              What happened?
+            </label>
+            <Textarea
+              id="bug-description"
+              rows={6}
+              placeholder="Steps to reproduce, expected result, actual outcome..."
+            />
+          </div>
 
-                    {/* Bottom */}
-                    <div className="px-4 py-4 flex flex-col gap-4">
-                        <div>
-                            <label className="sr-only" htmlFor="bug-text">Tell us about the issue you encountered</label>
-                            <textarea id="bug-text" rows={6} className="w-full bg-transparent border border-white rounded p-2 placeholder:text-white/65 outline-none"
-                                placeholder="Tell us about the issue you encountered" />
-                        </div>
-                        <p className="text-[14px] text-white/70">
-                            Any information you share may be reviewed to help improve commitly. If you have any additional questions, contact support.
-                        </p>
-
-                        <label className="inline-flex items-center gap-2 select-none">
-                            <input type="checkbox" className="accent-white" />
-                            <span className="text-[16px]">Include screenshot in report</span>
-                        </label>
-
-                        <div className="flex items-center justify-end">
-                            <button onClick={onClose} className="px-3 py-2 rounded border border-white text-white hover:bg-white/10 mr-2">Cancel</button>
-                            <button className="px-3 py-2 rounded bg-white text-black hover:bg-white/90">Send</button>
-                        </div>
-                    </div>
-                </div>
+          <div className="flex items-center justify-between rounded-lg border border-dashed border-muted px-3 py-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Paperclip className="h-4 w-4" />
+              <div>
+                <p className="font-medium text-foreground">Attachment</p>
+                <p className="text-xs text-muted-foreground">
+                  Drop screenshots or logs (optional)
+                </p>
+              </div>
             </div>
+            <Button variant="outline" size="sm">
+              Browse files
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Include last screenshot</p>
+              <p className="text-xs text-muted-foreground">
+                We&rsquo;ll only capture the active commitly tab.
+              </p>
+            </div>
+            <Switch
+              checked={includeScreenshot}
+              onCheckedChange={setIncludeScreenshot}
+              aria-label="Include screenshot"
+            />
+          </div>
         </div>
-    )
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button>Send report</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }

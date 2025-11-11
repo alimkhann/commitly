@@ -1,23 +1,43 @@
+import Link from "next/link"
+
+import { onboardingSteps } from "@/data/help-center"
+import { Card, CardContent } from "@/components/ui/card"
+
 export default function GettingStartedPage() {
-    return (
-        <main className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
-            <section className="w-full max-w-[900px] flex flex-col gap-8">
-                <header>
-                    <h1 className="font-teachers font-bold text-[40px] sm:text-[56px] md:text-[64px] leading-tight">Getting started</h1>
-                    <p className="text-white/70">A quick guide to set up and use Commitly.</p>
-                </header>
+  return (
+    <main className="min-h-screen w-full bg-background px-6 py-16">
+      <section className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        <header className="space-y-3">
+          <p className="text-sm uppercase tracking-[0.3em] text-primary">
+            Guide
+          </p>
+          <h1 className="text-4xl font-semibold">Getting started</h1>
+          <p className="text-base text-muted-foreground">
+            Follow these essentials to run your first commitly timeline and keep the workflow tidy.
+          </p>
+        </header>
 
-                <ol className="list-decimal pl-6 space-y-3 text-white/90 text-[18px] sm:text-[20px]">
-                    <li>Paste a GitHub repository URL on the home page.</li>
-                    <li>Use the left sidebar to navigate repo views and the help center.</li>
-                    <li>Open the account menu to find settings, release notes, and policies.</li>
-                    <li>Report issues via the Report bug option to help us improve.</li>
-                </ol>
+        <Card className="border-border/60 bg-card/80">
+          <CardContent className="p-6">
+            <ol className="space-y-4 text-base text-muted-foreground">
+              {onboardingSteps.map((step, index) => (
+                <li key={step} className="flex gap-4">
+                  <span className="text-sm font-semibold text-primary">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <p>{step}</p>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
 
-                <div className="pt-2">
-                    <a href="/help-center" className="underline hover:opacity-80">Back to Help center</a>
-                </div>
-            </section>
-        </main>
-    )
+        <div>
+          <Link href="/help-center" className="text-sm text-primary">
+            ← Back to Help center
+          </Link>
+        </div>
+      </section>
+    </main>
+  )
 }

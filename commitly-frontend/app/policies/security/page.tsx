@@ -1,25 +1,32 @@
+import { policyMeta } from "@/data/policies"
+
 export default function SecurityPage() {
-    return (
-        <main className="min-h-screen w-full bg-black text-white flex items-center justify-center px-6">
-            <article className="w-full max-w-[900px] flex flex-col gap-6">
-                <header>
-                    <h1 className="font-teachers font-bold text-[40px] sm:text-[56px] md:text-[64px] leading-tight">Security</h1>
-                    <p className="text-white/70">Last updated: 2025-09-30</p>
-                </header>
-                <section className="prose prose-invert max-w-none">
-                    <p>
-                        We take security seriously and implement technical and organizational safeguards to protect your data.
-                    </p>
-                    <h2>Safeguards</h2>
-                    <p>
-                        We use encryption in transit, access controls, and monitoring to secure systems and data.
-                    </p>
-                    <h2>Responsible disclosure</h2>
-                    <p>
-                        If you believe you've found a security issue, please report it to us so we can address it promptly.
-                    </p>
-                </section>
-            </article>
-        </main>
-    )
+  return (
+    <main className="min-h-screen w-full bg-background px-6 py-16">
+      <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <header className="space-y-2">
+          <p className="text-sm uppercase tracking-[0.3em] text-primary">Legal</p>
+          <h1 className="text-4xl font-semibold">Security</h1>
+          <p className="text-sm text-muted-foreground">
+            Last updated {policyMeta.updated}
+          </p>
+        </header>
+        <section className="space-y-4 text-base leading-relaxed text-muted-foreground">
+          <p>
+            Commitly uses encryption at rest and in transit, role-based access, secrets management, and continuous monitoring
+            to keep your data private. Production access is limited to on-call engineers with hardware keys.
+          </p>
+          <h2 className="text-xl font-semibold text-foreground">Safeguards</h2>
+          <p>
+            We isolate customer data by workspace, store secrets in a dedicated vault, and monitor for anomalous behavior.
+            Backups are encrypted and rotated every 12 hours.
+          </p>
+          <h2 className="text-xl font-semibold text-foreground">Responsible disclosure</h2>
+          <p>
+            If you discover a security issue, email {policyMeta.contact}. Include steps to reproduce so we can respond quickly.
+          </p>
+        </section>
+      </article>
+    </main>
+  )
 }
