@@ -215,16 +215,13 @@ function AccountSectionContent() {
         </Button>
       </div>
       <div className="rounded-2xl border border-border/60 p-4">
-        <p className="font-medium">Billing email</p>
-        <p className="text-sm text-muted-foreground">
-          We send plan receipts and security alerts here.
-        </p>
-        <Input placeholder="zhanbo@commitly.dev" className="mt-3" />
+        <p className="font-medium">Email</p>
+        <p className="text-sm text-muted-foreground">zhanbo@commitly.dev</p>
       </div>
       <Separator />
       <div className="flex items-center justify-between rounded-2xl border border-border/60 p-4">
         <div>
-          <p className="font-medium text-destructive">Delete workspace</p>
+          <p className="font-medium text-destructive">Delete account</p>
           <p className="text-sm text-muted-foreground">
             Removes imported repos and history after a 7-day hold.
           </p>
