@@ -28,7 +28,7 @@ export default function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-screen flex-col overflow-y-auto border-border/50 bg-card/80 backdrop-blur-xl",
+        "flex h-screen flex-col overflow-y-auto border border-white/10 bg-card/25 backdrop-blur-2xl",
         collapsed ? "w-[96px]" : "w-[320px]"
       )}
     >
@@ -85,7 +85,7 @@ export default function Sidebar() {
           <Button
             size="lg"
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl text-base",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-white/10 bg-white/10 text-base text-white transition-colors hover:bg-white/15",
               collapsed && "justify-center px-0"
             )}
             asChild
@@ -99,7 +99,7 @@ export default function Sidebar() {
             variant="secondary"
             size="lg"
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl text-base",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-white/5 bg-white/5 text-base text-white/90 transition-colors hover:bg-white/10",
               collapsed && "justify-center px-0"
             )}
             asChild
@@ -130,10 +130,10 @@ export default function Sidebar() {
                       key={repo.id}
                       href={`/repo/${repo.id}/timeline`}
                       className={cn(
-                        "group rounded-xl border border-transparent bg-transparent px-3 py-3 transition-colors",
+                        "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 transition-colors backdrop-blur-sm",
                         isActive
-                          ? "border-primary/80 bg-primary/10"
-                          : "hover:border-border/70 hover:bg-card/60"
+                          ? "border-primary/70 bg-primary/15"
+                          : "hover:border-white/10 hover:bg-card/25"
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -162,7 +162,7 @@ export default function Sidebar() {
                         {repo.tags.map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full bg-muted/60 px-2 py-0.5"
+                            className="rounded-full bg-white/10 px-2 py-0.5 backdrop-blur"
                           >
                             {tag}
                           </span>

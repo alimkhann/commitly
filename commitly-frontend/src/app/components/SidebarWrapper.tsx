@@ -18,7 +18,7 @@ export default function SidebarWrapper() {
   if (shouldHide) return null
 
   return (
-    <aside className="sticky top-0 flex h-screen shrink-0 border-r border-border bg-card/40 backdrop-blur">
+    <aside className="sticky top-0 z-10 flex h-screen shrink-0 border-r border-white/10 bg-card/20 backdrop-blur-xl">
       <Sidebar />
     </aside>
   )

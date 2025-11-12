@@ -20,8 +20,8 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 lg:px-16">
-      <section className="mx-auto flex w-full max-w-3xl flex-col gap-10 text-center">
+    <div className="relative flex flex-1 w-full items-center justify-center overflow-hidden px-6 py-12 lg:px-16">
+      <section className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-10 text-center py-16">
         <div className="space-y-4">
           <p className="text-sm uppercase tracking-[0.3em] text-primary/80">
             Repo-first learning
@@ -29,7 +29,7 @@ export default function Home() {
           <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
             Hey, builder. Ready to learn?
           </h1>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-lg">
             Drop a GitHub repo and we&apos;ll draft a roadmap that mirrors how the authors shipped it.
           </p>
         </div>
@@ -52,7 +52,7 @@ export default function Home() {
         </form>
 
         <div className="space-y-4">
-          <p className="text-sm font-medium text-muted-foreground">Examples</p>
+          <p className="text-sm font-medium">Examples</p>
           <div className="flex flex-wrap justify-center gap-3">
             {examples.map((example) => (
               <Button key={example.id} variant="outline" className="gap-2" asChild>

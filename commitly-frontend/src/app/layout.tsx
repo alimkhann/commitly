@@ -7,6 +7,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 
 import SidebarWrapper from "./components/SidebarWrapper"
+import HomeBackground from "./components/HomeBackground"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -42,8 +43,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         className={`${inter.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
       >
         <div className="relative flex h-screen bg-background">
+          <HomeBackground />
           <SidebarWrapper />
-          <main className="relative flex h-screen flex-1 flex-col overflow-x-hidden overflow-y-auto bg-gradient-to-b from-background to-[hsl(240,9%,6%)]">
+          <main className="relative z-10 flex h-screen flex-1 flex-col overflow-x-hidden overflow-y-auto bg-transparent">
             {children}
           </main>
         </div>
