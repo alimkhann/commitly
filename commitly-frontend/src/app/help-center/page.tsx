@@ -5,7 +5,6 @@ import { helpCards } from "@/data/help-center"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardFooter,
   CardHeader,

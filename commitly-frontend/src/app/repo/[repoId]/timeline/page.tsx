@@ -1,9 +1,8 @@
 "use client"
 
-import { useMemo } from "react"
+import { JSX, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   CircleDotDashed,

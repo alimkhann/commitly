@@ -8,7 +8,6 @@ import { getRepoById } from "@/data/repos"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import TabSwitch from "../../../components/TabSwitch"
-import { cn } from "@/lib/utils"
 
 export default function RepoGuidePage() {
   const params = useParams()
