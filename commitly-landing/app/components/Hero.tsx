@@ -3,6 +3,8 @@
 import Image from 'next/image'
 import { WaitlistForm } from './WaitlistForm'
 import { useLanguage } from '../contexts/LanguageContext'
+import ColorBends from './ColorBends'
+import CountUp from './CountUp'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 
@@ -29,13 +31,27 @@ export default function Hero({
 
     return (
         <section className="w-full px-8 pt-8 pb-32">
-            <div
-                className="relative bg-hero rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col"
-            >
-                <div className="gradient-vignette pointer-events-none" />
+            <div className="relative isolate rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col">
+                <div aria-hidden className="absolute inset-0 -z-10">
+                    <ColorBends
+                        colors={["#FF0000", "#00FF00", "#0000FF"]}
+                        rotation={0}
+                        speed={0.2}
+                        scale={1}
+                        frequency={1}
+                        warpStrength={1}
+                        mouseInfluence={1}
+                        parallax={0.5}
+                        noise={0.1}
+                        trackPointerGlobally
+                        transparent
+                    />
+                </div>
 
                 <div className="text-center max-w-[1100px] mx-auto pt-16 relative z-10 pb-14">
-                    <h1 className="h1-hero font-semibold">{t.heroTitle}</h1>
+                    <h1 className="h1-hero font-semibold">
+                        {t.heroTitle}
+                    </h1>
                     <p className="sub-hero mt-3">
                         {t.heroSubtitle}
                     </p>
@@ -45,7 +61,16 @@ export default function Hero({
                     {/* Counter */}
                     <div className="mt-3 counter-shadow inline-flex items-center gap-2">
                         <span className="dot-green" />
-                        <span><span className="text-green-400">{waitlistCount ?? 0}</span> {t.peopleJoined}</span>
+                        <span><span className="text-green-400">{
+                            <CountUp
+                                from={0}
+                                to={waitlistCount ?? 0}
+                                separator=","
+                                direction="up"
+                                duration={1}
+                                className="count-up-text"
+                            />
+                        }</span> {t.peopleJoined}</span>
                     </div>
                     {waitlistStatus !== 'idle' && (
                         <div className="mt-2 text-sm text-white/80">
