@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { useParams } from "next/navigation"
 import { Copy, Edit2, SendHorizontal, ThumbsDown, ThumbsUp } from "lucide-react"
 
+import { useAuth } from "@clerk/nextjs"
 import { repoService } from "@/lib/services/repos"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -12,12 +13,16 @@ import TabSwitch from "@/components/navigation/tab-switch"
 export default function RepoGuidePage() {
   const params = useParams()
   const repoId = params.repoId as string
+  const { isSignedIn } = useAuth()
   const repo = repoService.findById(repoId)
   const [message, setMessage] = useState("")
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  const thread = useMemo(() => repo?.guideThread ?? [], [repo])
+  const thread = useMemo(
+    () => (isSignedIn ? repo?.guideThread ?? [] : []),
+    [repo, isSignedIn]
+  )
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -25,6 +30,7 @@ export default function RepoGuidePage() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!isSignedIn) return
     setMessage("")
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
@@ -55,47 +61,55 @@ export default function RepoGuidePage() {
 
       <div className="mt-8 flex flex-1 flex-col items-center">
         <div className="mt-6 flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 overflow-y-auto pb-6">
-          {[...thread].reverse().map((messageItem) => (
-            <div
-              key={messageItem.id}
-              className="flex flex-col gap-1 group"
-            >
-              {messageItem.role === "guide" ? (
-                <article className="space-y-4 text-base leading-7 text-foreground">
-                  <div className="prose prose-invert max-w-none">
-                    {messageItem.message.split("\n").map((paragraph, idx) => (
-                      <p key={idx}>{paragraph}</p>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                    <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                    <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
-                      <ThumbsUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
-                      <ThumbsDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </article>
-              ) : (
-                <div className="group ml-auto flex max-w-[65%] flex-col items-end gap-1">
-                  <p className="rounded-3xl bg-primary px-4 py-3 text-base leading-relaxed text-primary-foreground shadow-sm">
-                    {messageItem.message}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                    <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                    <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
+          {thread.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
+              {isSignedIn
+                ? "No guide activity yet. Ask for a walkthrough to start the conversation."
+                : "Sign in to sync your guide chats and pick up where you left off."}
             </div>
-          ))}
+          ) : (
+            [...thread].reverse().map((messageItem) => (
+              <div
+                key={messageItem.id}
+                className="flex flex-col gap-1 group"
+              >
+                {messageItem.role === "guide" ? (
+                  <article className="space-y-4 text-base leading-7 text-foreground">
+                    <div className="prose prose-invert max-w-none">
+                      {messageItem.message.split("\n").map((paragraph, idx) => (
+                        <p key={idx}>{paragraph}</p>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                      <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </article>
+                ) : (
+                  <div className="group ml-auto flex max-w-[65%] flex-col items-end gap-1">
+                    <p className="rounded-3xl bg-primary px-4 py-3 text-base leading-relaxed text-primary-foreground shadow-sm">
+                      {messageItem.message}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                      <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button className="rounded-full border border-border/60 px-2 py-1 hover:border-border">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
