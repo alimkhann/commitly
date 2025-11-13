@@ -42,19 +42,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider
       appearance={{
-        baseTheme: dark,
+        theme: dark,
         variables: {
-          colorBackground: "#050505",
-          colorText: "#f4f4f5",
-          borderRadius: "0.5rem",
+          colorBackground: "#050507",
+          borderRadius: "0.3rem",
         },
         elements: {
-          card: "bg-[#050505] text-foreground shadow-2xl shadow-black/40",
-          headerTitle: "text-foreground",
-          headerSubtitle: "text-muted-foreground",
-          socialButtonsBlockButton: "bg-muted/40 text-foreground border border-border",
-          formButtonPrimary:
-            "bg-primary text-primary-foreground hover:bg-primary/90 transition-colors",
+          card: "text-foreground border-none border-white/8 shadow-[0_35px_70px_rgba(0,0,0,0.65)]",
+          formFieldInput: "bg-white/5",
+          headerTitle: "text-white",
+          headerSubtitle: "text-white/70",
+          socialButtonsBlockButton: "text-foreground border border-white/12 hover:bg-white/10 transition-colors",
+          formButtonPrimary: "bg-primary text-primary-foreground hover:bg-primary/85 shadow-[0_15px_35px_rgba(125,211,252,0.45)] transition-all",
           footerActionLink: "text-primary hover:text-primary/80",
         },
       }}

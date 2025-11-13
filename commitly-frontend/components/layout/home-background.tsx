@@ -1,8 +1,12 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 
-import Dither from '@/components/Dither'
+const Dither = dynamic(() => import('@/components/Dither'), {
+    ssr: false,
+    loading: () => null,
+})
 
 export default function HomeBackground() {
     const pathname = usePathname()
@@ -16,8 +20,8 @@ export default function HomeBackground() {
                 disableAnimation={false}
                 enableMouseInteraction
                 mouseRadius={0.3}
-                colorNum={4}
-                waveAmplitude={0.3}
+                colorNum={5}
+                waveAmplitude={0.2}
                 waveFrequency={3.7}
                 waveSpeed={0.04}
                 trackPointerGlobally
@@ -25,4 +29,3 @@ export default function HomeBackground() {
         </div>
     )
 }
-

@@ -53,12 +53,18 @@ export default function Home() {
         >
           <div className="flex flex-col gap-3 sm:flex-row">
             <Input
+              disabled={!isSignedIn}
               value={repoLink}
               onChange={(event) => setRepoLink(event.target.value)}
               placeholder="https://github.com/your-org/your-repo"
               className="flex-1 text-base"
             />
-            <Button type="submit" size="lg" className="text-base font-semibold">
+            <Button
+              type="submit"
+              size="lg"
+              disabled={!isSignedIn}
+              className="text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Generate roadmap
             </Button>
           </div>

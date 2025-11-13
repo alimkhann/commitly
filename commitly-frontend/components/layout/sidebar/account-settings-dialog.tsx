@@ -1,9 +1,14 @@
 "use client"
 
+import { useState } from "react"
+import { Bell, SlidersHorizontal } from "lucide-react"
 import { UserProfile } from "@clerk/nextjs"
 import { dark } from "@clerk/themes"
 
 import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 
 type AccountSettingsDialogProps = {
   open: boolean
@@ -16,36 +21,106 @@ export default function AccountSettingsDialog({
 }: AccountSettingsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl border-none bg-transparent p-0 shadow-none">
-          <UserProfile
-            routing="hash"
-            appearance={{
-              baseTheme: dark,
-              variables: {
-                colorBackground: "#050505",
-                colorText: "#f4f4f5",
-                colorPrimary: "#f6f6f6",
-                borderRadius: "0.5rem",
-                colorBorder: "000000",
-              },
-              elements: {
-                card: "bg-transparent text-foreground border border-border/60 rounded-3xl",
-                rootBox: "w-full",
-                navbar: "bg-transparent border-r border-border/40",
-                navbarButton: "text-foreground",
-                pageScrollBox: "bg-transparent",
-                profileSection: "bg-transparent",
-                profileSectionTitle: "text-muted-foreground",
-                headerTitle: "text-foreground",
-                headerSubtitle: "text-muted-foreground",
-                input: "bg-background text-foreground border border-border",
-                select: "bg-background text-foreground border border-border",
-                formButtonPrimary:
-                  "bg-primary text-primary-foreground hover:bg-primary/90 transition-colors",
-              },
-            }}
-          />
+      <DialogContent className="mx-auto border-none bg-transparent p-0 shadow-none -ml-16">
+        <UserProfile
+          routing="hash"
+          appearance={{
+            baseTheme: dark,
+            variables: {
+              colorBackground: "#050507",
+              colorText: "#f5f6fb",
+              borderRadius: "0.3rem",
+            },
+            elements: {
+            },
+          }}
+        >
+          <UserProfile.Page label="General" url="general" labelIcon={<SlidersHorizontal className="h-3.5 w-3.5" />}>
+            <GeneralPreferences />
+          </UserProfile.Page>
+          <UserProfile.Page label="Notifications" url="notifications" labelIcon={<Bell className="h-3.5 w-3.5" />}>
+            <NotificationsPreferences />
+          </UserProfile.Page>
+        </UserProfile>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function GeneralPreferences() {
+  return (
+    <div className="space-y-5 py-6 text-sm text-foreground">
+      <section className="rounded-3xl border-none p-6">
+        <div className="space-y-3">
+          <div>
+            <p className="text-base font-medium text-white">Theme</p>
+            <p className="text-xs text-white/60">
+              Commitly follows your system preference by default. Override it to lock a theme.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-white/80">
+            <Button size="sm" variant="secondary" className="rounded-full px-4">
+              System
+            </Button>
+            <Button size="sm" variant="ghost" className="rounded-full px-4">
+              Light
+            </Button>
+            <Button size="sm" variant="ghost" className="rounded-full px-4">
+              Dark
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border-none p-6 text-foreground">
+        <div className="space-y-3">
+          <div>
+            <p className="text-base font-medium text-white">Language</p>
+            <p className="text-xs text-white/60">
+              We auto-detect from your browser headers, but you can override it anytime.
+            </p>
+          </div>
+          <Input
+            placeholder="Prefer auto-detect"
+            className="mt-1 text-foreground placeholder:text-white/40"
+          />
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function NotificationsPreferences() {
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false)
+
+  return (
+    <div className="space-y-5 py-6 text-sm text-foreground">
+      <section className="rounded-3xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">Timeline responses</p>
+            <p className="text-xs text-white/60">
+              Get a push when commitly generates long-running timelines.
+            </p>
+          </div>
+          <Switch
+            checked={notificationsEnabled}
+            onCheckedChange={setNotificationsEnabled}
+          />
+        </div>
+      </section>
+      <section className="rounded-3xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">Weekly digest</p>
+            <p className="text-xs text-white/60">
+              Summary of repos, hints requested, and plan usage.
+            </p>
+          </div>
+          <Switch checked={weeklyDigestEnabled} onCheckedChange={setWeeklyDigestEnabled} />
+        </div>
+      </section>
+    </div>
   )
 }

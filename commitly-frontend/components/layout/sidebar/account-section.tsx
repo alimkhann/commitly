@@ -2,15 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import {
-  Bug,
-  ExternalLink,
-  HelpCircle,
-  LogOut,
-  Settings,
-  User,
-  Sparkles,
-} from "lucide-react"
+import { Bug, ExternalLink, HelpCircle, LogOut, Settings, Sparkles } from "lucide-react"
 import {
   SignedIn,
   SignedOut,
@@ -36,7 +28,6 @@ import {
 import { cn } from "@/lib/utils"
 
 import ReportBug from "@/components/modals/report-bug"
-import SettingsDialog from "./settings-dialog"
 import AccountSettingsDialog from "./account-settings-dialog"
 
 type AccountSectionProps = {
@@ -46,7 +37,6 @@ type AccountSectionProps = {
 export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const router = useRouter()
   const { isLoaded, user, isSignedIn } = useUser()
-  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false)
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false)
   const [reportBugOpen, setReportBugOpen] = useState(false)
 
@@ -131,13 +121,9 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 sideOffset={16}
                 className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/60 bg-card/95 p-3 shadow-2xl backdrop-blur"
               >
-                <DropdownMenuItem onClick={() => setGeneralSettingsOpen(true)}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  General settings
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAccountSettingsOpen(true)}>
-                  <User className="mr-2 h-4 w-4" />
-                  Account settings
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/plans")}>
                   <Sparkles className="mr-2 h-4 w-4" />
@@ -183,7 +169,6 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           </DropdownMenu>
         </div>
 
-        <SettingsDialog open={generalSettingsOpen} onOpenChange={setGeneralSettingsOpen} />
         <AccountSettingsDialog
           open={accountSettingsOpen}
           onOpenChange={setAccountSettingsOpen}
