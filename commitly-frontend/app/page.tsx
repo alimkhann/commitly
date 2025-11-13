@@ -6,16 +6,22 @@ import { GitBranch } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { repos } from "@/data/repos"
+import { repoService } from "@/lib/services/repos"
 
 export default function Home() {
   const [repoLink, setRepoLink] = useState("")
-  const examples = useMemo(() => repos.slice(0, 3), [])
+  const examples = useMemo(() => repoService.listExamples(3), [])
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!repoLink.trim()) return
-    // For now we simply reset and could wire up to backend later.
+    const value = repoLink.trim()
+    if (!value) return
+
+    const result = await repoService.queueImport(value)
+    if (!result.ok && !result.skipped) {
+      console.error(result.error ?? "Unable to queue repository import.")
+    }
+
     setRepoLink("")
   }
 

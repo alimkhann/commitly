@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { Filter, GitBranch, Search } from "lucide-react"
 
-import { repos } from "@/data/repos"
+import { repoService } from "@/lib/services/repos"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,9 +19,10 @@ import { Input } from "@/components/ui/input"
 export default function SearchPage() {
   const [query, setQuery] = useState("")
   const [difficulty, setDifficulty] = useState<"all" | "beginner" | "intermediate" | "advanced">("all")
+  const repoList = useMemo(() => repoService.list(), [])
 
   const filteredRepos = useMemo(() => {
-    return repos.filter((repo) => {
+    return repoList.filter((repo) => {
       const matchesQuery =
         repo.name.toLowerCase().includes(query.toLowerCase()) ||
         repo.description.toLowerCase().includes(query.toLowerCase())
@@ -29,7 +30,7 @@ export default function SearchPage() {
         difficulty === "all" || repo.difficulty === difficulty
       return matchesQuery && matchesDifficulty
     })
-  }, [query, difficulty])
+  }, [query, difficulty, repoList])
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">

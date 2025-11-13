@@ -4,15 +4,15 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { useParams } from "next/navigation"
 import { Copy, Edit2, SendHorizontal, ThumbsDown, ThumbsUp } from "lucide-react"
 
-import { getRepoById } from "@/data/repos"
+import { repoService } from "@/lib/services/repos"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import TabSwitch from "../../../components/TabSwitch"
+import TabSwitch from "@/components/navigation/tab-switch"
 
 export default function RepoGuidePage() {
   const params = useParams()
   const repoId = params.repoId as string
-  const repo = getRepoById(repoId)
+  const repo = repoService.findById(repoId)
   const [message, setMessage] = useState("")
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)

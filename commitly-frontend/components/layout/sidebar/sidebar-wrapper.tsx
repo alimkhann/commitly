@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 
-import Sidebar from "./Sidebar"
+import Sidebar from "./sidebar"
 
 const HIDE_SIDEBAR_PREFIXES = [
   "/help-center",

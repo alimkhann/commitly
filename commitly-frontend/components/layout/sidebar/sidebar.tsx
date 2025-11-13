@@ -6,17 +6,18 @@ import { usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
 import { ChevronLeft, Hammer, Search } from "lucide-react"
 
-import { repos } from "@/data/repos"
+import { repoService } from "@/lib/services/repos"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-import AccountSection from "./AccountSection/AccountSection"
+import AccountSection from "./account-section"
 
 export default function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const repoList = useMemo(() => repoService.list(), [])
   const toggleCollapse = () => setCollapsed((prev) => !prev)
 
   const activeRepoId = useMemo(() => {
@@ -123,7 +124,7 @@ export default function Sidebar() {
             </div>
             <ScrollArea className="h-full max-h-[45vh]">
               <div className="flex flex-col gap-2 pr-3">
-                {repos.map((repo) => {
+                {repoList.map((repo) => {
                   const isActive = activeRepoId === repo.id
                   return (
                     <Link

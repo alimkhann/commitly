@@ -9,7 +9,8 @@ import {
   Clock3,
 } from "lucide-react"
 
-import { getRepoById, type RepoTimelineStage } from "@/data/repos"
+import { type RepoTimelineStage } from "@/data/repos"
+import { repoService } from "@/lib/services/repos"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,13 +26,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import TabSwitch from "../../../components/TabSwitch"
+import TabSwitch from "@/components/navigation/tab-switch"
 
 export default function RepoTimelinePage() {
   const params = useParams()
   const router = useRouter()
   const repoId = params.repoId as string
-  const repo = getRepoById(repoId)
+  const repo = repoService.findById(repoId)
 
   const statusIcon = useMemo<Record<RepoTimelineStage["status"], JSX.Element>>(
     () => ({

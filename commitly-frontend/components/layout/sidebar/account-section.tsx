@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-import ReportBug from "../ReportBug"
-import SettingsDialog from "./Settings"
+import ReportBug from "@/components/modals/report-bug"
+import SettingsDialog from "./settings-dialog"
 
 type AccountSectionProps = {
   isCollapsed: boolean
