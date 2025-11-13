@@ -63,9 +63,7 @@ export default function RepoGuidePage() {
         <div className="mt-6 flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 overflow-y-auto pb-6">
           {thread.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
-              {isSignedIn
-                ? "No guide activity yet. Ask for a walkthrough to start the conversation."
-                : "Sign in to sync your guide chats and pick up where you left off."}
+              No guide activity yet. Ask for a walkthrough to start the conversation.
             </div>
           ) : (
             [...thread].reverse().map((messageItem) => (
@@ -123,10 +121,15 @@ export default function RepoGuidePage() {
           value={message}
           onChange={handleInputChange}
           rows={1}
-          placeholder="Ask for context, code walkthroughs, or compare approaches..."
-          className="min-h-[48px] max-h-40 flex-1 resize-none border-none bg-transparent focus-visible:ring-0"
+          disabled={!isSignedIn}
+          placeholder={
+            isSignedIn
+              ? "Ask for context, code walkthroughs, or compare approaches..."
+              : "Sign in to start working with the AI guide."
+          }
+          className="min-h-[48px] max-h-40 flex-1 resize-none border-none bg-transparent focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <Button type="submit" size="icon" className="rounded-full">
+        <Button type="submit" size="icon" className="rounded-full" disabled={!isSignedIn}>
           <SendHorizontal className="h-4 w-4" />
         </Button>
       </form>

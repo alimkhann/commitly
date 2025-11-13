@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
 import { ChevronLeft, Hammer, Search } from "lucide-react"
+import { useAuth } from "@clerk/nextjs"
 
 import { repoService } from "@/lib/services/repos"
 import { cn } from "@/lib/utils"
@@ -16,6 +17,7 @@ import AccountSection from "./account-section"
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { isSignedIn } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const repoList = useMemo(() => repoService.list(), [])
   const toggleCollapse = () => setCollapsed((prev) => !prev)
@@ -112,7 +114,7 @@ export default function Sidebar() {
           </Button>
         </div>
 
-        {!collapsed && (
+        {!collapsed && isSignedIn && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">

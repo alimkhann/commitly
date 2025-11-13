@@ -27,12 +27,23 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import TabSwitch from "@/components/navigation/tab-switch"
+import { useAuth } from "@clerk/nextjs"
 
 export default function RepoTimelinePage() {
   const params = useParams()
   const router = useRouter()
+  const auth = useAuth()
+  const isSignedIn = Boolean(auth.isSignedIn)
   const repoId = params.repoId as string
   const repo = repoService.findById(repoId)
+
+  const timelineStages = useMemo(() => {
+    if (!repo) return []
+    return repo.timeline.map((stage) => ({
+      ...stage,
+      status: (isSignedIn ? stage.status : "not-started") as RepoTimelineStage["status"],
+    }))
+  }, [repo, isSignedIn])
 
   const statusIcon = useMemo<Record<RepoTimelineStage["status"], JSX.Element>>(
     () => ({
@@ -83,16 +94,28 @@ export default function RepoTimelinePage() {
           <div className="h-2 rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${repo.progress}%` }}
+              style={{ width: `${isSignedIn ? repo.progress : 0}%` }}
             />
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {repo.progress}% of tasks completed · Updated {repo.updatedAt}
+            {isSignedIn
+              ? `${repo.progress}% of tasks completed · Updated ${repo.updatedAt}`
+              : "0% of tasks completed · Sign in to track progress."}
           </p>
         </div>
       </section>
 
-      <TimelineCanvas stages={repo.timeline} statusIcon={statusIcon} />
+      <TimelineCanvas
+        stages={timelineStages}
+        statusIcon={statusIcon}
+        isSignedIn={isSignedIn}
+      />
+
+      {!isSignedIn && (
+        <p className="rounded-2xl border border-dashed border-border/60 bg-card/60 px-4 py-3 text-center text-sm text-muted-foreground">
+          Signed-out view shows sample tasks only. Sign in to resume where you left off.
+        </p>
+      )}
     </div>
   )
 }
@@ -100,9 +123,11 @@ export default function RepoTimelinePage() {
 function TimelineCanvas({
   stages,
   statusIcon,
+  isSignedIn,
 }: {
   stages: RepoTimelineStage[]
   statusIcon: Record<RepoTimelineStage["status"], JSX.Element>
+  isSignedIn: boolean
 }) {
   return (
     <section className="relative mx-auto w-full max-w-5xl px-2">
@@ -110,7 +135,7 @@ function TimelineCanvas({
       <div className="grid gap-y-10 md:grid-cols-[1fr_40px_1fr] md:gap-x-8">
         {stages.map((stage, index) => {
           const align = index % 2 === 0 ? "left" : "right"
-          const isCurrent = stage.status === "in-progress"
+          const isCurrent = isSignedIn && stage.status === "in-progress"
           return (
             <div key={stage.id} className="grid md:contents">
               <div
@@ -125,6 +150,7 @@ function TimelineCanvas({
                   align={align}
                   statusIcon={statusIcon[stage.status]}
                   isCurrent={isCurrent}
+                  isSignedIn={isSignedIn}
                 />
               </div>
               <div className="relative hidden md:col-start-2 md:flex md:items-center md:justify-center">
@@ -144,11 +170,13 @@ function TimelineNodeCard({
   align,
   statusIcon,
   isCurrent,
+  isSignedIn,
 }: {
   stage: RepoTimelineStage
   align: "left" | "right"
   statusIcon: JSX.Element
   isCurrent: boolean
+  isSignedIn: boolean
 }) {
   return (
     <Collapsible className="group">
@@ -159,38 +187,40 @@ function TimelineNodeCard({
             align === "left" ? "-right-10" : "-left-10"
           )}
         />
-        <Card
-          className={cn(
-            "border-border/60 bg-card/70 shadow-lg shadow-black/25",
-            isCurrent && "ring-1 ring-primary/40"
-          )}
-        >
-          <CardHeader className={cn("pb-2", align === "right" && "text-right")}
+          <Card
+            className={cn(
+              "border-border/60 bg-card/70 shadow-lg shadow-black/25",
+              isCurrent && "ring-1 ring-primary/40"
+            )}
           >
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">{stage.title}</CardTitle>
-              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                {statusIcon}
-                {stage.status.replace("-", " ")}
-              </Badge>
-            </div>
-            <CardDescription>{stage.summary}</CardDescription>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="space-y-4 pt-2">
-              <div className="rounded-lg border border-border/60 bg-background/60 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Tasks
-                </p>
-                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                  {stage.tasks.map((task) => (
-                    <li key={task} className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                      <span>{task}</span>
-                    </li>
-                  ))}
-                </ul>
+            <CardHeader className={cn("pb-2", align === "right" && "text-right")}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg">{stage.title}</CardTitle>
+                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                  {statusIcon}
+                  {(stage.status === "not-started" && !isSignedIn
+                    ? "not started"
+                    : stage.status.replace("-", " "))}
+                </Badge>
               </div>
+              <CardDescription>{stage.summary}</CardDescription>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="space-y-4 pt-2">
+                <div className="rounded-lg border border-border/60 bg-background/60 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
+                  </p>
+                  <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    {stage.tasks.map((task) => (
+                      <li key={task} className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                        <span>{task}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               {stage.resources.length > 0 && (
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">

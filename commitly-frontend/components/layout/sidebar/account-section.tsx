@@ -8,6 +8,7 @@ import {
   HelpCircle,
   LogOut,
   Settings,
+  User,
   Sparkles,
 } from "lucide-react"
 import {
@@ -36,6 +37,7 @@ import { cn } from "@/lib/utils"
 
 import ReportBug from "@/components/modals/report-bug"
 import SettingsDialog from "./settings-dialog"
+import AccountSettingsDialog from "./account-settings-dialog"
 
 type AccountSectionProps = {
   isCollapsed: boolean
@@ -44,7 +46,8 @@ type AccountSectionProps = {
 export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const router = useRouter()
   const { isLoaded, user, isSignedIn } = useUser()
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [generalSettingsOpen, setGeneralSettingsOpen] = useState(false)
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false)
   const [reportBugOpen, setReportBugOpen] = useState(false)
 
   const displayName = useMemo(() => {
@@ -54,10 +57,12 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
 
   const planLabel = useMemo(() => {
     if (!user) return "Sign in to manage plan"
-    const metadataPlan =
-      (user.publicMetadata?.planName as string | undefined) ??
-      (user.privateMetadata?.planName as string | undefined)
-    return metadataPlan || "Free plan"
+    const publicMeta = user.publicMetadata as Record<string, unknown> | undefined
+    const planName = publicMeta?.["planName"]
+    if (typeof planName === "string" && planName.trim().length > 0) {
+      return planName
+    }
+    return "Free plan"
   }, [user])
 
   const initials = useMemo(() => {
@@ -126,9 +131,13 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 sideOffset={16}
                 className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/60 bg-card/95 p-3 shadow-2xl backdrop-blur"
               >
-                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                <DropdownMenuItem onClick={() => setGeneralSettingsOpen(true)}>
                   <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                  General settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAccountSettingsOpen(true)}>
+                  <User className="mr-2 h-4 w-4" />
+                  Account settings
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/plans")}>
                   <Sparkles className="mr-2 h-4 w-4" />
@@ -141,12 +150,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                     Help & resources
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
-                    <DropdownMenuSubContent
-                      side="left"
-                      align="start"
-                      sideOffset={12}
-                      className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/60 bg-card/95 shadow-xl backdrop-blur"
-                    >
+                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/60 bg-card/95 shadow-xl backdrop-blur">
                       <DropdownMenuItem onClick={() => router.push("/help-center")}>
                         Help center
                         <ExternalLink className="ml-auto h-3.5 w-3.5" />
@@ -179,7 +183,11 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
           </DropdownMenu>
         </div>
 
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <SettingsDialog open={generalSettingsOpen} onOpenChange={setGeneralSettingsOpen} />
+        <AccountSettingsDialog
+          open={accountSettingsOpen}
+          onOpenChange={setAccountSettingsOpen}
+        />
         <ReportBug open={reportBugOpen} onOpenChange={setReportBugOpen} />
       </SignedIn>
 
@@ -190,24 +198,43 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             isCollapsed && "px-2"
           )}
         >
-          <div className="rounded-2xl border border-border/60 bg-card/80 p-4 text-center shadow-inner">
-            <p className="text-sm font-semibold">Sign in to track progress</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Sync repo timelines, save task states, and unlock the workspace menu.
-            </p>
-            <div className="mt-4 flex flex-col gap-2">
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-2">
               <SignInButton mode="modal">
-                <Button className="w-full">Sign in</Button>
+                <Button size="icon" className="h-12 w-12 rounded-2xl">
+                  →
+                </Button>
               </SignInButton>
               <SignUpButton mode="modal">
-                <Button variant="secondary" className="w-full">
-                  Create account
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-12 w-12 rounded-2xl"
+                >
+                  +
                 </Button>
               </SignUpButton>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-border/60 bg-card/80 p-4 text-center shadow-inner">
+              <p className="text-sm font-semibold">Sign in to track progress</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Sync repo timelines, save task states, and unlock the workspace menu.
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                <SignInButton mode="modal">
+                  <Button className="w-full">Sign in</Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button variant="secondary" className="w-full">
+                    Create account
+                  </Button>
+                </SignUpButton>
+              </div>
+            </div>
+          )}
         </div>
-      </SignedOut>
+      </SignedOut >
     </>
   )
 }

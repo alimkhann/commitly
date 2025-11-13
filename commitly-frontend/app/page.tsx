@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { FormEvent, useMemo, useState } from "react"
 import { GitBranch } from "lucide-react"
+import { useAuth } from "@clerk/nextjs"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,12 +11,18 @@ import { repoService } from "@/lib/services/repos"
 
 export default function Home() {
   const [repoLink, setRepoLink] = useState("")
+  const { isSignedIn } = useAuth()
   const examples = useMemo(() => repoService.listExamples(3), [])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const value = repoLink.trim()
     if (!value) return
+
+    if (!isSignedIn) {
+      console.warn("Sign in to generate personalized timelines.")
+      return
+    }
 
     const result = await repoService.queueImport(value)
     if (!result.ok && !result.skipped) {
