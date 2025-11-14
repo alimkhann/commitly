@@ -143,7 +143,9 @@ class GeminiRoadmapGenerator:
         if not chunk_list:
             raise GeminiGenerationError("Repository does not have enough commits")
         attempt_chunks = chunk_list
-        for attempt in range(2):
+        attempt = 0
+        while attempt < 5:
+            attempt += 1
             context = self._render_context(attempt_chunks)
             prompt = PROMPT_TEMPLATE.format(
                 name=repo.full_name,
@@ -205,16 +207,25 @@ class GeminiRoadmapGenerator:
             except GeminiGenerationError:
                 finish_reasons = self._extract_finish_reasons(body)
                 if (
-                    attempt == 0
-                    and "MAX_TOKENS" in finish_reasons
+                    "MAX_TOKENS" in finish_reasons
                     and len(attempt_chunks) > MIN_RETRY_CHUNKS
                 ):
                     new_length = max(MIN_RETRY_CHUNKS, len(attempt_chunks) // 2)
-                    attempt_chunks = attempt_chunks[:new_length]
+                    if (
+                        new_length == len(attempt_chunks)
+                        and len(attempt_chunks) > MIN_RETRY_CHUNKS
+                    ):
+                        new_length = max(MIN_RETRY_CHUNKS, len(attempt_chunks) - 1)
+                    if new_length < len(attempt_chunks):
+                        attempt_chunks = attempt_chunks[:new_length]
+                    else:
+                        break
                     logger.info(
-                        "Retrying Gemini with %d/%d chunks due to MAX_TOKENS",
+                        "Retrying Gemini with %d/%d chunks due to MAX_TOKENS "
+                        "(attempt %d)",
                         new_length,
                         len(chunk_list),
+                        attempt + 1,
                     )
                     continue
                 raise
