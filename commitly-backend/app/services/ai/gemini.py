@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import Sequence
+from typing import Any, Sequence
 
 import httpx
 
@@ -55,6 +55,53 @@ Commit context:
 {context}
 """
 
+TIMELINE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "timeline": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "status": {"type": "string"},
+                    "eta": {"type": "string"},
+                    "tasks": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                    },
+                    "resources": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "href": {"type": "string"},
+                            },
+                            "required": ["label", "href"],
+                        },
+                        "minItems": 1,
+                    },
+                },
+                "required": [
+                    "id",
+                    "title",
+                    "summary",
+                    "status",
+                    "eta",
+                    "tasks",
+                    "resources",
+                ],
+            },
+            "minItems": 1,
+        }
+    },
+    "required": ["timeline"],
+}
+
 
 class GeminiConfigurationError(Exception):
     pass
@@ -105,6 +152,7 @@ class GeminiRoadmapGenerator:
             ],
             "generationConfig": {
                 "responseMimeType": "application/json",
+                "responseSchema": TIMELINE_SCHEMA,
                 "temperature": 0.2,
                 "topP": 0.8,
                 "maxOutputTokens": 1024,
@@ -185,6 +233,16 @@ class GeminiRoadmapGenerator:
                         continue
                     except Exception:  # pragma: no cover - best effort decode
                         collected_segments.append(data)
+            function_response = part.get("functionResponse") or part.get(
+                "function_response"
+            )
+            if isinstance(function_response, dict):
+                response_payload = function_response.get("response")
+                if isinstance(response_payload, str):
+                    collected_segments.append(response_payload)
+                elif response_payload is not None:
+                    collected_segments.append(json.dumps(response_payload))
+                continue
         text = "\n".join(segment for segment in collected_segments if segment).strip()
         if not text:
             logger.error(
