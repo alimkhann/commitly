@@ -205,80 +205,88 @@ class GeminiRoadmapGenerator:
                 "Gemini response missing candidates", extra={"payload": payload}
             )
             raise GeminiGenerationError("Gemini response did not contain candidates")
-        content = candidates[0].get("content") or {}
-        parts = content.get("parts") or []
         collected_segments: list[str] = []
-        candidate = candidates[0]
-        content = candidate.get("content") or {}
-        parts = content.get("parts") or []
+        logged_parts: list[Any] = []
+
+        def _append_segment(value: Any) -> None:
+            if isinstance(value, str) and value.strip():
+                collected_segments.append(value.strip())
+            elif value not in (None, "", [], {}):
+                try:
+                    collected_segments.append(json.dumps(value))
+                except TypeError:
+                    pass
 
         def _ingest_function_call(raw: Any) -> None:
             if not isinstance(raw, dict):
                 return
-            args = raw.get("args") or raw.get("arguments") or {}
-            if isinstance(args, str) and args.strip():
-                collected_segments.append(args)
-                return
-            if isinstance(args, dict):
-                for value in args.values():
-                    if isinstance(value, str) and value.strip():
-                        collected_segments.append(value)
-                    elif value is not None:
-                        collected_segments.append(json.dumps(value))
+            for key in ("response", "result"):
+                if key in raw:
+                    _append_segment(raw[key])
+            args = raw.get("args") or raw.get("arguments")
+            if args is not None:
+                _append_segment(args)
 
-        for part in parts:
-            text_value = part.get("text")
-            if isinstance(text_value, str) and text_value.strip():
-                collected_segments.append(text_value)
-                continue
-            function_call = part.get("functionCall") or part.get("function_call")
-            if function_call:
-                _ingest_function_call(function_call)
-                continue
-            inline_data = part.get("inlineData") or part.get("inline_data")
-            if isinstance(inline_data, dict):
-                data = inline_data.get("data")
-                if isinstance(data, str) and data.strip():
-                    try:
-                        decoded = base64.b64decode(data).decode("utf-8")
-                        collected_segments.append(decoded)
-                        continue
-                    except Exception:  # pragma: no cover - best effort decode
-                        collected_segments.append(data)
-            function_response = part.get("functionResponse") or part.get(
-                "function_response"
-            )
-            if isinstance(function_response, dict):
-                response_payload = function_response.get("response")
-                if isinstance(response_payload, str):
-                    collected_segments.append(response_payload)
-                elif response_payload is not None:
-                    collected_segments.append(json.dumps(response_payload))
-                continue
-        extra_calls: list[Any] = []
-        for key in (
+        function_call_keys = (
             "functionCall",
             "function_call",
             "functionCalls",
             "function_calls",
-        ):
-            value = candidate.get(key) or content.get(key)
-            if value:
-                if isinstance(value, list):
-                    extra_calls.extend(value)
-                else:
-                    extra_calls.append(value)
-        for function_call in extra_calls:
-            _ingest_function_call(function_call)
+        )
+
+        for candidate in candidates:
+            content = candidate.get("content") or {}
+            parts = content.get("parts") or []
+            if not logged_parts:
+                logged_parts = parts
+            for part in parts:
+                text_value = part.get("text")
+                if isinstance(text_value, str) and text_value.strip():
+                    collected_segments.append(text_value)
+                    continue
+                function_call = part.get("functionCall") or part.get("function_call")
+                if function_call:
+                    _ingest_function_call(function_call)
+                    continue
+                inline_data = part.get("inlineData") or part.get("inline_data")
+                if isinstance(inline_data, dict):
+                    data = inline_data.get("data")
+                    if isinstance(data, str) and data.strip():
+                        try:
+                            decoded = base64.b64decode(data).decode("utf-8")
+                            collected_segments.append(decoded)
+                            continue
+                        except Exception:  # pragma: no cover - best effort decode
+                            collected_segments.append(data)
+                function_response = part.get("functionResponse") or part.get(
+                    "function_response"
+                )
+                if isinstance(function_response, dict):
+                    response_payload = function_response.get("response")
+                    _append_segment(response_payload)
+                    continue
+            for source in (candidate, content):
+                if not isinstance(source, dict):
+                    continue
+                for key in function_call_keys:
+                    value = source.get(key)
+                    if isinstance(value, list):
+                        for item in value:
+                            _ingest_function_call(item)
+                    elif value:
+                        _ingest_function_call(value)
+
         text = "\n".join(segment for segment in collected_segments if segment).strip()
         if not text:
             logger.error(
                 "Gemini response missing text",
                 extra={
-                    "parts": parts,
+                    "parts": logged_parts,
                     "payload": payload,
-                    "finish_reason": candidate.get("finishReason")
-                    or candidate.get("finish_reason"),
+                    "finish_reasons": [
+                        cand.get("finishReason") or cand.get("finish_reason")
+                        for cand in candidates
+                    ],
                     "prompt_feedback": payload.get("promptFeedback")
                     or payload.get("prompt_feedback"),
                 },
