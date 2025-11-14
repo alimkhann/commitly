@@ -208,20 +208,32 @@ class GeminiRoadmapGenerator:
         content = candidates[0].get("content") or {}
         parts = content.get("parts") or []
         collected_segments: list[str] = []
+        candidate = candidates[0]
+        content = candidate.get("content") or {}
+        parts = content.get("parts") or []
+
+        def _ingest_function_call(raw: Any) -> None:
+            if not isinstance(raw, dict):
+                return
+            args = raw.get("args") or raw.get("arguments") or {}
+            if isinstance(args, str) and args.strip():
+                collected_segments.append(args)
+                return
+            if isinstance(args, dict):
+                for value in args.values():
+                    if isinstance(value, str) and value.strip():
+                        collected_segments.append(value)
+                    elif value is not None:
+                        collected_segments.append(json.dumps(value))
+
         for part in parts:
             text_value = part.get("text")
             if isinstance(text_value, str) and text_value.strip():
                 collected_segments.append(text_value)
                 continue
             function_call = part.get("functionCall") or part.get("function_call")
-            if isinstance(function_call, dict):
-                args = function_call.get("args") or {}
-                if isinstance(args, dict):
-                    for value in args.values():
-                        if isinstance(value, str) and value.strip():
-                            collected_segments.append(value)
-                        elif value is not None:
-                            collected_segments.append(json.dumps(value))
+            if function_call:
+                _ingest_function_call(function_call)
                 continue
             inline_data = part.get("inlineData") or part.get("inline_data")
             if isinstance(inline_data, dict):
@@ -243,11 +255,33 @@ class GeminiRoadmapGenerator:
                 elif response_payload is not None:
                     collected_segments.append(json.dumps(response_payload))
                 continue
+        extra_calls: list[Any] = []
+        for key in (
+            "functionCall",
+            "function_call",
+            "functionCalls",
+            "function_calls",
+        ):
+            value = candidate.get(key) or content.get(key)
+            if value:
+                if isinstance(value, list):
+                    extra_calls.extend(value)
+                else:
+                    extra_calls.append(value)
+        for function_call in extra_calls:
+            _ingest_function_call(function_call)
         text = "\n".join(segment for segment in collected_segments if segment).strip()
         if not text:
             logger.error(
                 "Gemini response missing text",
-                extra={"parts": parts, "payload": payload},
+                extra={
+                    "parts": parts,
+                    "payload": payload,
+                    "finish_reason": candidate.get("finishReason")
+                    or candidate.get("finish_reason"),
+                    "prompt_feedback": payload.get("promptFeedback")
+                    or payload.get("prompt_feedback"),
+                },
             )
             raise GeminiGenerationError("Gemini response was empty")
         try:
