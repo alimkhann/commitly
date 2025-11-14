@@ -1,3 +1,6 @@
+import logging
+import sys
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -7,6 +10,24 @@ from fastapi.responses import JSONResponse
 from app.api import auth, donate, github, roadmap, waitlist
 from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
 from app.core.config import settings
+
+
+def _configure_logging() -> None:
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+
+
+_configure_logging()
 
 app = FastAPI(
     title=settings.project_name,
