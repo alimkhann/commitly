@@ -13,9 +13,12 @@ from app.services.rag import CommitChunk
 
 logger = logging.getLogger(__name__)
 
-MAX_CONTEXT_CHARS = 15000
+MAX_CONTEXT_CHARS = 8000
+MAX_CHUNK_SNIPPET_CHARS = 400
+MIN_CHUNK_SNIPPET_CHARS = 150
 MAX_OUTPUT_TOKENS = 2048
 MIN_RETRY_CHUNKS = 5
+MAX_GEMINI_ATTEMPTS = 5
 
 PROMPT_TEMPLATE = """
 You are Commitly, an engineering mentor that reads GitHub commit history and drafts
@@ -144,63 +147,18 @@ class GeminiRoadmapGenerator:
             raise GeminiGenerationError("Repository does not have enough commits")
         attempt_chunks = chunk_list
         attempt = 0
-        while attempt < 5:
+        while attempt < MAX_GEMINI_ATTEMPTS:
             attempt += 1
             context = self._render_context(attempt_chunks)
-            prompt = PROMPT_TEMPLATE.format(
-                name=repo.full_name,
-                description=repo.description or "",
-                stars=repo.stars,
-                language=repo.language or "unknown",
-                branch=repo.default_branch,
+            body = await self._invoke_gemini(
+                repo=repo,
                 stage_budget=stage_budget,
                 context=context,
+                attempt=attempt,
+                chunk_count=len(attempt_chunks),
+                total_chunks=len(chunk_list),
+                mode="default",
             )
-            payload = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {
-                                "text": prompt,
-                            }
-                        ],
-                    }
-                ],
-                "generation_config": {
-                    "response_mime_type": "application/json",
-                    "response_json_schema": TIMELINE_SCHEMA,
-                    "temperature": 0.2,
-                    "top_p": 0.8,
-                    "max_output_tokens": MAX_OUTPUT_TOKENS,
-                },
-            }
-            extra = {
-                "model": self._endpoint,
-                "stage_budget": stage_budget,
-                "repo": repo.full_name,
-                "chunks": len(attempt_chunks),
-                "attempt": attempt + 1,
-            }
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                response = await client.post(
-                    self._endpoint,
-                    params={"key": self._api_key},
-                    json=payload,
-                )
-            if response.status_code >= 400:
-                logger.error(
-                    "Gemini API error",
-                    extra={
-                        **extra,
-                        "status": response.status_code,
-                        "body": response.text,
-                    },
-                )
-                raise GeminiGenerationError(
-                    f"Gemini API call failed (status {response.status_code})"
-                )
-            body = response.json()
             try:
                 timeline = self._parse_timeline(body)
                 return [TimelineStage(**stage) for stage in timeline]
@@ -218,23 +176,36 @@ class GeminiRoadmapGenerator:
                         new_length = max(MIN_RETRY_CHUNKS, len(attempt_chunks) - 1)
                     if new_length < len(attempt_chunks):
                         attempt_chunks = attempt_chunks[:new_length]
-                    else:
-                        break
-                    logger.info(
-                        "Retrying Gemini with %d/%d chunks due to MAX_TOKENS "
-                        "(attempt %d)",
-                        new_length,
-                        len(chunk_list),
-                        attempt + 1,
-                    )
-                    continue
+                        logger.info(
+                            "Retrying Gemini with %d/%d chunks due to MAX_TOKENS "
+                            "(attempt %d)",
+                            new_length,
+                            len(chunk_list),
+                            attempt + 1,
+                        )
+                        continue
                 raise
-        raise GeminiGenerationError("Gemini failed to return a roadmap")
+
+        # Final fallback with compressed context (commit headers only)
+        minimal_context = self._render_minimal_context(chunk_list[:MIN_RETRY_CHUNKS])
+        body = await self._invoke_gemini(
+            repo=repo,
+            stage_budget=stage_budget,
+            context=minimal_context,
+            attempt=attempt + 1,
+            chunk_count=MIN_RETRY_CHUNKS,
+            total_chunks=len(chunk_list),
+            mode="minimal",
+        )
+        timeline = self._parse_timeline(body)
+        return [TimelineStage(**stage) for stage in timeline]
 
     def _render_context(self, chunks: Sequence[CommitChunk]) -> str:
         pieces = []
         remaining = MAX_CONTEXT_CHARS
-        per_chunk = max(600, MAX_CONTEXT_CHARS // max(1, len(chunks)))
+        per_chunk = MAX_CONTEXT_CHARS // max(1, len(chunks))
+        per_chunk = min(MAX_CHUNK_SNIPPET_CHARS, per_chunk)
+        per_chunk = max(MIN_CHUNK_SNIPPET_CHARS, per_chunk)
         for chunk in chunks:
             snippet = (chunk.content or "")[:per_chunk]
             text = f"[{chunk.commit_sha[:7]} | {chunk.chunk_type}]\n{snippet}"
@@ -243,6 +214,33 @@ class GeminiRoadmapGenerator:
             if remaining <= 0:
                 break
         return "\n\n".join(pieces)
+
+    def _render_minimal_context(
+        self, chunks: Sequence[CommitChunk], max_lines: int = 5
+    ) -> str:
+        lines = []
+        for chunk in chunks[:max_lines]:
+            first_line = (chunk.content or "").splitlines()
+            summary = first_line[0] if first_line else ""
+            summary = summary[:MIN_CHUNK_SNIPPET_CHARS]
+            lines.append(f"{chunk.commit_sha[:7]} - {chunk.chunk_type}: {summary}")
+        return "\n".join(lines)
+
+    def _build_prompt(
+        self,
+        repo: RepositoryMetadata,
+        stage_budget: int,
+        context: str,
+    ) -> str:
+        return PROMPT_TEMPLATE.format(
+            name=repo.full_name,
+            description=repo.description or "",
+            stars=repo.stars,
+            language=repo.language or "unknown",
+            branch=repo.default_branch,
+            stage_budget=stage_budget,
+            context=context,
+        )
 
     def _parse_timeline(self, payload: dict) -> list[dict]:
         candidates = payload.get("candidates") or []
@@ -384,3 +382,64 @@ class GeminiRoadmapGenerator:
             if isinstance(reason, str):
                 reasons.append(reason)
         return reasons
+
+    async def _invoke_gemini(
+        self,
+        *,
+        repo: RepositoryMetadata,
+        stage_budget: int,
+        context: str,
+        attempt: int,
+        chunk_count: int,
+        total_chunks: int,
+        mode: str,
+    ) -> dict:
+        prompt = self._build_prompt(repo, stage_budget, context)
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": prompt,
+                        }
+                    ],
+                }
+            ],
+            "generation_config": {
+                "response_mime_type": "application/json",
+                "response_json_schema": TIMELINE_SCHEMA,
+                "temperature": 0.2,
+                "top_p": 0.8,
+                "max_output_tokens": MAX_OUTPUT_TOKENS,
+            },
+        }
+        extra = {
+            "model": self._endpoint,
+            "stage_budget": stage_budget,
+            "repo": repo.full_name,
+            "chunks": chunk_count,
+            "total_chunks": total_chunks,
+            "attempt": attempt,
+            "mode": mode,
+        }
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            response = await client.post(
+                self._endpoint,
+                params={"key": self._api_key},
+                json=payload,
+            )
+        if response.status_code >= 400:
+            logger.error(
+                "Gemini API error",
+                extra={
+                    **extra,
+                    "status": response.status_code,
+                    "body": response.text,
+                },
+            )
+            raise GeminiGenerationError(
+                f"Gemini API call failed (status {response.status_code})"
+            )
+        logger.debug("Gemini call success", extra=extra)
+        return response.json()
