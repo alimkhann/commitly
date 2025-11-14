@@ -1,0 +1,12 @@
+[flake8]
+max-line-length = 88
+extend-ignore = Q000,I100,I201
+inline-quotes = double
+docstring-quotes = double
+multiline-quotes = double
+application-import-names = app
+exclude =
+    commitly-backend/venv,
+    commitly-backend/.venv,
+    commitly-frontend/node_modules,
+    commitly-backend/node_modules

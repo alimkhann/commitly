@@ -33,3 +33,19 @@ def test_auth_ping_allows_normalized_authorized_party(
         assert response.status_code == 200
     finally:
         settings.clerk_authorized_parties = original
+
+
+def test_auth_ping_accepts_secondary_audience(client: TestClient, make_clerk_token):
+    from app.core.config import settings
+
+    original = settings.clerk_audience
+    try:
+        settings.clerk_audience = "authenticated,custom-aud"
+        token = make_clerk_token(aud=["custom-aud"])
+        response = client.get(
+            "/api/v1/auth/ping",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+    finally:
+        settings.clerk_audience = original

@@ -13,7 +13,7 @@ from jose.utils import base64url_decode
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 
 
 def _normalize_party(value: str) -> str:
@@ -155,7 +155,10 @@ def verify_clerk_token(token: str) -> ClerkClaims:
         raise InvalidClerkToken("Invalid issuer")
 
     audience_values = _select_audience(claims.get("aud"))
-    if settings.clerk_audience not in audience_values:
+    allowed_audiences = Settings._coerce_list(settings.clerk_audience) or [
+        settings.clerk_audience
+    ]
+    if not any(audience in audience_values for audience in allowed_audiences):
         raise InvalidClerkToken("Invalid audience")
 
     if settings.clerk_authorized_parties:

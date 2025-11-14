@@ -15,18 +15,18 @@ os.environ.setdefault("CLERK_ISSUER", "https://clerk.example.com/")
 os.environ.setdefault("CLERK_AUDIENCE", "commitly-api")
 os.environ["CLERK_AUTHORIZED_PARTIES"] = '["https://app.commitly.dev"]'
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi.testclient import TestClient
-from jose import jwt
-import pytest
-from sqlalchemy.orm import Session
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from jose import jwt  # noqa: E402
+import pytest  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
-from app.core.auth import jwks_cache
-from app.core.config import settings
-from app.core.database import Base, SessionLocal, engine, get_db
-from app.main import app
-from app.models.waitlist import Waitlist
+from app.core.auth import jwks_cache  # noqa: E402
+from app.core.config import Settings, settings  # noqa: E402
+from app.core.database import Base, SessionLocal, engine, get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.waitlist import Waitlist  # noqa: E402
 
 # Create tables once for the test database
 Base.metadata.create_all(bind=engine)
@@ -74,9 +74,12 @@ def prime_jwks(clerk_keypair: Dict[str, Any]) -> Generator[None, None, None]:
 def make_clerk_token(clerk_keypair: Dict[str, Any]):
     def _make(**overrides: Any) -> str:
         now = int(time.time())
+        audiences = Settings._coerce_list(settings.clerk_audience) or [
+            settings.clerk_audience
+        ]
         claims: Dict[str, Any] = {
             "iss": settings.clerk_issuer,
-            "aud": settings.clerk_audience,
+            "aud": audiences,
             "sub": overrides.pop("sub", "user_123"),
             "sid": overrides.pop("sid", "session_abc"),
             "exp": overrides.pop("exp", now + 3600),
