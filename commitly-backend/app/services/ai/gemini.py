@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import httpx
 
@@ -292,19 +292,39 @@ class GeminiRoadmapGenerator:
                 },
             )
             raise GeminiGenerationError("Gemini response was empty")
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError as exc:
-            logger.error(
-                "Failed to parse Gemini payload",
-                exc_info=exc,
-                extra={"raw_text": text},
-            )
-            raise GeminiGenerationError("Gemini returned non-JSON output") from exc
-        timeline = parsed.get("timeline")
+        parsed: dict[str, Any] = {}
+        if text:
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError as exc:
+                logger.error(
+                    "Failed to parse Gemini payload",
+                    exc_info=exc,
+                    extra={"raw_text": text[:2000]},
+                )
+        timeline = parsed.get("timeline") if isinstance(parsed, dict) else None
+        if not isinstance(timeline, list) or not timeline:
+            timeline = self._find_timeline(payload)
         if not isinstance(timeline, list) or not timeline:
             logger.error(
-                "Gemini response missing timeline array", extra={"parsed": parsed}
+                "Gemini response missing timeline array",
+                extra={"parsed": parsed, "payload": payload},
             )
             raise GeminiGenerationError("Gemini response missing timeline array")
         return timeline
+
+    def _find_timeline(self, payload: Any) -> Optional[list]:
+        if isinstance(payload, dict):
+            timeline = payload.get("timeline")
+            if isinstance(timeline, list) and timeline:
+                return timeline
+            for value in payload.values():
+                found = self._find_timeline(value)
+                if found:
+                    return found
+        elif isinstance(payload, list):
+            for item in payload:
+                found = self._find_timeline(item)
+                if found:
+                    return found
+        return None
