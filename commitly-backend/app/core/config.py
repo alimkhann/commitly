@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     supabase_anon_key: str = Field(..., validation_alias="SUPABASE_ANON_KEY")
     database_url: str = Field(..., validation_alias="DATABASE_URL")
 
+    # Clerk (authentication) configuration
+    clerk_jwks_url: HttpUrl = Field(..., validation_alias="CLERK_JWKS_URL")
+    clerk_issuer: str = Field(..., validation_alias="CLERK_ISSUER")
+    clerk_audience: str = Field(..., validation_alias="CLERK_AUDIENCE")
+    clerk_authorized_parties: List[str] = Field(
+        default_factory=list, validation_alias="CLERK_AUTHORIZED_PARTIES"
+    )
+    clerk_jwks_cache_seconds: int = Field(
+        300, validation_alias="CLERK_JWKS_CACHE_SECONDS"
+    )
+
     # Polar (donations) configuration
     polar_access_token: Optional[str] = Field(
         default=None, validation_alias="POLAR_ACCESS_TOKEN"
@@ -53,42 +64,47 @@ class Settings(BaseSettings):
         default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS"
     )
 
-    @field_validator("allowed_origins", mode="before")
-    @classmethod
-    def parse_origins(cls, value: Any) -> List[str]:
+    @staticmethod
+    def _coerce_list(value: Any) -> List[str]:
         match value:
             case None:
-                return ["*"]
+                return []
             case str() as raw:
                 cleaned = raw.strip()
                 if not cleaned:
-                    return ["*"]
+                    return []
                 if cleaned.startswith("["):
                     try:
                         import json
 
                         data = json.loads(cleaned)
                         if isinstance(data, list):
-                            cleaned_list = [
-                                origin.strip()
-                                for origin in data
-                                if isinstance(origin, str) and origin.strip()
+                            return [
+                                item.strip()
+                                for item in data
+                                if isinstance(item, str) and item.strip()
                             ]
-                            return cleaned_list or ["*"]
                     except json.JSONDecodeError:
                         pass
-                parts = [
-                    origin.strip() for origin in cleaned.split(",") if origin.strip()
-                ]
-                return parts or ["*"]
+                return [item.strip() for item in cleaned.split(",") if item.strip()]
             case list() as sequence:
-                cleaned_list = [
-                    origin.strip()
-                    for origin in sequence
-                    if isinstance(origin, str) and origin.strip()
+                return [
+                    item.strip()
+                    for item in sequence
+                    if isinstance(item, str) and item.strip()
                 ]
-                return cleaned_list or ["*"]
-        return ["*"]
+        return []
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_origins(cls, value: Any) -> List[str]:
+        parsed = cls._coerce_list(value)
+        return parsed or ["*"]
+
+    @field_validator("clerk_authorized_parties", mode="before")
+    @classmethod
+    def parse_authorized_parties(cls, value: Any) -> List[str]:
+        return cls._coerce_list(value)
 
 
 @lru_cache

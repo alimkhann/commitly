@@ -10,6 +10,7 @@ python-dotenv==1.1.1
 
 # HTTP + utils
 requests==2.32.5
+httpx==0.28.1
 
 # Database
 SQLAlchemy==2.0.36
@@ -19,6 +20,7 @@ psycopg[binary]==3.2.2
 # External services
 supabase==2.19.0
 polar-sdk==0.24.0
+python-jose[cryptography]==3.3.0
 
 # Optional: caching (uncomment if used)
 # redis==5.0.8

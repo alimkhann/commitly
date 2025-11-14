@@ -71,9 +71,11 @@ export default function CountUp({
 
   useEffect(() => {
     if (ref.current) {
-      ref.current.textContent = formatValue(direction === 'down' ? to : from);
+      // Keep displaying the last known value instead of jumping back to `from`
+      // whenever new props arrive (prevents the counter flashing 0).
+      ref.current.textContent = formatValue(motionValue.get());
     }
-  }, [from, to, direction, formatValue]);
+  }, [formatValue, motionValue]);
 
   useEffect(() => {
     if (isInView && startWhen) {

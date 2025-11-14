@@ -1,21 +1,107 @@
+import base64
 from collections.abc import Generator
 import os
+import time
+from typing import Any, Dict
 
 # Ensure required env vars are set before importing the app/settings
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 os.environ.setdefault("SUPABASE_URL", "http://localhost:8000")
 os.environ.setdefault("SUPABASE_ANON_KEY", "anon")
+os.environ.setdefault(
+    "CLERK_JWKS_URL", "https://clerk.example.com/.well-known/jwks.json"
+)
+os.environ.setdefault("CLERK_ISSUER", "https://clerk.example.com/")
+os.environ.setdefault("CLERK_AUDIENCE", "commitly-api")
+os.environ["CLERK_AUTHORIZED_PARTIES"] = '["https://app.commitly.dev"]'
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
+from jose import jwt
 import pytest
 from sqlalchemy.orm import Session
 
+from app.core.auth import jwks_cache
+from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine, get_db
 from app.main import app
 from app.models.waitlist import Waitlist
 
 # Create tables once for the test database
 Base.metadata.create_all(bind=engine)
+
+
+TEST_JWK_KID = "test-key"
+
+
+def _b64url_uint(value: int) -> str:
+    raw = value.to_bytes((value.bit_length() + 7) // 8, "big")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+@pytest.fixture(scope="session")
+def clerk_keypair() -> Dict[str, Any]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key().public_numbers()
+    jwk_payload = {
+        "kty": "RSA",
+        "alg": "RS256",
+        "use": "sig",
+        "kid": TEST_JWK_KID,
+        "n": _b64url_uint(public_key.n),
+        "e": _b64url_uint(public_key.e),
+    }
+    private_pem = (
+        private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        .decode("utf-8")
+        .strip()
+    )
+    return {"private_key": private_pem, "jwk": jwk_payload}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def prime_jwks(clerk_keypair: Dict[str, Any]) -> Generator[None, None, None]:
+    jwks_cache.prime({"keys": [clerk_keypair["jwk"]]})
+    yield
+
+
+@pytest.fixture()
+def make_clerk_token(clerk_keypair: Dict[str, Any]):
+    def _make(**overrides: Any) -> str:
+        now = int(time.time())
+        claims: Dict[str, Any] = {
+            "iss": settings.clerk_issuer,
+            "aud": settings.clerk_audience,
+            "sub": overrides.pop("sub", "user_123"),
+            "sid": overrides.pop("sid", "session_abc"),
+            "exp": overrides.pop("exp", now + 3600),
+            "nbf": overrides.pop("nbf", now - 60),
+            "iat": overrides.pop("iat", now - 60),
+        }
+        if settings.clerk_authorized_parties:
+            claims["azp"] = overrides.pop("azp", settings.clerk_authorized_parties[0])
+        claims.update(overrides)
+
+        token = jwt.encode(
+            claims,
+            clerk_keypair["private_key"],
+            algorithm="RS256",
+            headers={"kid": clerk_keypair["jwk"]["kid"]},
+        )
+        return token
+
+    return _make
+
+
+@pytest.fixture()
+def auth_headers(make_clerk_token):
+    token = make_clerk_token()
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture()

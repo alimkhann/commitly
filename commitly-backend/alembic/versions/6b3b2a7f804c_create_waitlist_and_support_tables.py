@@ -1,4 +1,4 @@
-"""Create waitlist and support tables
+"""Create waitlist table and policies
 
 Revision ID: 6b3b2a7f804c
 Revises:
@@ -35,25 +35,8 @@ def upgrade() -> None:
     )
     op.create_index("ix_waitlist_email", "waitlist", ["email"], unique=False)
 
-    op.create_table(
-        "support",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("email", sa.String(length=255), nullable=False),
-        sa.Column("message", sa.Text(), nullable=False),
-        sa.Column("status", sa.String(length=50), nullable=False, server_default="new"),
-        sa.Column(
-            "created_at",
-            sa.TIMESTAMP(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-    )
-    op.create_index("ix_support_email", "support", ["email"], unique=False)
-    op.create_index("ix_support_status", "support", ["status"], unique=False)
-
-    # Enable RLS
+    # Enable RLS on waitlist so policies take effect.
     op.execute("ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;")
-    op.execute("ALTER TABLE support ENABLE ROW LEVEL SECURITY;")
 
     # Policies for anon role
     op.execute(
@@ -90,40 +73,6 @@ def upgrade() -> None:
         $$;
         """
     )
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
-                AND tablename = 'support'
-                AND policyname = 'Allow public insert on support'
-            ) THEN
-                CREATE POLICY "Allow public insert on support"
-                ON support FOR INSERT
-                WITH CHECK (true);
-            END IF;
-        END
-        $$;
-        """
-    )
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_policies WHERE schemaname = 'public'
-                AND tablename = 'support'
-                AND policyname = 'Allow public select on support'
-            ) THEN
-                CREATE POLICY "Allow public select on support"
-                ON support FOR SELECT
-                USING (true);
-            END IF;
-        END
-        $$;
-        """
-    )
 
     # RPC helper for Supabase client (.rpc("waitlist_count"))
     op.execute(
@@ -141,18 +90,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP FUNCTION IF EXISTS public.waitlist_count();")
+    """Downgrades are intentionally disabled to avoid losing waitlist entries."""
 
-    op.execute('DROP POLICY IF EXISTS "Allow public insert on support" ON support;')
-    op.execute('DROP POLICY IF EXISTS "Allow public select on support" ON support;')
-    op.execute('DROP POLICY IF EXISTS "Allow public insert on waitlist" ON waitlist;')
-    op.execute(
-        'DROP POLICY IF EXISTS "Allow public select count on waitlist" ON waitlist;'
-    )
-
-    op.drop_index("ix_support_status", table_name="support")
-    op.drop_index("ix_support_email", table_name="support")
-    op.drop_table("support")
-
-    op.drop_index("ix_waitlist_email", table_name="waitlist")
-    op.drop_table("waitlist")
+    raise RuntimeError("Downgrading this revision would drop waitlist data; aborting.")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -14,11 +14,15 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
 )
 def join_waitlist(
-    payload: WaitlistCreate, session: Session = Depends(get_db)
+    payload: WaitlistCreate,
+    request: Request,
+    session: Session = Depends(get_db),
 ) -> WaitlistResponse:
     service = SupabaseService(session)
+    actor = getattr(request.state, "clerk_claims", None)
+    actor_id: str | None = actor.get("sub") if isinstance(actor, dict) else None
     try:
-        entry = service.add_to_waitlist(payload)
+        entry = service.add_to_waitlist(payload, requested_by=actor_id)
     except DuplicateEntryError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

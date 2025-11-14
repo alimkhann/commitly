@@ -26,7 +26,8 @@ def test_waitlist_count(client: TestClient):
     for e in emails:
         assert (
             client.post(
-                "/api/v1/waitlist/", json={"email": e, "source": "tests"}
+                "/api/v1/waitlist/",
+                json={"email": e, "source": "tests"},
             ).status_code
             == 201
         )
@@ -34,3 +35,12 @@ def test_waitlist_count(client: TestClient):
     count_resp = client.get("/api/v1/waitlist/count")
     assert count_resp.status_code == 200
     assert count_resp.json() == {"count": len(emails)}
+
+
+def test_join_waitlist_allows_authenticated_actor(client: TestClient, auth_headers):
+    response = client.post(
+        "/api/v1/waitlist/",
+        json={"email": "authed@example.com", "source": "tests"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201

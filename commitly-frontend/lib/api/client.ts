@@ -10,6 +10,7 @@ type ApiClientOptions<TBody> = {
   method?: HttpMethod
   body?: TBody
   headers?: HeadersInit
+  authToken?: string
   cache?: RequestCache
   next?: NextFetchOptions
   signal?: AbortSignal
@@ -22,16 +23,19 @@ export type ApiClientResponse<TData> = {
   error?: string
 }
 
-const sanitizeHeaders = (
+const buildHeaders = (
   headers: HeadersInit | undefined,
-  hasJsonBody: boolean
-): HeadersInit => {
-  if (!headers && !hasJsonBody) return {}
+  hasJsonBody: boolean,
+  authToken?: string
+): Headers => {
   const resolved = new Headers(headers)
   if (hasJsonBody && !resolved.has("Content-Type")) {
     resolved.set("Content-Type", "application/json")
   }
-  return Object.fromEntries(resolved.entries())
+  if (authToken) {
+    resolved.set("Authorization", `Bearer ${authToken}`)
+  }
+  return resolved
 }
 
 const resolveUrl = (path: string, baseUrl: string) => {
@@ -43,10 +47,19 @@ const resolveUrl = (path: string, baseUrl: string) => {
 
 export async function apiClient<TResponse, TBody = unknown>(
   baseUrl: string,
-  { path, method = "GET", body, headers, cache = "no-store", next, signal }: ApiClientOptions<TBody>
+  {
+    path,
+    method = "GET",
+    body,
+    headers,
+    authToken,
+    cache = "no-store",
+    next,
+    signal,
+  }: ApiClientOptions<TBody>
 ): Promise<ApiClientResponse<TResponse>> {
   const hasJsonBody = body !== undefined
-  const requestHeaders = sanitizeHeaders(headers, hasJsonBody)
+  const requestHeaders = buildHeaders(headers, hasJsonBody, authToken)
 
   try {
     const response = await fetch(resolveUrl(path, baseUrl), {

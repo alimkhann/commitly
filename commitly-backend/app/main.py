@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import donate, waitlist
+from app.api import auth, donate, waitlist
+from app.core.auth import ClerkAuthMiddleware
 from app.core.config import settings
 
 app = FastAPI(title=settings.project_name, debug=settings.debug, version="1.0.0")
@@ -14,6 +15,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(ClerkAuthMiddleware)
 
 # Include routers
 app.include_router(
@@ -23,6 +25,8 @@ app.include_router(
 app.include_router(
     donate.router, prefix=f"{settings.api_v1_str}/donate", tags=["donate"]
 )
+
+app.include_router(auth.router, prefix=f"{settings.api_v1_str}/auth", tags=["auth"])
 
 
 @app.get("/")

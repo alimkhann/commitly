@@ -7,6 +7,8 @@ __pycache__
 .pytest_cache/
 venv
 
+tmp-backups
+
 # Dependencies
 node_modules/
 npm-debug.log*

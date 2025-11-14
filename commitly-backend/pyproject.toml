@@ -10,6 +10,8 @@ known_first_party = ["app"]
 known_third_party = [
   "alembic",
   "fastapi",
+  "httpx",
+  "jose",
   "pydantic",
   "pydantic_settings",
   "polar_sdk",

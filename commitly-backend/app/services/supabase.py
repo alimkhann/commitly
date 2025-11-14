@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -20,13 +21,18 @@ class PersistenceError(ServiceError):
     """Raised when the database returns an unexpected error."""
 
 
+logger = logging.getLogger(__name__)
+
+
 class SupabaseService:
     """Encapsulates write/read operations against the Supabase Postgres database."""
 
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def add_to_waitlist(self, payload: WaitlistCreate) -> Waitlist:
+    def add_to_waitlist(
+        self, payload: WaitlistCreate, requested_by: str | None = None
+    ) -> Waitlist:
         entry = Waitlist(email=payload.email, source=payload.source)
         self.session.add(entry)
         try:
@@ -39,6 +45,11 @@ class SupabaseService:
             raise PersistenceError(str(exc)) from exc
 
         self.session.refresh(entry)
+        if requested_by:
+            logger.info(
+                "Waitlist entry created",
+                extra={"email": entry.email, "requested_by": requested_by},
+            )
         return entry
 
     def waitlist_count(self) -> int:
