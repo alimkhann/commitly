@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = Field(
         default=None, validation_alias="GEMINI_API_KEY"
     )
-    gemini_model: str = Field("gemini-1.5-flash", validation_alias="GEMINI_MODEL")
+    gemini_model: str = Field("gemini-flash-latest", validation_alias="GEMINI_MODEL")
     roadmap_timeline_fraction: float = Field(
         0.25, ge=0.1, le=1.0, validation_alias="ROADMAP_TIMELINE_FRACTION"
     )
