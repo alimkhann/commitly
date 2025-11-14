@@ -152,18 +152,32 @@ class GeminiRoadmapGenerator:
     def _parse_timeline(self, payload: dict) -> list[dict]:
         candidates = payload.get("candidates") or []
         if not candidates:
+            logger.error(
+                "Gemini response missing candidates", extra={"payload": payload}
+            )
             raise GeminiGenerationError("Gemini response did not contain candidates")
         content = candidates[0].get("content") or {}
         parts = content.get("parts") or []
         text = "".join(part.get("text", "") for part in parts)
         if not text:
+            logger.error(
+                "Gemini response missing text",
+                extra={"parts": parts, "payload": payload},
+            )
             raise GeminiGenerationError("Gemini response was empty")
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError as exc:
-            logger.error("Failed to parse Gemini payload", exc_info=exc)
+            logger.error(
+                "Failed to parse Gemini payload",
+                exc_info=exc,
+                extra={"raw_text": text},
+            )
             raise GeminiGenerationError("Gemini returned non-JSON output") from exc
         timeline = parsed.get("timeline")
         if not isinstance(timeline, list) or not timeline:
+            logger.error(
+                "Gemini response missing timeline array", extra={"parsed": parsed}
+            )
             raise GeminiGenerationError("Gemini response missing timeline array")
         return timeline
