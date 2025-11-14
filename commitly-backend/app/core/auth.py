@@ -13,6 +13,16 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.types import ASGIApp
 
 from app.core.config import settings
+from urllib.parse import urlparse
+
+
+def _normalize_party(value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme:
+        netloc = parsed.netloc.rstrip("/")
+        path = parsed.path.rstrip("/")
+        return f"{netloc}{path}" if path else netloc
+    return value.rstrip("/")
 
 
 class ClerkClaims(TypedDict, total=False):
@@ -150,8 +160,13 @@ def verify_clerk_token(token: str) -> ClerkClaims:
 
     if settings.clerk_authorized_parties:
         azp = claims.get("azp")
-        if azp not in settings.clerk_authorized_parties:
-            raise InvalidClerkToken("Token not issued for this application")
+        if isinstance(azp, str):
+            normalized_azp = _normalize_party(azp)
+            allowed = {_normalize_party(party) for party in settings.clerk_authorized_parties}
+            if "*" not in allowed and normalized_azp not in allowed:
+                raise InvalidClerkToken("Token not issued for this application")
+        else:
+            raise InvalidClerkToken("Token missing authorized party")
 
     if "sub" not in claims:
         raise InvalidClerkToken("Token is missing subject claim")
