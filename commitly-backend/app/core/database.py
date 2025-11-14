@@ -1,6 +1,8 @@
 from collections.abc import Generator
+import logging
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import settings
@@ -12,15 +14,18 @@ class Base(DeclarativeBase):
     pass
 
 
+logger = logging.getLogger(__name__)
+
+db_url = make_url(settings.database_url)
 connect_args: dict[str, object] = {}
-if settings.database_url.startswith("postgresql+psycopg"):
-    # Psycopg's prepared statements can leak when reusing connections across
-    # threads (Render reuses pooled connections). Disable prepared statements
-    # entirely to avoid "DuplicatePreparedStatement" errors from the server.
-    connect_args["prepare_threshold"] = 0
+if "psycopg" in db_url.drivername:
+    # Disable psycopg3 auto-prepared statements to avoid duplicate statement
+    # errors when pooled connections are reused across threads.
+    connect_args["prepare_threshold"] = None
+    logger.info("psycopg driver detected: disabling prepared statements")
 
 engine = create_engine(
-    settings.database_url,
+    db_url,
     pool_pre_ping=True,
     connect_args=connect_args,
 )
