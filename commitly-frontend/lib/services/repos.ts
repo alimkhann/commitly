@@ -9,7 +9,7 @@ import { apiClient, type ApiClientResponse } from "@/lib/api/client"
 import { env } from "@/lib/config/env"
 
 const API_ROUTES = {
-  generateRoadmap: "/roadmap/generate",
+  generateRoadmap: "/api/v1/roadmap/generate",
 }
 
 export type RoadmapSummary = {
