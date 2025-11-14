@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from typing import Sequence
@@ -158,7 +159,33 @@ class GeminiRoadmapGenerator:
             raise GeminiGenerationError("Gemini response did not contain candidates")
         content = candidates[0].get("content") or {}
         parts = content.get("parts") or []
-        text = "".join(part.get("text", "") for part in parts)
+        collected_segments: list[str] = []
+        for part in parts:
+            text_value = part.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                collected_segments.append(text_value)
+                continue
+            function_call = part.get("functionCall")
+            if isinstance(function_call, dict):
+                args = function_call.get("args") or {}
+                if isinstance(args, dict):
+                    for value in args.values():
+                        if isinstance(value, str) and value.strip():
+                            collected_segments.append(value)
+                        elif value is not None:
+                            collected_segments.append(json.dumps(value))
+                continue
+            inline_data = part.get("inlineData") or part.get("inline_data")
+            if isinstance(inline_data, dict):
+                data = inline_data.get("data")
+                if isinstance(data, str) and data.strip():
+                    try:
+                        decoded = base64.b64decode(data).decode("utf-8")
+                        collected_segments.append(decoded)
+                        continue
+                    except Exception:  # pragma: no cover - best effort decode
+                        collected_segments.append(data)
+        text = "\n".join(segment for segment in collected_segments if segment).strip()
         if not text:
             logger.error(
                 "Gemini response missing text",
