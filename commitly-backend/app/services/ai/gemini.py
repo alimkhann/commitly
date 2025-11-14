@@ -150,12 +150,12 @@ class GeminiRoadmapGenerator:
                     ],
                 }
             ],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "responseSchema": TIMELINE_SCHEMA,
+            "generation_config": {
+                "response_mime_type": "application/json",
+                "response_json_schema": TIMELINE_SCHEMA,
                 "temperature": 0.2,
-                "topP": 0.8,
-                "maxOutputTokens": 1024,
+                "top_p": 0.8,
+                "max_output_tokens": 1024,
             },
         }
         extra = {
