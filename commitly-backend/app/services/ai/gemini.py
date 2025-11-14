@@ -103,6 +103,16 @@ TIMELINE_SCHEMA: dict[str, Any] = {
 }
 
 
+def _safe_dump(obj: Any, limit: int = 4000) -> str:
+    try:
+        serialized = json.dumps(obj)
+    except TypeError:
+        serialized = str(obj)
+    if len(serialized) > limit:
+        return f"{serialized[:limit]}...<truncated>"
+    return serialized
+
+
 class GeminiConfigurationError(Exception):
     pass
 
@@ -279,7 +289,8 @@ class GeminiRoadmapGenerator:
         text = "\n".join(segment for segment in collected_segments if segment).strip()
         if not text:
             logger.error(
-                "Gemini response missing text",
+                "Gemini response missing text | payload=%s",
+                _safe_dump(payload),
                 extra={
                     "parts": logged_parts,
                     "payload": payload,
