@@ -14,6 +14,8 @@ from app.services.rag import CommitChunk
 logger = logging.getLogger(__name__)
 
 MAX_CONTEXT_CHARS = 15000
+MAX_OUTPUT_TOKENS = 2048
+MIN_RETRY_CHUNKS = 5
 
 PROMPT_TEMPLATE = """
 You are Commitly, an engineering mentor that reads GitHub commit history and drafts
@@ -137,63 +139,86 @@ class GeminiRoadmapGenerator:
         chunks: Sequence[CommitChunk],
         stage_budget: int,
     ) -> list[TimelineStage]:
-        if not chunks:
+        chunk_list = list(chunks)
+        if not chunk_list:
             raise GeminiGenerationError("Repository does not have enough commits")
-        context = self._render_context(chunks)
-        prompt = PROMPT_TEMPLATE.format(
-            name=repo.full_name,
-            description=repo.description or "",
-            stars=repo.stars,
-            language=repo.language or "unknown",
-            branch=repo.default_branch,
-            stage_budget=stage_budget,
-            context=context,
-        )
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "text": prompt,
-                        }
-                    ],
-                }
-            ],
-            "generation_config": {
-                "response_mime_type": "application/json",
-                "response_json_schema": TIMELINE_SCHEMA,
-                "temperature": 0.2,
-                "top_p": 0.8,
-                "max_output_tokens": 1024,
-            },
-        }
-        extra = {
-            "model": self._endpoint,
-            "stage_budget": stage_budget,
-            "repo": repo.full_name,
-        }
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            response = await client.post(
-                self._endpoint,
-                params={"key": self._api_key},
-                json=payload,
+        attempt_chunks = chunk_list
+        for attempt in range(2):
+            context = self._render_context(attempt_chunks)
+            prompt = PROMPT_TEMPLATE.format(
+                name=repo.full_name,
+                description=repo.description or "",
+                stars=repo.stars,
+                language=repo.language or "unknown",
+                branch=repo.default_branch,
+                stage_budget=stage_budget,
+                context=context,
             )
-        if response.status_code >= 400:
-            logger.error(
-                "Gemini API error",
-                extra={
-                    **extra,
-                    "status": response.status_code,
-                    "body": response.text,
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "text": prompt,
+                            }
+                        ],
+                    }
+                ],
+                "generation_config": {
+                    "response_mime_type": "application/json",
+                    "response_json_schema": TIMELINE_SCHEMA,
+                    "temperature": 0.2,
+                    "top_p": 0.8,
+                    "max_output_tokens": MAX_OUTPUT_TOKENS,
                 },
-            )
-            raise GeminiGenerationError(
-                f"Gemini API call failed (status {response.status_code})"
-            )
-        body = response.json()
-        timeline = self._parse_timeline(body)
-        return [TimelineStage(**stage) for stage in timeline]
+            }
+            extra = {
+                "model": self._endpoint,
+                "stage_budget": stage_budget,
+                "repo": repo.full_name,
+                "chunks": len(attempt_chunks),
+                "attempt": attempt + 1,
+            }
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                response = await client.post(
+                    self._endpoint,
+                    params={"key": self._api_key},
+                    json=payload,
+                )
+            if response.status_code >= 400:
+                logger.error(
+                    "Gemini API error",
+                    extra={
+                        **extra,
+                        "status": response.status_code,
+                        "body": response.text,
+                    },
+                )
+                raise GeminiGenerationError(
+                    f"Gemini API call failed (status {response.status_code})"
+                )
+            body = response.json()
+            try:
+                timeline = self._parse_timeline(body)
+                return [TimelineStage(**stage) for stage in timeline]
+            except GeminiGenerationError:
+                finish_reasons = self._extract_finish_reasons(body)
+                if (
+                    attempt == 0
+                    and "MAX_TOKENS" in finish_reasons
+                    and len(attempt_chunks) > MIN_RETRY_CHUNKS
+                ):
+                    new_length = max(MIN_RETRY_CHUNKS, len(attempt_chunks) // 2)
+                    attempt_chunks = attempt_chunks[:new_length]
+                    logger.info(
+                        "Retrying Gemini with %d/%d chunks due to MAX_TOKENS",
+                        new_length,
+                        len(chunk_list),
+                    )
+                    continue
+                raise
+        raise GeminiGenerationError("Gemini failed to return a roadmap")
 
     def _render_context(self, chunks: Sequence[CommitChunk]) -> str:
         pieces = []
@@ -336,6 +361,15 @@ class GeminiRoadmapGenerator:
         elif isinstance(payload, list):
             for item in payload:
                 found = self._find_timeline(item)
-                if found:
-                    return found
+            if found:
+                return found
         return None
+
+    @staticmethod
+    def _extract_finish_reasons(payload: dict) -> list[str]:
+        reasons: list[str] = []
+        for candidate in payload.get("candidates") or []:
+            reason = candidate.get("finishReason") or candidate.get("finish_reason")
+            if isinstance(reason, str):
+                reasons.append(reason)
+        return reasons
