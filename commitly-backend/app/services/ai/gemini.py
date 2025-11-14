@@ -109,6 +109,11 @@ class GeminiRoadmapGenerator:
                 "maxOutputTokens": 1024,
             },
         }
+        extra = {
+            "model": self._endpoint,
+            "stage_budget": stage_budget,
+            "repo": repo.full_name,
+        }
         async with httpx.AsyncClient(timeout=25.0) as client:
             response = await client.post(
                 self._endpoint,
@@ -116,8 +121,17 @@ class GeminiRoadmapGenerator:
                 json=payload,
             )
         if response.status_code >= 400:
-            logger.error("Gemini API error", extra={"status": response.status_code})
-            raise GeminiGenerationError("Gemini API call failed")
+            logger.error(
+                "Gemini API error",
+                extra={
+                    **extra,
+                    "status": response.status_code,
+                    "body": response.text,
+                },
+            )
+            raise GeminiGenerationError(
+                f"Gemini API call failed (status {response.status_code})"
+            )
         body = response.json()
         timeline = self._parse_timeline(body)
         return [TimelineStage(**stage) for stage in timeline]
