@@ -45,8 +45,8 @@ npm run lint         # Next.js ESLint rules + Tailwind-aware Stylelint
 
 ## FastAPI integration game plan
 
-1. **Expose REST endpoints** such as `POST /repos/import`, `GET /repos/:id`, and `GET /repos` from FastAPI. Attach Supabase from the backend for persistence and Clerk webhooks for identity.
+1. **Expose REST endpoints** such as `POST /roadmap/generate`, `GET /repos/:id`, and `GET /repos` from FastAPI. Attach Supabase from the backend for persistence and Clerk webhooks for identity.
 2. **Configure auth**: Clerk issues JWTs; validate them in FastAPI (Clerk publishes the JWKS). Return Clerk user IDs to map workspaces/billing in Supabase.
 3. **Billing**: Use Clerk’s built-in Stripe portal or call Stripe from FastAPI. Store subscription state in Supabase and surface it via `/billing` endpoints.
-4. **Wire the frontend**: set `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, etc. `repoService.queueImport` already posts to `/repos/import`; expand the service with `fetchRepo`/`listRepos` once the backend endpoints are ready.
+4. **Wire the frontend**: set `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, etc. `repoService.generateRoadmap` posts to `/roadmap/generate` after the user connects GitHub through the OAuth flow that lives under `/github/oauth/*` endpoints.
 5. **Secure data fetching**: when you add authenticated pages, hydrate Clerk on the client and forward the session token via `fetch` headers inside the service layer. Supabase client helpers can also live in `lib/services` so every request gets the same auth context.

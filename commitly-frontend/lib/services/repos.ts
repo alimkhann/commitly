@@ -2,17 +2,34 @@ import {
   repos,
   getRepoById as getRepoByIdFromStatic,
   type RepoRecord,
+  type RepoTimelineStage,
 } from "@/data/repos"
 
 import { apiClient, type ApiClientResponse } from "@/lib/api/client"
 import { env } from "@/lib/config/env"
 
 const API_ROUTES = {
-  importRepo: "/repos/import",
-  repo: (id: string) => `/repos/${id}`,
+  generateRoadmap: "/roadmap/generate",
 }
 
-export type RepoImportResult = ApiClientResponse<{ id: string }> & {
+export type RoadmapSummary = {
+  full_name: string
+  description?: string | null
+  language?: string | null
+  stars: number
+  default_branch: string
+  html_url?: string | null
+  owner_avatar_url?: string | null
+}
+
+export type RoadmapResponseBody = {
+  repo: RoadmapSummary
+  timeline: RepoTimelineStage[]
+  cached: boolean
+  generated_at: string
+}
+
+export type RepoImportResult = ApiClientResponse<RoadmapResponseBody> & {
   skipped?: boolean
 }
 
@@ -29,7 +46,10 @@ export const repoService = {
     return getRepoByIdFromStatic(id)
   },
 
-  async queueImport(repoUrl: string): Promise<RepoImportResult> {
+  async generateRoadmap(
+    repoUrl: string,
+    authToken?: string
+  ): Promise<RepoImportResult> {
     if (!repoUrl.trim()) {
       return { ok: false, status: 0, error: "Repository URL is required." }
     }
@@ -44,10 +64,11 @@ export const repoService = {
       }
     }
 
-    return apiClient<{ id: string }>(env.apiBaseUrl, {
-      path: API_ROUTES.importRepo,
+    return apiClient<RoadmapResponseBody>(env.apiBaseUrl, {
+      path: API_ROUTES.generateRoadmap,
       method: "POST",
-      body: { repoUrl },
+      body: { repo_url: repoUrl },
+      authToken,
     })
   },
 }

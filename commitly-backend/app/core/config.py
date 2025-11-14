@@ -64,6 +64,43 @@ class Settings(BaseSettings):
         default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS"
     )
 
+    # GitHub ingestion
+    github_api_base: HttpUrl = Field(
+        "https://api.github.com", validation_alias="GITHUB_API_BASE"
+    )
+    github_token: Optional[str] = Field(default=None, validation_alias="GITHUB_TOKEN")
+    github_commit_limit: int = Field(40, validation_alias="GITHUB_COMMIT_LIMIT")
+    github_oauth_client_id: Optional[str] = Field(
+        default=None, validation_alias="GITHUB_OAUTH_CLIENT_ID"
+    )
+    github_oauth_client_secret: Optional[str] = Field(
+        default=None, validation_alias="GITHUB_OAUTH_CLIENT_SECRET"
+    )
+    github_oauth_redirect_uri: Optional[HttpUrl] = Field(
+        default=None, validation_alias="GITHUB_OAUTH_REDIRECT_URI"
+    )
+    github_oauth_success_redirect: Optional[HttpUrl] = Field(
+        default=None, validation_alias="GITHUB_OAUTH_SUCCESS_REDIRECT"
+    )
+    github_oauth_scope: str = Field(
+        "read:user public_repo", validation_alias="GITHUB_OAUTH_SCOPE"
+    )
+
+    # Gemini + AI pipeline
+    gemini_api_key: Optional[str] = Field(
+        default=None, validation_alias="GEMINI_API_KEY"
+    )
+    gemini_model: str = Field("gemini-1.5-flash", validation_alias="GEMINI_MODEL")
+    roadmap_timeline_fraction: float = Field(
+        0.25, ge=0.1, le=1.0, validation_alias="ROADMAP_TIMELINE_FRACTION"
+    )
+
+    # Redis cache
+    redis_url: Optional[str] = Field(default=None, validation_alias="REDIS_URL")
+    roadmap_cache_ttl_seconds: int = Field(
+        3600, validation_alias="ROADMAP_CACHE_TTL_SECONDS"
+    )
+
     @staticmethod
     def _coerce_list(value: Any) -> List[str]:
         match value:

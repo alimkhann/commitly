@@ -1,0 +1,192 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import math
+from typing import Sequence
+
+from fastapi import HTTPException, status
+
+from app.core.cache import RedisJSONCache, redis_cache
+from app.core.config import settings
+from app.models.roadmap import RoadmapRepoSummary, RoadmapResponse
+from app.services.ai.gemini import (
+    GeminiConfigurationError,
+    GeminiGenerationError,
+    GeminiRoadmapGenerator,
+)
+from app.services.github import (
+    CommitSnapshot,
+    GitHubRateLimitExceeded,
+    GitHubService,
+    GitHubServiceError,
+    RepositoryIdentity,
+    RepositoryMetadata,
+    parse_github_url,
+)
+from app.services.github_tokens import GitHubTokenStore
+from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
+
+
+class RoadmapService:
+    def __init__(
+        self,
+        chunk_store: CommitChunkStore,
+        generator: GeminiRoadmapGenerator,
+        token_store: GitHubTokenStore,
+        cache: RedisJSONCache | None = None,
+        cache_ttl: int = settings.roadmap_cache_ttl_seconds,
+        commit_limit: int = settings.github_commit_limit,
+        timeline_fraction: float = settings.roadmap_timeline_fraction,
+    ) -> None:
+        self._chunk_store = chunk_store
+        self._generator = generator
+        self._token_store = token_store
+        self._cache = cache
+        self._cache_ttl = cache_ttl
+        self._commit_limit = commit_limit
+        self._timeline_fraction = timeline_fraction
+        self._default_token = settings.github_token
+
+    async def generate(
+        self,
+        repo_url: str,
+        force_refresh: bool = False,
+        actor_id: str | None = None,
+    ) -> RoadmapResponse:
+        identity = self._parse_identity(repo_url)
+        cache_key = f"roadmap:{identity.full_name.lower()}"
+        if not force_refresh and self._cache:
+            cached = await self._cache.get(cache_key)
+            if cached:
+                return RoadmapResponse.model_validate(cached)
+        token = None
+        if actor_id:
+            record = self._token_store.get_token(actor_id)
+            if record:
+                token = record.access_token
+        if token is None:
+            token = self._default_token
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Connect GitHub to generate a roadmap",
+            )
+        github_client = GitHubService(token=token)
+        repo = await self._fetch_repo(github_client, identity)
+        try:
+            commits = await github_client.fetch_commits(
+                identity, repo.default_branch, self._commit_limit
+            )
+        except GitHubRateLimitExceeded as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)
+            )
+        except GitHubServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
+            )
+        if not commits:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Repository does not contain commits",
+            )
+        chunks = self._build_chunks(repo.full_name, commits)
+        try:
+            self._chunk_store.persist(chunks)
+        except ChunkStorageError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            )
+        stage_budget = max(1, math.ceil(len(commits) * self._timeline_fraction))
+        try:
+            timeline = await self._generator.generate(repo, chunks, stage_budget)
+        except GeminiGenerationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(exc),
+            )
+        response = RoadmapResponse(
+            repo=self._to_summary(repo),
+            timeline=timeline,
+            cached=False,
+            generated_at=datetime.now(timezone.utc),
+        )
+        if self._cache:
+            await self._cache.set(
+                cache_key, response.model_dump(mode="json"), self._cache_ttl
+            )
+        return response
+
+    def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
+        try:
+            return parse_github_url(repo_url)
+        except GitHubServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            )
+
+    async def _fetch_repo(
+        self, github: GitHubService, identity: RepositoryIdentity
+    ) -> RepositoryMetadata:
+        try:
+            return await github.fetch_repository(identity)
+        except GitHubServiceError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    def _build_chunks(
+        self, full_name: str, commits: Sequence[CommitSnapshot]
+    ) -> list[CommitChunk]:
+        chronological = list(reversed(commits))
+        chunks: list[CommitChunk] = []
+        for index, commit in enumerate(chronological):
+            chunk_type = "initial-full" if index == 0 else "diff-only"
+            body_lines = [commit.message.strip(), ""]
+            for file in commit.files:
+                patch = file.patch or f"[{file.status}]"
+                body_lines.append(f"File: {file.filename}")
+                if chunk_type == "initial-full" or patch:
+                    body_lines.append(patch)
+                body_lines.append("")
+            content = "\n".join(body_lines).strip()
+            chunks.append(
+                CommitChunk(
+                    repo_full_name=full_name,
+                    commit_sha=commit.sha,
+                    chunk_type=chunk_type,
+                    content=content,
+                    authored_at=commit.authored_date,
+                )
+            )
+        return chunks
+
+    def _to_summary(self, repo: RepositoryMetadata) -> RoadmapRepoSummary:
+        return RoadmapRepoSummary(
+            full_name=repo.full_name,
+            description=repo.description,
+            language=repo.language,
+            stars=repo.stars,
+            default_branch=repo.default_branch,
+            html_url=repo.html_url,
+            owner_avatar_url=repo.owner_avatar_url,
+        )
+
+
+def build_roadmap_service(
+    session, cache: RedisJSONCache | None = redis_cache
+) -> RoadmapService:
+    try:
+        generator = GeminiRoadmapGenerator(
+            settings.gemini_api_key or "", settings.gemini_model
+        )
+    except GeminiConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+    return RoadmapService(
+        chunk_store=CommitChunkStore(session),
+        generator=generator,
+        token_store=GitHubTokenStore(session),
+        cache=cache,
+    )

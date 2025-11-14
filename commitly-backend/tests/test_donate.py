@@ -9,20 +9,22 @@ class _FakePolarService:
         return {"id": "chk_123", "url": "https://pay.local/checkout/chk_123"}
 
 
-def test_donate_checkout_success(monkeypatch, client: TestClient):
+def test_donate_checkout_success(monkeypatch, client: TestClient, auth_headers):
     from app.api import donate as donate_api
 
     monkeypatch.setattr(donate_api, "PolarService", _FakePolarService)
 
     payload = {"amount_cents": 1500, "email": "donor@example.com"}
-    response = client.post("/api/v1/donate/checkout", json=payload)
+    response = client.post(
+        "/api/v1/donate/checkout", json=payload, headers=auth_headers
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["checkout_id"] == "chk_123"
     assert data["url"].startswith("https://")
 
 
-def test_donate_checkout_config_error(monkeypatch, client: TestClient):
+def test_donate_checkout_config_error(monkeypatch, client: TestClient, auth_headers):
     from app.api import donate as donate_api
 
     class _BrokenService(_FakePolarService):
@@ -30,11 +32,13 @@ def test_donate_checkout_config_error(monkeypatch, client: TestClient):
             raise donate_api.PolarConfigurationError("missing config")
 
     monkeypatch.setattr(donate_api, "PolarService", _BrokenService)
-    response = client.post("/api/v1/donate/checkout", json={})
+    response = client.post("/api/v1/donate/checkout", json={}, headers=auth_headers)
     assert response.status_code == 503
 
 
-def test_donate_checkout_validation_error(monkeypatch, client: TestClient):
+def test_donate_checkout_validation_error(
+    monkeypatch, client: TestClient, auth_headers
+):
     from app.api import donate as donate_api
 
     class _ValidatingService(_FakePolarService):
@@ -42,5 +46,17 @@ def test_donate_checkout_validation_error(monkeypatch, client: TestClient):
             raise ValueError("bad amount")
 
     monkeypatch.setattr(donate_api, "PolarService", _ValidatingService)
-    response = client.post("/api/v1/donate/checkout", json={"amount_cents": 1})
+    response = client.post(
+        "/api/v1/donate/checkout",
+        json={"amount_cents": 1},
+        headers=auth_headers,
+    )
     assert response.status_code == 422
+
+
+def test_donate_checkout_requires_auth(monkeypatch, client: TestClient):
+    from app.api import donate as donate_api
+
+    monkeypatch.setattr(donate_api, "PolarService", _FakePolarService)
+    response = client.post("/api/v1/donate/checkout", json={"amount_cents": 500})
+    assert response.status_code == 401

@@ -22,9 +22,8 @@ supabase==2.19.0
 polar-sdk==0.24.0
 python-jose[cryptography]==3.3.0
 
-# Optional: caching (uncomment if used)
-# redis==5.0.8
-# fastapi-cache2==0.2.1
+# Caching
+redis==5.0.8
 
 # Optional: AI/RAG core (leave commented until ready)
 # openai==1.46.0
