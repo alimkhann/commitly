@@ -89,6 +89,8 @@ def make_clerk_token(clerk_keypair: Dict[str, Any]):
         if settings.clerk_authorized_parties:
             claims["azp"] = overrides.pop("azp", settings.clerk_authorized_parties[0])
         claims.update(overrides)
+        if claims.get("aud") is None:
+            claims.pop("aud", None)
 
         token = jwt.encode(
             claims,

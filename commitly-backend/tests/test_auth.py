@@ -49,3 +49,12 @@ def test_auth_ping_accepts_secondary_audience(client: TestClient, make_clerk_tok
         assert response.status_code == 200
     finally:
         settings.clerk_audience = original
+
+
+def test_auth_ping_accepts_token_without_audience(client: TestClient, make_clerk_token):
+    token = make_clerk_token(aud=None)
+    response = client.get(
+        "/api/v1/auth/ping",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200

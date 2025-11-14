@@ -158,8 +158,9 @@ def verify_clerk_token(token: str) -> ClerkClaims:
     allowed_audiences = Settings._coerce_list(settings.clerk_audience) or [
         settings.clerk_audience
     ]
-    if not any(audience in audience_values for audience in allowed_audiences):
-        raise InvalidClerkToken("Invalid audience")
+    if audience_values:
+        if not any(audience in audience_values for audience in allowed_audiences):
+            raise InvalidClerkToken("Invalid audience")
 
     if settings.clerk_authorized_parties:
         azp = claims.get("azp")
