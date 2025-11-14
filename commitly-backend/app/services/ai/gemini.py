@@ -213,7 +213,7 @@ class GeminiRoadmapGenerator:
             if isinstance(text_value, str) and text_value.strip():
                 collected_segments.append(text_value)
                 continue
-            function_call = part.get("functionCall")
+            function_call = part.get("functionCall") or part.get("function_call")
             if isinstance(function_call, dict):
                 args = function_call.get("args") or {}
                 if isinstance(args, dict):
