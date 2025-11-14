@@ -12,7 +12,18 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+connect_args: dict[str, object] = {}
+if settings.database_url.startswith("postgresql+psycopg"):
+    # Psycopg's prepared statements can leak when reusing connections across
+    # threads (Render reuses pooled connections). Disable prepared statements
+    # entirely to avoid "DuplicatePreparedStatement" errors from the server.
+    connect_args["prepare_threshold"] = 0
+
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    connect_args=connect_args,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
