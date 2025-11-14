@@ -25,9 +25,7 @@ def test_auth_ping_allows_normalized_authorized_party(
     original = list(settings.clerk_authorized_parties)
     try:
         settings.clerk_authorized_parties = ["commitly-m005.onrender.com"]
-        normalized_token = make_clerk_token(
-            azp="https://commitly-m005.onrender.com/"
-        )
+        normalized_token = make_clerk_token(azp="https://commitly-m005.onrender.com/")
         response = client.get(
             "/api/v1/auth/ping",
             headers={"Authorization": f"Bearer {normalized_token}"},

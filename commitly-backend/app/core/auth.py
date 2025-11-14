@@ -3,6 +3,7 @@ from __future__ import annotations
 from threading import RLock
 import time
 from typing import Any, Dict, List, Optional, TypedDict, cast
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, Request, status
 import httpx
@@ -13,7 +14,6 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.types import ASGIApp
 
 from app.core.config import settings
-from urllib.parse import urlparse
 
 
 def _normalize_party(value: str) -> str:
@@ -162,7 +162,9 @@ def verify_clerk_token(token: str) -> ClerkClaims:
         azp = claims.get("azp")
         if isinstance(azp, str):
             normalized_azp = _normalize_party(azp)
-            allowed = {_normalize_party(party) for party in settings.clerk_authorized_parties}
+            allowed = {
+                _normalize_party(party) for party in settings.clerk_authorized_parties
+            }
             if "*" not in allowed and normalized_azp not in allowed:
                 raise InvalidClerkToken("Token not issued for this application")
         else:
