@@ -1,14 +1,15 @@
 "use client"
 
-import { useState } from "react"
-import { Bell, SlidersHorizontal } from "lucide-react"
-import { UserProfile } from "@clerk/nextjs"
+import { useEffect, useState } from "react"
+import { Bell, GitBranch, SlidersHorizontal } from "lucide-react"
+import { UserProfile, useAuth } from "@clerk/nextjs"
 import { dark } from "@clerk/themes"
 
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { githubService } from "@/lib/services/github"
 
 type AccountSettingsDialogProps = {
   open: boolean
@@ -40,6 +41,9 @@ export default function AccountSettingsDialog({
           </UserProfile.Page>
           <UserProfile.Page label="Notifications" url="notifications" labelIcon={<Bell className="h-3.5 w-3.5" />}>
             <NotificationsPreferences />
+          </UserProfile.Page>
+          <UserProfile.Page label="Connections" url="connections" labelIcon={<GitBranch className="h-3.5 w-3.5" />}>
+            <GithubConnectionPreferences />
           </UserProfile.Page>
         </UserProfile>
       </DialogContent>
@@ -121,6 +125,125 @@ function NotificationsPreferences() {
           <Switch checked={weeklyDigestEnabled} onCheckedChange={setWeeklyDigestEnabled} />
         </div>
       </section>
+    </div>
+  )
+}
+
+function GithubConnectionPreferences() {
+  const { isSignedIn, getToken } = useAuth()
+  const [loading, setLoading] = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [githubLogin, setGithubLogin] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadStatus() {
+      if (!isSignedIn) return
+      setLoading(true)
+      setError(null)
+      try {
+        const token = (await getToken?.()) ?? undefined
+        const response = await githubService.status(token)
+        if (cancelled) return
+        if (response.ok && response.data) {
+          setConnected(response.data.connected)
+          setGithubLogin(response.data.github_login ?? null)
+        } else if (response.status === 401) {
+          setConnected(false)
+          setGithubLogin(null)
+        }
+      } catch {
+        if (!cancelled) setError("Failed to check GitHub connection")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadStatus()
+    return () => {
+      cancelled = true
+    }
+  }, [getToken, isSignedIn])
+
+  const handleDisconnect = async () => {
+    if (!isSignedIn) return
+    setLoading(true)
+    setError(null)
+    try {
+      const token = (await getToken?.()) ?? undefined
+      const response = await githubService.disconnect(token)
+      if (!response.ok && response.error) {
+        setError(response.error)
+      }
+      setConnected(false)
+      setGithubLogin(null)
+    } catch {
+      setError("Failed to disconnect GitHub")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConnect = async () => {
+    if (!isSignedIn) return
+    setLoading(true)
+    setError(null)
+    try {
+      const token = (await getToken?.()) ?? undefined
+      const response = await githubService.start(token, typeof window !== "undefined" ? window.location.href : undefined)
+      if (response.ok && response.data) {
+        window.location.href = response.data.authorize_url
+      } else if (response.error) {
+        setError(response.error)
+      }
+    } catch {
+      setError("Failed to start GitHub OAuth")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4 py-6 text-sm text-foreground">
+      <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-base font-medium text-white">GitHub</p>
+            <p className="text-xs text-white/60">
+              {connected && githubLogin
+                ? `Connected as ${githubLogin}`
+                : loading
+                  ? "Checking your GitHub connection..."
+                  : "Connect to generate roadmaps from your repositories."}
+            </p>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+          <div className="flex gap-2">
+            {connected ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={loading}
+                onClick={handleDisconnect}
+              >
+                Disconnect
+              </Button>
+            ) : (
+              !loading && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleConnect}
+                >
+                  Connect GitHub
+                </Button>
+              )
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
