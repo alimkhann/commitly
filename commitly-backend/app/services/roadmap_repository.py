@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Iterable
 
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
@@ -10,6 +11,7 @@ from app.models.roadmap import (
     RoadmapRepoSummary,
     RoadmapResponse,
     TimelineStage,
+    UserSyncedRepo,
 )
 
 
@@ -109,3 +111,54 @@ class RoadmapResultStore:
             cached=record.cached,
             generated_at=record.generated_at,
         )
+
+
+class UserSyncedRepoStore:
+    def __init__(self, session: Session, result_store: RoadmapResultStore) -> None:
+        self._session = session
+        self._result_store = result_store
+
+    def pin(self, user_id: str | None, full_name: str) -> None:
+        if not user_id:
+            return
+        try:
+            record = (
+                self._session.query(UserSyncedRepo)
+                .filter_by(user_id=user_id, repo_full_name=full_name)
+                .one_or_none()
+            )
+            if record:
+                record.pinned_at = datetime.now(timezone.utc)
+            else:
+                self._session.add(
+                    UserSyncedRepo(user_id=user_id, repo_full_name=full_name)
+                )
+            self._session.commit()
+        except SQLAlchemyError:
+            self._session.rollback()
+            raise
+
+    def unpin(self, user_id: str, full_name: str) -> None:
+        try:
+            self._session.query(UserSyncedRepo).filter_by(
+                user_id=user_id, repo_full_name=full_name
+            ).delete()
+            self._session.commit()
+        except SQLAlchemyError:
+            self._session.rollback()
+            raise
+
+    def list(self, user_id: str | None) -> list[RoadmapResponse]:
+        if not user_id:
+            return []
+        records: Iterable[GeneratedRoadmap] = (
+            self._session.query(GeneratedRoadmap)
+            .join(
+                UserSyncedRepo,
+                UserSyncedRepo.repo_full_name == GeneratedRoadmap.repo_full_name,
+            )
+            .filter(UserSyncedRepo.user_id == user_id)
+            .order_by(UserSyncedRepo.pinned_at.desc())
+            .all()
+        )
+        return [self._result_store._to_response(record) for record in records]

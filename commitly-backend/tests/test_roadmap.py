@@ -43,6 +43,9 @@ def roadmap_payload() -> RoadmapResponse:
 @pytest.fixture()
 def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse):
     class _StubService:
+        def __init__(self) -> None:
+            self.unpin_called: tuple[str, str] | None = None
+
         async def generate(
             self,
             repo_url: str,
@@ -59,8 +62,16 @@ def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse
         async def list_synced(self):
             return [roadmap_payload]
 
-    client.app.dependency_overrides[get_roadmap_service] = lambda: _StubService()
-    yield
+        async def list_user_pins(self, user_id: str):
+            assert user_id == "user_123"
+            return [roadmap_payload]
+
+        async def unpin_repo(self, user_id: str, repo_full_name: str):
+            self.unpin_called = (user_id, repo_full_name)
+
+    service = _StubService()
+    client.app.dependency_overrides[get_roadmap_service] = lambda: service
+    yield service
     client.app.dependency_overrides.pop(get_roadmap_service, None)
 
 
@@ -95,3 +106,24 @@ def test_catalog_endpoint(client: TestClient, stubbed_roadmap_service):
     response = client.get("/api/v1/roadmap/catalog")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+def test_list_user_pins(
+    client: TestClient,
+    auth_headers,
+    stubbed_roadmap_service,
+    roadmap_payload,
+):
+    response = client.get("/api/v1/roadmap/pins", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["repo"]["full_name"] == roadmap_payload.repo.full_name
+
+
+def test_unpin_repo(client: TestClient, auth_headers, stubbed_roadmap_service):
+    response = client.delete(
+        "/api/v1/roadmap/pins/acme/widgets", headers=auth_headers
+    )
+    assert response.status_code == 204
+    assert stubbed_roadmap_service.unpin_called == ("user_123", "acme/widgets")

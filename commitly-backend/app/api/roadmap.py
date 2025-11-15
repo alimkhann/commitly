@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import ClerkClaims, require_clerk_auth
@@ -43,3 +43,22 @@ async def generate_roadmap(
         force_refresh=payload.force_refresh,
         actor_id=current_user["sub"],
     )
+
+
+@router.get("/pins", response_model=list[RoadmapResponse])
+async def list_pinned_roadmaps(
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> list[RoadmapResponse]:
+    return await service.list_user_pins(current_user["sub"])
+
+
+@router.delete("/pins/{owner}/{repo}", status_code=status.HTTP_204_NO_CONTENT)
+async def unpin_roadmap(
+    owner: str,
+    repo: str,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> Response:
+    await service.unpin_repo(current_user["sub"], f"{owner}/{repo}")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

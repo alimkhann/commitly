@@ -26,7 +26,7 @@ from app.services.github import (
 )
 from app.services.github_tokens import GitHubTokenStore
 from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
-from app.services.roadmap_repository import RoadmapResultStore
+from app.services.roadmap_repository import RoadmapResultStore, UserSyncedRepoStore
 
 
 class RoadmapService:
@@ -34,6 +34,7 @@ class RoadmapService:
         self,
         chunk_store: CommitChunkStore,
         result_store: RoadmapResultStore,
+        pin_store: UserSyncedRepoStore,
         generator: GeminiRoadmapGenerator,
         token_store: GitHubTokenStore,
         cache: RedisJSONCache | None = None,
@@ -50,6 +51,7 @@ class RoadmapService:
         self._timeline_fraction = timeline_fraction
         self._default_token = settings.github_token
         self._result_store = result_store
+        self._pin_store = pin_store
 
     async def generate(
         self,
@@ -125,6 +127,7 @@ class RoadmapService:
                 cache_key, response.model_dump(mode="json"), self._cache_ttl
             )
         self._result_store.upsert(response)
+        self._pin_store.pin(actor_id, repo.full_name)
         return response
 
     async def get_cached(self, repo_full_name: str) -> RoadmapResponse:
@@ -138,6 +141,12 @@ class RoadmapService:
 
     async def list_synced(self) -> list[RoadmapResponse]:
         return self._result_store.list()
+
+    async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
+        return self._pin_store.list(user_id)
+
+    async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
+        self._pin_store.unpin(user_id, repo_full_name)
 
     def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
         try:
@@ -209,10 +218,13 @@ def build_roadmap_service(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         )
+    result_store = RoadmapResultStore(session)
+    pin_store = UserSyncedRepoStore(session, result_store)
     return RoadmapService(
         chunk_store=CommitChunkStore(session),
         generator=generator,
         token_store=GitHubTokenStore(session),
         cache=cache,
-        result_store=RoadmapResultStore(session),
+        result_store=result_store,
+        pin_store=pin_store,
     )
