@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.auth import ClerkClaims, require_clerk_auth
 from app.core.database import get_db
 from app.models.waitlist import WaitlistCountResponse, WaitlistCreate, WaitlistResponse
 from app.services.supabase import DuplicateEntryError, PersistenceError, SupabaseService
@@ -15,12 +16,11 @@ router = APIRouter()
 )
 def join_waitlist(
     payload: WaitlistCreate,
-    request: Request,
+    claims: ClerkClaims = Depends(require_clerk_auth),
     session: Session = Depends(get_db),
 ) -> WaitlistResponse:
     service = SupabaseService(session)
-    actor = getattr(request.state, "clerk_claims", None)
-    actor_id: str | None = actor.get("sub") if isinstance(actor, dict) else None
+    actor_id: str | None = claims.get("sub")
     try:
         entry = service.add_to_waitlist(payload, requested_by=actor_id)
     except DuplicateEntryError:
