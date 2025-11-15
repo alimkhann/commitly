@@ -64,6 +64,8 @@ class RoadmapService:
         if not force_refresh and self._cache:
             cached = await self._cache.get(cache_key)
             if cached:
+                if actor_id:
+                    self._pin_store.pin(actor_id, identity.full_name)
                 return RoadmapResponse.model_validate(cached)
         token = None
         if actor_id:
