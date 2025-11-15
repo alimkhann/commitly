@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.roadmap import (
@@ -18,52 +18,87 @@ class RoadmapResultStore:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+        self._table_ready = False
 
-    def upsert(self, response: RoadmapResponse) -> None:
-        summary = response.repo.model_dump()
-        timeline_payload = [stage.model_dump() for stage in response.timeline]
-        record = (
-            self._session.query(GeneratedRoadmap)
-            .filter_by(repo_full_name=summary["full_name"])
-            .one_or_none()
+    def _ensure_table_exists(self) -> None:
+        if self._table_ready:
+            return
+        engine = self._session.get_bind()
+        if engine is None:
+            return
+        GeneratedRoadmap.__table__.create(bind=engine, checkfirst=True)
+        self._table_ready = True
+
+    def _is_missing_table_error(self, exc: ProgrammingError) -> bool:
+        message = str(exc).lower()
+        return "generated_roadmaps" in message and (
+            "undefined" in message or "does not exist" in message
         )
-        if record:
-            record.repo_summary = summary
-            record.timeline = timeline_payload
-            record.cached = response.cached
-            record.generated_at = response.generated_at
-        else:
-            record = GeneratedRoadmap(
-                repo_full_name=summary["full_name"],
-                repo_summary=summary,
-                timeline=timeline_payload,
-                cached=response.cached,
-                generated_at=response.generated_at,
-            )
-            self._session.add(record)
+
+    def _with_table_guard(self, action):
         try:
-            self._session.commit()
-        except SQLAlchemyError:
+            return action()
+        except ProgrammingError as exc:
             self._session.rollback()
+            if self._is_missing_table_error(exc):
+                self._ensure_table_exists()
+                return action()
             raise
 
+    def upsert(self, response: RoadmapResponse) -> None:
+        def action() -> None:
+            summary = response.repo.model_dump()
+            timeline_payload = [stage.model_dump() for stage in response.timeline]
+            record = (
+                self._session.query(GeneratedRoadmap)
+                .filter_by(repo_full_name=summary["full_name"])
+                .one_or_none()
+            )
+            if record:
+                record.repo_summary = summary
+                record.timeline = timeline_payload
+                record.cached = response.cached
+                record.generated_at = response.generated_at
+            else:
+                record = GeneratedRoadmap(
+                    repo_full_name=summary["full_name"],
+                    repo_summary=summary,
+                    timeline=timeline_payload,
+                    cached=response.cached,
+                    generated_at=response.generated_at,
+                )
+                self._session.add(record)
+            try:
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
+
     def get(self, full_name: str) -> RoadmapResponse | None:
-        record = (
-            self._session.query(GeneratedRoadmap)
-            .filter_by(repo_full_name=full_name)
-            .one_or_none()
-        )
-        if not record:
-            return None
-        return self._to_response(record)
+        def action() -> RoadmapResponse | None:
+            record = (
+                self._session.query(GeneratedRoadmap)
+                .filter_by(repo_full_name=full_name)
+                .one_or_none()
+            )
+            if not record:
+                return None
+            return self._to_response(record)
+
+        return self._with_table_guard(action)
 
     def list(self) -> list[RoadmapResponse]:
-        records: Iterable[GeneratedRoadmap] = (
-            self._session.query(GeneratedRoadmap)
-            .order_by(GeneratedRoadmap.updated_at.desc())
-            .all()
-        )
-        return [self._to_response(record) for record in records]
+        def action() -> list[RoadmapResponse]:
+            records: Iterable[GeneratedRoadmap] = (
+                self._session.query(GeneratedRoadmap)
+                .order_by(GeneratedRoadmap.updated_at.desc())
+                .all()
+            )
+            return [self._to_response(record) for record in records]
+
+        return self._with_table_guard(action)
 
     def _to_response(self, record: GeneratedRoadmap) -> RoadmapResponse:
         summary = RoadmapRepoSummary(**record.repo_summary)
