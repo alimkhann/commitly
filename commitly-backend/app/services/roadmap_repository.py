@@ -40,7 +40,9 @@ class RoadmapResultStore:
             return False
         message = str(exc).lower()
         missing_markers = ("undefined", "does not exist", "no such table")
-        return "generated_roadmaps" in message and any(marker in message for marker in missing_markers)
+        return "generated_roadmaps" in message and any(
+            marker in message for marker in missing_markers
+        )
 
     def _handle_missing_table_error(self, exc: Exception) -> bool:
         if self._is_missing_table_error(exc):
@@ -144,7 +146,8 @@ class UserSyncedRepoStore:
         message = str(exc).lower()
         handled = False
         missing = any(
-            marker in message for marker in ("undefined", "does not exist", "no such table")
+            marker in message
+            for marker in ("undefined", "does not exist", "no such table")
         )
         if missing and "user_synced_repos" in message:
             self._ensure_table_exists()
