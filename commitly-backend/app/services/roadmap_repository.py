@@ -51,13 +51,15 @@ class RoadmapResultStore:
         return False
 
     def _with_table_guard(self, action):
-        try:
-            return action()
-        except (ProgrammingError, OperationalError) as exc:
-            self._session.rollback()
-            if self._handle_missing_table_error(exc):
+        while True:
+            try:
                 return action()
-            raise
+            except (ProgrammingError, OperationalError) as exc:
+                self._session.rollback()
+                if not self._handle_missing_table_error(exc):
+                    raise
+                # Missing table was created; retry the action.
+                continue
 
     def upsert(self, response: RoadmapResponse) -> None:
         def action() -> None:
@@ -158,13 +160,14 @@ class UserSyncedRepoStore:
         return handled
 
     def _with_table_guard(self, action):
-        try:
-            return action()
-        except (ProgrammingError, OperationalError) as exc:
-            self._session.rollback()
-            if self._handle_missing_table_error(exc):
+        while True:
+            try:
                 return action()
-            raise
+            except (ProgrammingError, OperationalError) as exc:
+                self._session.rollback()
+                if not self._handle_missing_table_error(exc):
+                    raise
+                continue
 
     def pin(self, user_id: str | None, full_name: str) -> None:
         if not user_id:
