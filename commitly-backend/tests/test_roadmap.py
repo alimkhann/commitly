@@ -76,7 +76,9 @@ def test_generate_roadmap_happy_path(
     assert response.json()["repo"]["full_name"] == roadmap_payload.repo.full_name
 
 
-def test_generate_roadmap_requires_auth(client: TestClient):
+def test_generate_roadmap_requires_auth(
+    client: TestClient, stubbed_roadmap_service
+):
     response = client.post(
         "/api/v1/roadmap/generate", json={"repo_url": "https://github.com/acme/widgets"}
     )
