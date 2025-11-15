@@ -23,6 +23,10 @@ class GitHubRateLimitExceeded(GitHubServiceError):
     """Raised when the REST API rate limit has been exhausted."""
 
 
+class GitHubAuthenticationError(GitHubServiceError):
+    """Raised when GitHub rejects our credentials."""
+
+
 @dataclass(slots=True)
 class RepositoryIdentity:
     owner: str
@@ -92,7 +96,17 @@ class GitHubService:
             and response.headers.get("X-RateLimit-Remaining") == "0"
         ):
             raise GitHubRateLimitExceeded("GitHub rate limit exceeded")
-        response.raise_for_status()
+        if response.status_code == 401:
+            raise GitHubAuthenticationError(
+                "GitHub rejected the access token. "
+                "Please reconnect your GitHub account."
+            )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise GitHubServiceError(
+                f"GitHub API request failed ({response.status_code})"
+            ) from exc
         return response
 
     async def fetch_repository(

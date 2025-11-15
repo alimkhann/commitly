@@ -16,6 +16,7 @@ from app.services.ai.gemini import (
 )
 from app.services.github import (
     CommitSnapshot,
+    GitHubAuthenticationError,
     GitHubRateLimitExceeded,
     GitHubService,
     GitHubServiceError,
@@ -77,6 +78,10 @@ class RoadmapService:
             commits = await github_client.fetch_commits(
                 identity, repo.default_branch, self._commit_limit
             )
+        except GitHubAuthenticationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+            )
         except GitHubRateLimitExceeded as exc:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)
@@ -131,6 +136,10 @@ class RoadmapService:
     ) -> RepositoryMetadata:
         try:
             return await github.fetch_repository(identity)
+        except GitHubAuthenticationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+            )
         except GitHubServiceError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
