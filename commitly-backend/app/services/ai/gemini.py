@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 MAX_CONTEXT_CHARS = 8000
 MAX_CHUNK_SNIPPET_CHARS = 400
 MIN_CHUNK_SNIPPET_CHARS = 150
-MAX_OUTPUT_TOKENS = 2048
+# Allow enough headroom for model \"thoughts\" plus the JSON timeline.
+MAX_OUTPUT_TOKENS = 6144
 MIN_RETRY_CHUNKS = 5
 MAX_GEMINI_ATTEMPTS = 5
 
