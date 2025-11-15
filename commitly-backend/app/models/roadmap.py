@@ -64,6 +64,22 @@ class GeneratedRoadmap(Base):
     )
 
 
+class UserSyncedRepo(Base):
+    """Tracks which repositories a user has pinned to the sidebar."""
+
+    __tablename__ = "user_synced_repos"
+    __table_args__ = (
+        UniqueConstraint("user_id", "repo_full_name", name="uq_user_synced_repo"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    pinned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class RoadmapRequest(BaseModel):
     repo_url: AnyHttpUrl = Field(description="GitHub repository URL")
     force_refresh: bool = Field(

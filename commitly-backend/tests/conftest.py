@@ -26,6 +26,7 @@ from app.core.auth import jwks_cache  # noqa: E402
 from app.core.config import Settings, settings  # noqa: E402
 from app.core.database import Base, SessionLocal, engine, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.roadmap import GeneratedRoadmap, UserSyncedRepo  # noqa: E402
 from app.models.waitlist import Waitlist  # noqa: E402
 
 # Create tables once for the test database
@@ -121,9 +122,13 @@ def db_session() -> Generator[Session, None, None]:
 @pytest.fixture(autouse=True)
 def _clean_db(db_session: Session) -> Generator[None, None, None]:
     # Clean tables that we use between tests to avoid cross-test leakage
+    db_session.query(UserSyncedRepo).delete()
+    db_session.query(GeneratedRoadmap).delete()
     db_session.query(Waitlist).delete()
     db_session.commit()
     yield
+    db_session.query(UserSyncedRepo).delete()
+    db_session.query(GeneratedRoadmap).delete()
     db_session.query(Waitlist).delete()
     db_session.commit()
 
