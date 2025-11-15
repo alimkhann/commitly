@@ -66,8 +66,7 @@ class RoadmapResultStore:
         def action() -> None:
             summary = json.loads(response.repo.model_dump_json())
             timeline_payload = [
-                json.loads(stage.model_dump_json())
-                for stage in response.timeline
+                json.loads(stage.model_dump_json()) for stage in response.timeline
             ]
             record = (
                 self._session.query(GeneratedRoadmap)
