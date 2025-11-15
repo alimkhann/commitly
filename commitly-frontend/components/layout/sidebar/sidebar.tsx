@@ -7,19 +7,19 @@ import { useMemo, useState } from "react"
 import { ChevronLeft, Hammer, Search } from "lucide-react"
 import { useAuth } from "@clerk/nextjs"
 
-import { repoService } from "@/lib/services/repos"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 import AccountSection from "./account-section"
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { isSignedIn } = useAuth()
+  const { synced, pending, loading } = useRoadmapCatalog()
   const [collapsed, setCollapsed] = useState(false)
-  const repoList = useMemo(() => repoService.list(), [])
   const toggleCollapse = () => setCollapsed((prev) => !prev)
 
   const activeRepoId = useMemo(() => {
@@ -118,62 +118,71 @@ export default function Sidebar() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Active repos
+                Synced repos
               </p>
-              <Badge variant="outline" className="font-normal text-[11px]">
-                synced
-              </Badge>
+              {loading && (
+                <Badge variant="outline" className="font-normal text-[11px]">
+                  Loading…
+                </Badge>
+              )}
             </div>
             <ScrollArea className="h-full max-h-[45vh]">
               <div className="flex flex-col gap-2 pr-3">
-                {repoList.map((repo) => {
-                  const isActive = activeRepoId === repo.id
-                  return (
-                    <Link
-                      key={repo.id}
-                      href={`/repo/${repo.id}/timeline`}
-                      className={cn(
-                        "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 transition-colors backdrop-blur-sm",
-                        isActive
-                          ? "border-primary/70 bg-primary/15"
-                          : "hover:border-white/10 hover:bg-card/25"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium leading-tight">
-                            {repo.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {repo.language} • {repo.stars}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={isActive ? "accent" : "secondary"}
-                          className="text-[11px]"
-                        >
-                          {repo.progress}%
-                        </Badge>
-                      </div>
-                      <div className="mt-3 h-1.5 rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${repo.progress}%` }}
-                        />
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
-                        {repo.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full bg-white/10 px-2 py-0.5 backdrop-blur"
+                {pending.length + synced.length === 0 && !loading ? (
+                  <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-sm text-muted-foreground">
+                    Generate a roadmap to pin it here.
+                  </div>
+                ) : (
+                  [...pending, ...synced].map((repo) => {
+                    const slug = repo.slug
+                    const isActive = activeRepoId === slug
+                    const href = `/repo/${slug}/timeline`
+                    const isPending = Boolean((repo as { pending?: boolean }).pending)
+                    const isSyncedRepo = "timeline" in repo
+                    const language = isSyncedRepo ? repo.repo.language : null
+                    const description = isSyncedRepo ? repo.repo.description : null
+                    const generatedAt = isSyncedRepo ? repo.generated_at : null
+                    const stageCount = isSyncedRepo ? repo.timeline.length : 0
+                    return (
+                      <Link
+                        key={slug}
+                        href={href}
+                        className={cn(
+                          "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 transition-colors backdrop-blur-sm",
+                          isActive
+                            ? "border-primary/70 bg-primary/15"
+                            : "hover:border-white/10 hover:bg-card/25"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium leading-tight">
+                              {"repo" in repo ? repo.repo.full_name : repo.fullName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {isPending
+                                ? "Generating timeline…"
+                                : [language, generatedAt && new Date(generatedAt).toLocaleDateString()]
+                                    .filter(Boolean)
+                                    .join(" • ")}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={isActive ? "accent" : "secondary"}
+                            className="text-[11px] capitalize"
                           >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </Link>
-                  )
-                })}
+                            {isPending ? "Syncing" : `${stageCount} stages`}
+                          </Badge>
+                        </div>
+                        {!isPending && description && (
+                          <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
+                            {description}
+                          </p>
+                        )}
+                      </Link>
+                    )
+                  })
+                )}
               </div>
             </ScrollArea>
           </div>
