@@ -14,6 +14,7 @@ os.environ.setdefault(
 os.environ.setdefault("CLERK_ISSUER", "https://clerk.example.com/")
 os.environ.setdefault("CLERK_AUDIENCE", "commitly-api")
 os.environ["CLERK_AUTHORIZED_PARTIES"] = '["https://app.commitly.dev"]'
+os.environ.setdefault("GEMINI_API_KEY", "test-key")
 
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402

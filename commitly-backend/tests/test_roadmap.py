@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import inspect
 
 from app.api.roadmap import get_roadmap_service
 from app.models.roadmap import (
@@ -125,3 +126,22 @@ def test_unpin_repo(client: TestClient, auth_headers, stubbed_roadmap_service):
     response = client.delete("/api/v1/roadmap/pins/acme/widgets", headers=auth_headers)
     assert response.status_code == 204
     assert stubbed_roadmap_service.unpin_called == ("user_123", "acme/widgets")
+
+
+def test_pins_endpoint_recovers_when_tables_missing(client: TestClient, auth_headers):
+    from app.core.database import Base, engine
+    from app.models.roadmap import GeneratedRoadmap, UserSyncedRepo
+
+    UserSyncedRepo.__table__.drop(bind=engine, checkfirst=True)
+    GeneratedRoadmap.__table__.drop(bind=engine, checkfirst=True)
+
+    response = client.get("/api/v1/roadmap/pins", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json() == []
+
+    inspector = inspect(engine)
+    assert inspector.has_table(UserSyncedRepo.__tablename__)
+    assert inspector.has_table(GeneratedRoadmap.__tablename__)
+
+    # Restore declarative metadata state for subsequent tests.
+    Base.metadata.create_all(bind=engine, checkfirst=True)
