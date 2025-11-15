@@ -1,25 +1,25 @@
 "use client"
 
-import Link from "next/link"
-import { FormEvent, useEffect, useMemo, useState } from "react"
-import { GitBranch } from "lucide-react"
+import { FormEvent, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@clerk/nextjs"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { githubService } from "@/lib/services/github"
-import { repoService, type RoadmapResponseBody } from "@/lib/services/repos"
+import { repoService } from "@/lib/services/repos"
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 
 export default function Home() {
+  const router = useRouter()
   const [repoLink, setRepoLink] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [latestRoadmap, setLatestRoadmap] = useState<RoadmapResponseBody | null>(null)
   const [githubConnected, setGithubConnected] = useState(false)
   const [githubLogin, setGithubLogin] = useState<string | null>(null)
   const [isCheckingGithub, setIsCheckingGithub] = useState(false)
   const { isSignedIn, getToken } = useAuth()
-  const examples = useMemo(() => repoService.listExamples(3), [])
+  const { markPending } = useRoadmapCatalog()
 
   useEffect(() => {
     let cancelled = false
@@ -77,22 +77,25 @@ export default function Home() {
 
     setIsSubmitting(true)
     setError(null)
-    setLatestRoadmap(null)
-    const token = getToken ? await getToken() : null
-    const result = await repoService.generateRoadmap(value, token ?? undefined)
-    setIsSubmitting(false)
-    if (!result.ok && !result.skipped) {
-      const message = result.error ?? "Unable to generate roadmap."
-      console.error(message)
-      setError(message)
+    const identity = repoService.parseRepoInput(value)
+    if (!identity) {
+      setIsSubmitting(false)
+      setError("Enter a valid GitHub repository URL (owner/name).")
       return
     }
 
-    if (result.data) {
-      setLatestRoadmap(result.data)
-    }
+    const canonicalUrl = `https://github.com/${identity.fullName}`
+    markPending(identity)
 
+    const params = new URLSearchParams({
+      repoUrl: canonicalUrl,
+      fullName: identity.fullName,
+      intent: "generate",
+    })
+
+    router.push(`/repo/${identity.slug}/timeline?${params.toString()}`)
     setRepoLink("")
+    setIsSubmitting(false)
   }
 
   const handleConnectGithub = async () => {
@@ -173,75 +176,11 @@ export default function Home() {
           )}
         </form>
 
-        {latestRoadmap && (
-          <div className="space-y-4 rounded-3xl border border-border/80 bg-card/70 p-6 text-left">
-            <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-primary/70">
-                Fresh timeline
-              </p>
-              <h3 className="mt-2 text-2xl font-semibold">
-                {latestRoadmap.repo.full_name}
-                {latestRoadmap.cached && (
-                  <span className="ml-2 text-xs font-medium text-muted-foreground">
-                    Cached hit
-                  </span>
-                )}
-              </h3>
-              {latestRoadmap.repo.description && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {latestRoadmap.repo.description}
-                </p>
-              )}
-            </div>
-            <div className="space-y-3">
-              {latestRoadmap.timeline.map((stage) => (
-                <div
-                  key={stage.id}
-                  className="rounded-2xl border border-border/60 bg-background/80 p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-primary/60">
-                        {stage.id}
-                      </p>
-                      <h4 className="text-lg font-semibold">{stage.title}</h4>
-                    </div>
-                    <span className="text-sm text-muted-foreground">ETA {stage.eta}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{stage.summary}</p>
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    {stage.tasks.map((task) => (
-                      <li key={task}>{task}</li>
-                    ))}
-                  </ul>
-                  {stage.resources.length > 0 && (
-                    <div className="mt-3 text-sm">
-                      <span className="text-muted-foreground">Resources: </span>
-                      {stage.resources.map((resource, index) => (
-                        <span key={`${stage.id}-${resource.label}-${index}`}>
-                          {index > 0 && <span className="text-muted-foreground"> · </span>}
-                          <a
-                            href={resource.href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary underline-offset-2 hover:underline"
-                          >
-                            {resource.label}
-                          </a>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/*
         <div className="space-y-4">
           <p className="text-sm font-medium">Examples</p>
           <div className="flex flex-wrap justify-center gap-3">
-            {examples.map((example) => (
+            {repoService.listExamples(3).map((example) => (
               <Button key={example.id} variant="outline" className="gap-2" asChild>
                 <Link href={`/repo/${example.id}/timeline`}>
                   {example.name}
@@ -251,6 +190,7 @@ export default function Home() {
             ))}
           </div>
         </div>
+        */}
       </section>
     </div>
   )

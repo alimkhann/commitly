@@ -15,11 +15,25 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 
 export default function SearchPage() {
   const [query, setQuery] = useState("")
   const [difficulty, setDifficulty] = useState<"all" | "beginner" | "intermediate" | "advanced">("all")
   const repoList = useMemo(() => repoService.list(), [])
+  const { synced, loading } = useRoadmapCatalog()
+
+  const syncedMatches = useMemo(() => {
+    if (!query.trim()) return synced
+    const lower = query.toLowerCase()
+    return synced.filter((repo) => {
+      const summary = repo.repo.description?.toLowerCase() ?? ""
+      return (
+        repo.repo.full_name.toLowerCase().includes(lower) ||
+        summary.includes(lower)
+      )
+    })
+  }, [synced, query])
 
   const filteredRepos = useMemo(() => {
     return repoList.filter((repo) => {
@@ -38,7 +52,7 @@ export default function SearchPage() {
         <p className="text-sm font-medium uppercase tracking-[0.3em] text-primary">
           Repo directory
         </p>
-        <h1 className="text-3xl font-semibold">Search synced repositories</h1>
+        <h1 className="text-3xl font-semibold">Search repositories</h1>
         <p className="text-base text-muted-foreground">
           Filter by difficulty, language, or keywords to jump into an existing timeline.
         </p>
@@ -72,49 +86,92 @@ export default function SearchPage() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Filter className="h-4 w-4" />
-          Showing {filteredRepos.length} repositories
+          Showing {filteredRepos.length} public repositories
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {filteredRepos.map((repo) => (
-          <Card
-            key={repo.id}
-            className="flex flex-col border-border/60 bg-card/70 shadow-lg shadow-black/20"
-          >
-            <CardHeader className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-xl">{repo.name}</CardTitle>
-                <Badge variant="outline" className="text-xs uppercase tracking-wide">
-                  {repo.difficulty}
-                </Badge>
-              </div>
-              <CardDescription>{repo.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="mt-auto space-y-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <GitBranch className="h-4 w-4" />
-                <span>
-                  {repo.language} • {repo.updatedAt}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {repo.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-muted/40 px-3 py-1 text-muted-foreground"
-                  >
-                    {tag}
+      {!!syncedMatches.length && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Your synced repositories</h2>
+            {loading && <p className="text-xs text-muted-foreground">Refreshing…</p>}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {syncedMatches.map((repo) => (
+              <Card
+                key={repo.slug}
+                className="flex flex-col border-border/60 bg-card/70 shadow-lg shadow-black/20"
+              >
+                <CardHeader className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-xl">{repo.repo.full_name}</CardTitle>
+                    <Badge variant="outline" className="text-xs uppercase tracking-wide">
+                      {repo.timeline.length} stages
+                    </Badge>
+                  </div>
+                  <CardDescription>{repo.repo.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="mt-auto space-y-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    <span>
+                      {repo.repo.language ?? "Unknown"} •
+                      {" "}
+                      {new Date(repo.generated_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <Button className="w-full" variant="secondary" asChild>
+                    <Link href={`/repo/${repo.slug}/timeline`}>Open timeline</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Public repositories</h2>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredRepos.map((repo) => (
+            <Card
+              key={repo.id}
+              className="flex flex-col border-border/60 bg-card/70 shadow-lg shadow-black/20"
+            >
+              <CardHeader className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-xl">{repo.name}</CardTitle>
+                  <Badge variant="outline" className="text-xs uppercase tracking-wide">
+                    {repo.difficulty}
+                  </Badge>
+                </div>
+                <CardDescription>{repo.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto space-y-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-4 w-4" />
+                  <span>
+                    {repo.language} • {repo.updatedAt}
                   </span>
-                ))}
-              </div>
-              <Button className="w-full" variant="secondary" asChild>
-                <Link href={`/repo/${repo.id}/timeline`}>Open timeline</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {repo.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-muted/40 px-3 py-1 text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <Button className="w-full" variant="secondary" asChild>
+                  <Link href={`/repo/${repo.id}/timeline`}>Open timeline</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

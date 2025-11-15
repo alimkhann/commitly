@@ -10,6 +10,7 @@ import { Inter, JetBrains_Mono } from "next/font/google"
 
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper"
 import HomeBackground from "@/components/layout/home-background"
+import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -62,13 +63,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <body
           className={`${inter.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
         >
-          <div className="relative flex h-screen bg-background">
-            <HomeBackground />
-            <SidebarWrapper />
-            <main className="relative z-10 flex h-screen flex-1 flex-col overflow-x-hidden overflow-y-auto bg-transparent">
-              {children}
-            </main>
-          </div>
+          <RoadmapCatalogProvider>
+            <div className="relative flex h-screen bg-background">
+              <HomeBackground />
+              <SidebarWrapper />
+              <main className="relative z-10 flex h-screen flex-1 flex-col overflow-x-hidden overflow-y-auto bg-transparent">
+                {children}
+              </main>
+            </div>
+          </RoadmapCatalogProvider>
           <Analytics />
           <SpeedInsights />
         </body>

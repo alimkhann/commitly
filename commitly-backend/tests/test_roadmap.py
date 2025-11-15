@@ -52,6 +52,13 @@ def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse
             assert repo_url == "https://github.com/acme/widgets"
             return roadmap_payload
 
+        async def get_cached(self, repo_full_name: str):
+            assert repo_full_name == "acme/widgets"
+            return roadmap_payload
+
+        async def list_synced(self):
+            return [roadmap_payload]
+
     client.app.dependency_overrides[get_roadmap_service] = lambda: _StubService()
     yield
     client.app.dependency_overrides.pop(get_roadmap_service, None)
@@ -69,8 +76,22 @@ def test_generate_roadmap_happy_path(
     assert response.json()["repo"]["full_name"] == roadmap_payload.repo.full_name
 
 
-def test_generate_roadmap_requires_auth(client: TestClient):
+def test_generate_roadmap_requires_auth(client: TestClient, stubbed_roadmap_service):
     response = client.post(
         "/api/v1/roadmap/generate", json={"repo_url": "https://github.com/acme/widgets"}
     )
     assert response.status_code == 401
+
+
+def test_get_cached_roadmap(
+    client: TestClient, stubbed_roadmap_service, roadmap_payload
+):
+    response = client.get("/api/v1/roadmap/cached/acme/widgets")
+    assert response.status_code == 200
+    assert response.json()["repo"]["full_name"] == roadmap_payload.repo.full_name
+
+
+def test_catalog_endpoint(client: TestClient, stubbed_roadmap_service):
+    response = client.get("/api/v1/roadmap/catalog")
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)

@@ -69,7 +69,6 @@ app.include_router(
     roadmap.router,
     prefix=f"{settings.api_v1_str}/roadmap",
     tags=["roadmap"],
-    dependencies=protected,
 )
 app.include_router(
     github.router,
