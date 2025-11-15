@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Iterable
 
-from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.roadmap import (
@@ -35,26 +35,31 @@ class RoadmapResultStore:
         """Expose table guard to collaborators that depend on this table."""
         self._ensure_table_exists()
 
-    def _is_missing_table_error(self, exc: ProgrammingError) -> bool:
+    def _is_missing_table_error(self, exc: Exception) -> bool:
+        if not isinstance(exc, (ProgrammingError, OperationalError)):
+            return False
         message = str(exc).lower()
-        return "generated_roadmaps" in message and (
-            "undefined" in message or "does not exist" in message
+        missing_markers = ("undefined", "does not exist", "no such table")
+        return "generated_roadmaps" in message and any(
+            marker in message for marker in missing_markers
         )
 
-    def _handle_missing_table_error(self, exc: ProgrammingError) -> bool:
+    def _handle_missing_table_error(self, exc: Exception) -> bool:
         if self._is_missing_table_error(exc):
             self._ensure_table_exists()
             return True
         return False
 
     def _with_table_guard(self, action):
-        try:
-            return action()
-        except ProgrammingError as exc:
-            self._session.rollback()
-            if self._handle_missing_table_error(exc):
+        while True:
+            try:
                 return action()
-            raise
+            except (ProgrammingError, OperationalError) as exc:
+                self._session.rollback()
+                if not self._handle_missing_table_error(exc):
+                    raise
+                # Missing table was created; retry the action.
+                continue
 
     def upsert(self, response: RoadmapResponse) -> None:
         def action() -> None:
@@ -128,11 +133,6 @@ class UserSyncedRepoStore:
         self._result_store = result_store
         self._table_ready = False
 
-    def _ensure_tables_ready(self) -> None:
-        # Ensure dependent tables exist before issuing joins.
-        self._result_store.ensure_table_ready()
-        self._ensure_table_exists()
-
     def _ensure_table_exists(self) -> None:
         if self._table_ready:
             return
@@ -142,10 +142,15 @@ class UserSyncedRepoStore:
         UserSyncedRepo.__table__.create(bind=engine, checkfirst=True)
         self._table_ready = True
 
-    def _handle_missing_table_error(self, exc: ProgrammingError) -> bool:
+    def _handle_missing_table_error(self, exc: Exception) -> bool:
+        if not isinstance(exc, (ProgrammingError, OperationalError)):
+            return False
         message = str(exc).lower()
         handled = False
-        missing = "undefined" in message or "does not exist" in message
+        missing = any(
+            marker in message
+            for marker in ("undefined", "does not exist", "no such table")
+        )
         if missing and "user_synced_repos" in message:
             self._ensure_table_exists()
             handled = True
@@ -155,18 +160,18 @@ class UserSyncedRepoStore:
         return handled
 
     def _with_table_guard(self, action):
-        try:
-            return action()
-        except ProgrammingError as exc:
-            self._session.rollback()
-            if self._handle_missing_table_error(exc):
+        while True:
+            try:
                 return action()
-            raise
+            except (ProgrammingError, OperationalError) as exc:
+                self._session.rollback()
+                if not self._handle_missing_table_error(exc):
+                    raise
+                continue
 
     def pin(self, user_id: str | None, full_name: str) -> None:
         if not user_id:
             return
-        self._ensure_tables_ready()
 
         def action() -> None:
             try:
@@ -189,8 +194,6 @@ class UserSyncedRepoStore:
         self._with_table_guard(action)
 
     def unpin(self, user_id: str, full_name: str) -> None:
-        self._ensure_tables_ready()
-
         def action() -> None:
             try:
                 self._session.query(UserSyncedRepo).filter_by(
@@ -206,7 +209,6 @@ class UserSyncedRepoStore:
     def list(self, user_id: str | None) -> list[RoadmapResponse]:
         if not user_id:
             return []
-        self._ensure_tables_ready()
 
         def action() -> list[RoadmapResponse]:
             records: Iterable[GeneratedRoadmap] = (
