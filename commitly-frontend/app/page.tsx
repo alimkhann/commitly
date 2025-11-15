@@ -109,6 +109,19 @@ export default function Home() {
     }
   }
 
+  const handleDisconnectGithub = async () => {
+    if (!isSignedIn) return
+    const token = (await getToken?.()) ?? undefined
+    const response = await githubService.disconnect(token)
+    if (response.ok) {
+      setGithubConnected(false)
+      setGithubLogin(null)
+      setError(null)
+    } else if (response.error) {
+      setError(response.error)
+    }
+  }
+
   return (
     <div className="relative flex flex-1 w-full items-center justify-center overflow-hidden px-6 py-12 lg:px-16">
       <section className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-10 text-center py-16">
@@ -161,9 +174,20 @@ export default function Home() {
             </div>
           )}
           {githubConnected && githubLogin && (
-            <p className="text-xs text-muted-foreground text-left">
-              Connected as {githubLogin}
-            </p>
+            <div className="flex items-center gap-3 text-left text-xs text-muted-foreground">
+              <p className="truncate">
+                Connected as {githubLogin}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleDisconnectGithub}
+                className="text-xs"
+              >
+                Disconnect
+              </Button>
+            </div>
           )}
         </form>
 
