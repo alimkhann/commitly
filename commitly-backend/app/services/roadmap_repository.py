@@ -31,19 +31,28 @@ class RoadmapResultStore:
         GeneratedRoadmap.__table__.create(bind=engine, checkfirst=True)
         self._table_ready = True
 
+    def ensure_table_ready(self) -> None:
+        """Expose table guard to collaborators that depend on this table."""
+        self._ensure_table_exists()
+
     def _is_missing_table_error(self, exc: ProgrammingError) -> bool:
         message = str(exc).lower()
         return "generated_roadmaps" in message and (
             "undefined" in message or "does not exist" in message
         )
 
+    def _handle_missing_table_error(self, exc: ProgrammingError) -> bool:
+        if self._is_missing_table_error(exc):
+            self._ensure_table_exists()
+            return True
+        return False
+
     def _with_table_guard(self, action):
         try:
             return action()
         except ProgrammingError as exc:
             self._session.rollback()
-            if self._is_missing_table_error(exc):
-                self._ensure_table_exists()
+            if self._handle_missing_table_error(exc):
                 return action()
             raise
 
@@ -117,48 +126,99 @@ class UserSyncedRepoStore:
     def __init__(self, session: Session, result_store: RoadmapResultStore) -> None:
         self._session = session
         self._result_store = result_store
+        self._table_ready = False
+
+    def _ensure_tables_ready(self) -> None:
+        # Ensure dependent tables exist before issuing joins.
+        self._result_store.ensure_table_ready()
+        self._ensure_table_exists()
+
+    def _ensure_table_exists(self) -> None:
+        if self._table_ready:
+            return
+        engine = self._session.get_bind()
+        if engine is None:
+            return
+        UserSyncedRepo.__table__.create(bind=engine, checkfirst=True)
+        self._table_ready = True
+
+    def _handle_missing_table_error(self, exc: ProgrammingError) -> bool:
+        message = str(exc).lower()
+        handled = False
+        missing = "undefined" in message or "does not exist" in message
+        if missing and "user_synced_repos" in message:
+            self._ensure_table_exists()
+            handled = True
+        if missing and "generated_roadmaps" in message:
+            self._result_store.ensure_table_ready()
+            handled = True
+        return handled
+
+    def _with_table_guard(self, action):
+        try:
+            return action()
+        except ProgrammingError as exc:
+            self._session.rollback()
+            if self._handle_missing_table_error(exc):
+                return action()
+            raise
 
     def pin(self, user_id: str | None, full_name: str) -> None:
         if not user_id:
             return
-        try:
-            record = (
-                self._session.query(UserSyncedRepo)
-                .filter_by(user_id=user_id, repo_full_name=full_name)
-                .one_or_none()
-            )
-            if record:
-                record.pinned_at = datetime.now(timezone.utc)
-            else:
-                self._session.add(
-                    UserSyncedRepo(user_id=user_id, repo_full_name=full_name)
+        self._ensure_tables_ready()
+
+        def action() -> None:
+            try:
+                record = (
+                    self._session.query(UserSyncedRepo)
+                    .filter_by(user_id=user_id, repo_full_name=full_name)
+                    .one_or_none()
                 )
-            self._session.commit()
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+                if record:
+                    record.pinned_at = datetime.now(timezone.utc)
+                else:
+                    self._session.add(
+                        UserSyncedRepo(user_id=user_id, repo_full_name=full_name)
+                    )
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
 
     def unpin(self, user_id: str, full_name: str) -> None:
-        try:
-            self._session.query(UserSyncedRepo).filter_by(
-                user_id=user_id, repo_full_name=full_name
-            ).delete()
-            self._session.commit()
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+        self._ensure_tables_ready()
+
+        def action() -> None:
+            try:
+                self._session.query(UserSyncedRepo).filter_by(
+                    user_id=user_id, repo_full_name=full_name
+                ).delete()
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
 
     def list(self, user_id: str | None) -> list[RoadmapResponse]:
         if not user_id:
             return []
-        records: Iterable[GeneratedRoadmap] = (
-            self._session.query(GeneratedRoadmap)
-            .join(
-                UserSyncedRepo,
-                UserSyncedRepo.repo_full_name == GeneratedRoadmap.repo_full_name,
+        self._ensure_tables_ready()
+
+        def action() -> list[RoadmapResponse]:
+            records: Iterable[GeneratedRoadmap] = (
+                self._session.query(GeneratedRoadmap)
+                .join(
+                    UserSyncedRepo,
+                    UserSyncedRepo.repo_full_name == GeneratedRoadmap.repo_full_name,
+                )
+                .filter(UserSyncedRepo.user_id == user_id)
+                .order_by(UserSyncedRepo.pinned_at.desc())
+                .all()
             )
-            .filter(UserSyncedRepo.user_id == user_id)
-            .order_by(UserSyncedRepo.pinned_at.desc())
-            .all()
-        )
-        return [self._result_store._to_response(record) for record in records]
+            return [self._result_store._to_response(record) for record in records]
+
+        return self._with_table_guard(action)
