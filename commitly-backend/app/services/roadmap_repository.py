@@ -64,7 +64,9 @@ class RoadmapResultStore:
     def upsert(self, response: RoadmapResponse) -> None:
         def action() -> None:
             summary = response.repo.model_dump(mode="json")
-            timeline_payload = [stage.model_dump(mode="json") for stage in response.timeline]
+            timeline_payload = [
+                stage.model_dump(mode="json") for stage in response.timeline
+            ]
             record = (
                 self._session.query(GeneratedRoadmap)
                 .filter_by(repo_full_name=summary["full_name"])
