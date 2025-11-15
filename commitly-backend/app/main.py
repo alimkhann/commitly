@@ -39,9 +39,18 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+cors_origins = list(settings.allowed_origins or [])
+local_dev_origins = {
+    "http://localhost:3000",
+    "http://localhost:3700",
+}
+for origin in local_dev_origins:
+    if origin not in cors_origins:
+        cors_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=cors_origins or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
