@@ -168,9 +168,15 @@ export default function Home() {
                   ? "Checking your GitHub connection..."
                   : "Connect GitHub to allow Commitly to read repository history."}
               </p>
-              <Button type="button" variant="outline" onClick={handleConnectGithub} disabled={isCheckingGithub}>
-                Connect GitHub
-              </Button>
+              {!isCheckingGithub && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleConnectGithub}
+                >
+                  Connect GitHub
+                </Button>
+              )}
             </div>
           )}
           {githubConnected && githubLogin && (
