@@ -26,12 +26,14 @@ from app.services.github import (
 )
 from app.services.github_tokens import GitHubTokenStore
 from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
+from app.services.roadmap_repository import RoadmapResultStore
 
 
 class RoadmapService:
     def __init__(
         self,
         chunk_store: CommitChunkStore,
+        result_store: RoadmapResultStore,
         generator: GeminiRoadmapGenerator,
         token_store: GitHubTokenStore,
         cache: RedisJSONCache | None = None,
@@ -47,6 +49,7 @@ class RoadmapService:
         self._commit_limit = commit_limit
         self._timeline_fraction = timeline_fraction
         self._default_token = settings.github_token
+        self._result_store = result_store
 
     async def generate(
         self,
@@ -121,7 +124,20 @@ class RoadmapService:
             await self._cache.set(
                 cache_key, response.model_dump(mode="json"), self._cache_ttl
             )
+        self._result_store.upsert(response)
         return response
+
+    async def get_cached(self, repo_full_name: str) -> RoadmapResponse:
+        result = self._result_store.get(repo_full_name)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Timeline has not been generated for this repository.",
+            )
+        return result
+
+    async def list_synced(self) -> list[RoadmapResponse]:
+        return self._result_store.list()
 
     def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
         try:
@@ -198,4 +214,5 @@ def build_roadmap_service(
         generator=generator,
         token_store=GitHubTokenStore(session),
         cache=cache,
+        result_store=RoadmapResultStore(session),
     )

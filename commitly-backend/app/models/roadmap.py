@@ -4,7 +4,16 @@ from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -25,6 +34,33 @@ class RepoCommitChunk(Base):
     authored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class GeneratedRoadmap(Base):
+    """Stores the latest generated roadmap for a repository."""
+
+    __tablename__ = "generated_roadmaps"
+    __table_args__ = (
+        UniqueConstraint("repo_full_name", name="uq_generated_roadmap_full_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    repo_summary: Mapped[dict] = mapped_column(JSON, nullable=False)
+    timeline: Mapped[list] = mapped_column(JSON, nullable=False)
+    cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
 

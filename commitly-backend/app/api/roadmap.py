@@ -15,6 +15,23 @@ def get_roadmap_service(session: Session = Depends(get_db)) -> RoadmapService:
     return build_roadmap_service(session)
 
 
+@router.get("/catalog", response_model=list[RoadmapResponse])
+async def list_roadmaps(
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> list[RoadmapResponse]:
+    return await service.list_synced()
+
+
+@router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)
+async def get_cached_roadmap(
+    owner: str,
+    repo: str,
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> RoadmapResponse:
+    full_name = f"{owner}/{repo}"
+    return await service.get_cached(full_name)
+
+
 @router.post("/generate", response_model=RoadmapResponse)
 async def generate_roadmap(
     payload: RoadmapRequest,
