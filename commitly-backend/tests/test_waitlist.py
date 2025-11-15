@@ -33,7 +33,7 @@ def test_waitlist_count(client: TestClient, auth_headers):
             == 201
         )
 
-    count_resp = client.get("/api/v1/waitlist/count", headers=auth_headers)
+    count_resp = client.get("/api/v1/waitlist/count")
     assert count_resp.status_code == 200
     assert count_resp.json() == {"count": len(emails)}
 
@@ -47,9 +47,9 @@ def test_join_waitlist_allows_authenticated_actor(client: TestClient, auth_heade
     assert response.status_code == 201
 
 
-def test_waitlist_rejects_missing_token(client: TestClient):
+def test_waitlist_allows_anonymous_submission(client: TestClient):
     response = client.post(
         "/api/v1/waitlist/",
-        json={"email": "fail@example.com", "source": "tests"},
+        json={"email": "anon@example.com", "source": "tests"},
     )
-    assert response.status_code == 401
+    assert response.status_code == 201

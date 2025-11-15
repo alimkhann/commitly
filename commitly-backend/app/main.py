@@ -55,7 +55,6 @@ app.include_router(
     waitlist.router,
     prefix=f"{settings.api_v1_str}/waitlist",
     tags=["waitlist"],
-    dependencies=protected,
 )
 
 app.include_router(
