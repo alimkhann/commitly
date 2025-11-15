@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Iterable
 
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
@@ -63,9 +64,10 @@ class RoadmapResultStore:
 
     def upsert(self, response: RoadmapResponse) -> None:
         def action() -> None:
-            summary = response.repo.model_dump(mode="json")
+            summary = json.loads(response.repo.model_dump_json())
             timeline_payload = [
-                stage.model_dump(mode="json") for stage in response.timeline
+                json.loads(stage.model_dump_json())
+                for stage in response.timeline
             ]
             record = (
                 self._session.query(GeneratedRoadmap)
