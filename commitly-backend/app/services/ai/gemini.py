@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import math
 from typing import Any, Optional, Sequence
 
 import httpx
@@ -188,17 +189,28 @@ class GeminiRoadmapGenerator:
 
         # Final fallback with compressed context (commit headers only)
         minimal_context = self._render_minimal_context(chunk_list[:MIN_RETRY_CHUNKS])
-        body = await self._invoke_gemini(
-            repo=repo,
-            stage_budget=stage_budget,
-            context=minimal_context,
-            attempt=attempt + 1,
-            chunk_count=MIN_RETRY_CHUNKS,
-            total_chunks=len(chunk_list),
-            mode="minimal",
-        )
-        timeline = self._parse_timeline(body)
-        return [TimelineStage(**stage) for stage in timeline]
+        try:
+            body = await self._invoke_gemini(
+                repo=repo,
+                stage_budget=stage_budget,
+                context=minimal_context,
+                attempt=attempt + 1,
+                chunk_count=min(len(chunk_list), MIN_RETRY_CHUNKS),
+                total_chunks=len(chunk_list),
+                mode="minimal",
+            )
+            timeline = self._parse_timeline(body)
+            return [TimelineStage(**stage) for stage in timeline]
+        except GeminiGenerationError:
+            logger.warning(
+                "Gemini exhausted attempts; falling back to heuristic roadmap",
+                extra={
+                    "repo": repo.full_name,
+                    "total_chunks": len(chunk_list),
+                    "stage_budget": stage_budget,
+                },
+            )
+            return self._fallback_timeline(repo, chunk_list, stage_budget)
 
     def _render_context(self, chunks: Sequence[CommitChunk]) -> str:
         pieces = []
@@ -443,3 +455,87 @@ class GeminiRoadmapGenerator:
             )
         logger.debug("Gemini call success", extra=extra)
         return response.json()
+
+    def _fallback_timeline(
+        self,
+        repo: RepositoryMetadata,
+        chunks: Sequence[CommitChunk],
+        stage_budget: int,
+    ) -> list[TimelineStage]:
+        if not chunks:
+            raise GeminiGenerationError(
+                "Gemini failed to generate and no commits available for fallback"
+            )
+        stage_count = max(1, min(stage_budget, len(chunks)))
+        group_size = math.ceil(len(chunks) / stage_count)
+        timeline: list[TimelineStage] = []
+        repo_url = (
+            repo.html_url or f"https://github.com/{repo.full_name}"
+            if getattr(repo, "full_name", None)
+            else None
+        )
+        for idx in range(stage_count):
+            start = idx * group_size
+            end = min(len(chunks), start + group_size)
+            stage_chunks = chunks[start:end]
+            if not stage_chunks:
+                continue
+            title = self._fallback_title(stage_chunks, idx)
+            summary = self._fallback_summary(stage_chunks)
+            tasks = self._fallback_tasks(stage_chunks)
+            resources = (
+                [{"label": "Repository", "href": repo_url}]
+                if repo_url
+                else [{"label": "GitHub", "href": "https://github.com/"}]
+            )
+            timeline.append(
+                TimelineStage(
+                    id=f"stage-{idx + 1}",
+                    title=title,
+                    summary=summary,
+                    status="not-started",
+                    eta="45m",
+                    tasks=tasks,
+                    resources=resources,
+                )
+            )
+        if not timeline:
+            raise GeminiGenerationError("Fallback timeline generation failed")
+        return timeline
+
+    def _fallback_title(self, stage_chunks: Sequence[CommitChunk], idx: int) -> str:
+        first = stage_chunks[0].commit_sha[:7]
+        last = stage_chunks[-1].commit_sha[:7]
+        if first == last:
+            window = first
+        else:
+            window = f"{first}…{last}"
+        return f"Stage {idx + 1}: Review commits {window}"
+
+    def _fallback_summary(self, stage_chunks: Sequence[CommitChunk]) -> str:
+        lines = []
+        for chunk in stage_chunks[:3]:
+            first_line = (chunk.content or "").splitlines()
+            text = first_line[0].strip() if first_line else ""
+            if text:
+                lines.append(text[:180])
+        if not lines:
+            lines = [
+                f"{len(stage_chunks)} commits touching {stage_chunks[0].chunk_type}"
+            ]
+        return " / ".join(lines)
+
+    def _fallback_tasks(self, stage_chunks: Sequence[CommitChunk]) -> list[str]:
+        tasks: list[str] = []
+        for chunk in stage_chunks[:3]:
+            lines = [line.strip() for line in (chunk.content or "").splitlines()]
+            for line in lines:
+                if line and not line.startswith("---"):
+                    tasks.append(line[:140])
+                    break
+        if not tasks:
+            window = (
+                f"{stage_chunks[0].commit_sha[:7]}–{stage_chunks[-1].commit_sha[:7]}"
+            )
+            tasks = [f"Read commits {window}"]
+        return tasks
