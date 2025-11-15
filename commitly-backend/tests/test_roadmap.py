@@ -122,8 +122,6 @@ def test_list_user_pins(
 
 
 def test_unpin_repo(client: TestClient, auth_headers, stubbed_roadmap_service):
-    response = client.delete(
-        "/api/v1/roadmap/pins/acme/widgets", headers=auth_headers
-    )
+    response = client.delete("/api/v1/roadmap/pins/acme/widgets", headers=auth_headers)
     assert response.status_code == 204
     assert stubbed_roadmap_service.unpin_called == ("user_123", "acme/widgets")

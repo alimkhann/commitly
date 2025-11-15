@@ -4,9 +4,9 @@ Revision ID: 20241115_add_user_synced_repos
 Revises: 20241115_add_generated_roadmaps
 Create Date: 2025-11-15 10:10:00.000000
 """
+
 from alembic import op
 import sqlalchemy as sa
-
 
 revision = "20241115_add_user_synced_repos"
 down_revision = "20241115_add_generated_roadmaps"
