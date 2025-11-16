@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.roadmap import GeneratedRoadmap, RoadmapViewTracker
@@ -118,10 +119,10 @@ class TestRoadmapViewTrackerService:
     def test_increment_view_if_eligible_returns_true_when_eligible(
         self, view_tracker_service, mock_session
     ):
-        """Should return True and record view when eligible."""
-        # Mock no existing record (eligible)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.\
-            return_value = None
+        """Should return True and record view when eligible (new user)."""
+        # Mock no existing record (eligible) with with_for_update chain
+        mock_session.query.return_value.filter_by.return_value.\
+            with_for_update.return_value.one_or_none.return_value = None
 
         result = view_tracker_service.increment_view_if_eligible(
             "owner/repo", "user123"
@@ -129,6 +130,7 @@ class TestRoadmapViewTrackerService:
 
         assert result is True
         mock_session.add.assert_called_once()
+        mock_session.commit.assert_called_once()
 
     def test_increment_view_if_eligible_returns_false_when_not_eligible(
         self, view_tracker_service, mock_session
@@ -137,14 +139,66 @@ class TestRoadmapViewTrackerService:
         # Mock existing record from 1 hour ago (not eligible)
         mock_record = MagicMock(spec=RoadmapViewTracker)
         mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.\
-            return_value = mock_record
+        mock_session.query.return_value.filter_by.return_value.\
+            with_for_update.return_value.one_or_none.return_value = mock_record
 
         result = view_tracker_service.increment_view_if_eligible(
             "owner/repo", "user123"
         )
 
         assert result is False
+
+    def test_increment_view_if_eligible_handles_race_condition(
+        self, view_tracker_service, mock_session
+    ):
+        """Should return False when IntegrityError occurs (race condition)."""
+        # Mock no existing record initially
+        mock_session.query.return_value.filter_by.return_value.\
+            with_for_update.return_value.one_or_none.return_value = None
+        # Mock IntegrityError on commit (another request created the record)
+        mock_session.commit.side_effect = IntegrityError(
+            "duplicate key", params=None, orig=Exception("duplicate")
+        )
+
+        result = view_tracker_service.increment_view_if_eligible(
+            "owner/repo", "user123"
+        )
+
+        assert result is False
+        mock_session.rollback.assert_called_once()
+
+    def test_increment_view_if_eligible_updates_after_cooldown(
+        self, view_tracker_service, mock_session
+    ):
+        """Should return True and update timestamp after cooldown period."""
+        # Mock existing record from 25 hours ago (eligible after 24h cooldown)
+        mock_record = MagicMock(spec=RoadmapViewTracker)
+        mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=25)
+        mock_session.query.return_value.filter_by.return_value.\
+            with_for_update.return_value.one_or_none.return_value = mock_record
+
+        result = view_tracker_service.increment_view_if_eligible(
+            "owner/repo", "user123"
+        )
+
+        assert result is True
+        # Verify timestamp was updated
+        assert mock_record.viewed_at > datetime.now(timezone.utc) - timedelta(
+            seconds=5
+        )
+        mock_session.commit.assert_called_once()
+
+    def test_increment_view_if_eligible_anonymous_returns_true(
+        self, view_tracker_service, mock_session
+    ):
+        """Should return True for anonymous users without database access."""
+        result = view_tracker_service.increment_view_if_eligible(
+            "owner/repo", None
+        )
+
+        assert result is True
+        # Verify no database queries were made
+        mock_session.query.assert_not_called()
 
 
 class TestRoadmapResultStoreIncrement:

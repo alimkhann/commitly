@@ -154,9 +154,11 @@ class RoadmapViewTrackerService:
         self, repo_full_name: str, user_id: str | None
     ) -> bool:
         """
-        Check if view can be counted and record it if eligible.
+        Atomically check if view can be counted and record it if eligible.
 
-        This is a convenience method combining can_increment_view and record_view.
+        This method prevents race conditions by performing the eligibility check
+        and record update in a single atomic operation. If two requests arrive
+        simultaneously, only one will succeed in recording the view.
 
         Args:
             repo_full_name: Full repository name (owner/repo)
@@ -165,7 +167,47 @@ class RoadmapViewTrackerService:
         Returns:
             True if view was counted (eligible), False otherwise
         """
-        if self.can_increment_view(repo_full_name, user_id):
-            self.record_view(repo_full_name, user_id)
+        # Always allow anonymous views (but don't track them)
+        if user_id is None:
             return True
-        return False
+
+        def action() -> bool:
+            # Query with FOR UPDATE to lock the row during check
+            record = (
+                self._session.query(RoadmapViewTracker)
+                .filter_by(repo_full_name=repo_full_name, user_id=user_id)
+                .with_for_update()
+                .one_or_none()
+            )
+
+            if record is None:
+                # No existing record - try to create one
+                try:
+                    new_record = RoadmapViewTracker(
+                        repo_full_name=repo_full_name,
+                        user_id=user_id,
+                    )
+                    self._session.add(new_record)
+                    self._session.commit()
+                    return True
+                except IntegrityError:
+                    # Race condition: another request created the record
+                    # This means the view shouldn't be counted
+                    self._session.rollback()
+                    return False
+
+            # Record exists - check if cooldown period has passed
+            cooldown_threshold = datetime.now(timezone.utc) - timedelta(
+                hours=self.VIEW_COOLDOWN_HOURS
+            )
+
+            if record.viewed_at < cooldown_threshold:
+                # Cooldown has passed - update the timestamp
+                record.viewed_at = datetime.now(timezone.utc)
+                self._session.commit()
+                return True
+            else:
+                # Still within cooldown period
+                return False
+
+        return self._with_table_guard(action)
