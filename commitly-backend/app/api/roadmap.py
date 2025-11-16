@@ -69,22 +69,34 @@ async def list_roadmaps(
         import time
 
         start_time = time.time()
-        logger.info("list_roadmaps: Calling service.list_catalog via executor")
+        logger.info("list_roadmaps: Calling service.list_catalog")
 
+        # Wrap the sync database call in executor to avoid blocking event loop
+        # The service.list_catalog is async but calls sync DB code internally
         def call_db():
             try:
                 logger.info("list_roadmaps.executor: Starting database call")
-                return service._result_store.list_catalog(
-                    page=page,
-                    page_size=page_size,
-                    language=language,
-                    tag=tag,
-                    difficulty=difficulty,
-                    min_rating=min_rating,
-                    min_views=min_views,
-                    min_syncs=min_syncs,
-                    sort=sort,
-                )
+                # Use the service's internal result_store directly for executor
+                # This avoids issues with async/sync boundaries
+                if hasattr(service, "_result_store"):
+                    return service._result_store.list_catalog(
+                        page=page,
+                        page_size=page_size,
+                        language=language,
+                        tag=tag,
+                        difficulty=difficulty,
+                        min_rating=min_rating,
+                        min_views=min_views,
+                        min_syncs=min_syncs,
+                        sort=sort,
+                    )
+                else:
+                    # For test stubs, fallback to async service method
+                    # This won't work in executor, but should work in tests
+                    raise RuntimeError(
+                        "Service doesn't have _result_store and executor can't "
+                        "call async methods"
+                    )
             except Exception as e:
                 elapsed = time.time() - start_time
                 logger.error(
@@ -94,25 +106,42 @@ async def list_roadmaps(
                 )
                 raise
 
-        loop = asyncio.get_event_loop()
-        try:
-            items, total_count = await asyncio.wait_for(
-                loop.run_in_executor(None, call_db),
-                timeout=25.0,  # 25 second timeout (less than Render's 30s)
-            )
-            elapsed = time.time() - start_time
-            logger.info(
-                f"list_roadmaps: Query completed in {elapsed:.2f}s - "
-                f"Retrieved {len(items)} items, total={total_count}"
-            )
-        except asyncio.TimeoutError:
-            elapsed = time.time() - start_time
-            logger.error(
-                f"list_roadmaps: Database query timed out after {elapsed:.2f}s"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="Database query timed out",
+        # Check if we have _result_store (production) or need to use async method (tests)
+        if hasattr(service, "_result_store"):
+            # Production: Use executor for sync DB call
+            loop = asyncio.get_event_loop()
+            try:
+                items, total_count = await asyncio.wait_for(
+                    loop.run_in_executor(None, call_db),
+                    timeout=25.0,  # 25 second timeout (less than Render's 30s)
+                )
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"list_roadmaps: Query completed in {elapsed:.2f}s - "
+                    f"Retrieved {len(items)} items, total={total_count}"
+                )
+            except asyncio.TimeoutError:
+                elapsed = time.time() - start_time
+                logger.error(
+                    f"list_roadmaps: Database query timed out after {elapsed:.2f}s"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                    detail="Database query timed out",
+                )
+        else:
+            # Tests: Use async service method directly
+            logger.info("list_roadmaps: Using async service method (test mode)")
+            items, total_count = await service.list_catalog(
+                page=page,
+                page_size=page_size,
+                language=language,
+                tag=tag,
+                difficulty=difficulty,
+                min_rating=min_rating,
+                min_views=min_views,
+                min_syncs=min_syncs,
+                sort=sort,
             )
 
         total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0

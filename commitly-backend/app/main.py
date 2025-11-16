@@ -49,6 +49,50 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Database connection failed: {e}", exc_info=True)
         # Don't fail startup, but log the error
+
+    # Verify schema: Check if required columns exist
+    logger.info("Verifying database schema...")
+    try:
+        with SessionLocal() as session:
+            # Check if primary_language column exists
+            result = session.execute(
+                text(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'generated_roadmaps'
+                    AND column_name = 'primary_language'
+                    """
+                )
+            )
+            column_exists = result.fetchone() is not None
+
+            if not column_exists:
+                logger.warning(
+                    "Required columns missing in generated_roadmaps table. "
+                    "Attempting to run migrations..."
+                )
+                try:
+                    from pathlib import Path
+                    from alembic.config import Config
+                    from alembic import command
+
+                    project_root = Path(__file__).parent.parent
+                    alembic_ini = project_root / "alembic.ini"
+                    alembic_cfg = Config(str(alembic_ini))
+                    command.upgrade(alembic_cfg, "head")
+                    logger.info("Migrations applied successfully")
+                except Exception as migration_error:
+                    logger.error(
+                        f"Failed to run migrations: {migration_error}",
+                        exc_info=True,
+                    )
+            else:
+                logger.info("Database schema verified successfully")
+    except Exception as e:
+        logger.error(f"Schema verification failed: {e}", exc_info=True)
+        # Don't fail startup, but log the error
+
     yield
     # Shutdown
     logger.info("Application shutting down")
