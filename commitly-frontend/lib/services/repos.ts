@@ -23,6 +23,8 @@ const API_ROUTES = {
   archived: "/api/v1/roadmap/archived",
   rating: (owner: string, repo: string) =>
     `/api/v1/roadmap/${owner}/${repo}/rating`,
+  recordView: (owner: string, repo: string) =>
+    `/api/v1/roadmap/${owner}/${repo}/view`,
 };
 
 export type RepoIdentity = {
@@ -197,13 +199,19 @@ export const repoService = {
 
   async listCatalog(
     page = 1,
-    pageSize = 50
+    pageSize = 50,
+    sort:
+      | "newest"
+      | "most_viewed"
+      | "most_synced"
+      | "highest_rated"
+      | "trending" = "newest"
   ): Promise<ApiClientResponse<RoadmapCatalogPage>> {
     if (!env.apiBaseUrl) {
       return { ok: false, status: 0, error: "API base URL missing" };
     }
     return apiClient<RoadmapCatalogPage>(env.apiBaseUrl, {
-      path: `${API_ROUTES.catalog}?page=${page}&page_size=${pageSize}`,
+      path: `${API_ROUTES.catalog}?page=${page}&page_size=${pageSize}&sort=${sort}`,
       cache: "no-store",
     });
   },
@@ -363,6 +371,21 @@ export const repoService = {
     } | null>(env.apiBaseUrl, {
       path: API_ROUTES.rating(owner, repo),
       cache: "no-store",
+      authToken,
+    });
+  },
+
+  async recordRoadmapView(
+    owner: string,
+    repo: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<void>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<void>(env.apiBaseUrl, {
+      path: API_ROUTES.recordView(owner, repo),
+      method: "POST",
       authToken,
     });
   },

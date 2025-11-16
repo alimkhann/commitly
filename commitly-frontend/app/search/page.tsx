@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { Filter, GitBranch, Search } from "lucide-react";
+import { Eye, Filter, GitBranch, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
@@ -26,6 +26,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { RepoRecord } from "@/data/repos";
 import { githubService } from "@/lib/services/github";
 import { type RoadmapResponseBody, repoService } from "@/lib/services/repos";
@@ -53,6 +60,9 @@ export default function SearchPage() {
   const [difficulty, setDifficulty] = useState<
     "all" | "beginner" | "intermediate" | "advanced"
   >("all");
+  const [sortBy, setSortBy] = useState<
+    "newest" | "most_viewed" | "most_synced" | "highest_rated" | "trending"
+  >("newest");
   const repoList = useMemo(() => repoService.list(), []);
   const { synced, yourRepos, loading, refreshUserRepos, desync } =
     useRoadmapCatalog();
@@ -100,7 +110,7 @@ export default function SearchPage() {
     let cancelled = false;
     const load = async () => {
       setPublicLoading(true);
-      const response = await repoService.listCatalog(1, 50);
+      const response = await repoService.listCatalog(1, 50, sortBy);
       if (cancelled) {
         return;
       }
@@ -121,7 +131,7 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [backendConfigured]);
+  }, [backendConfigured, sortBy]);
 
   const syncedMap = useMemo(
     () => new Map(synced.map((repo) => [repo.repo.full_name, repo])),
@@ -248,9 +258,29 @@ export default function SearchPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Filter className="h-4 w-4" />
-          Showing {filteredRepos.length} public repositories
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Filter className="h-4 w-4" />
+            Showing {filteredRepos.length} public repositories
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-sm">Sort by:</span>
+            <Select
+              onValueChange={(value) => setSortBy(value as typeof sortBy)}
+              value={sortBy}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">🆕 Newest</SelectItem>
+                <SelectItem value="trending">🔥 Trending</SelectItem>
+                <SelectItem value="most_viewed">👁️ Most Viewed</SelectItem>
+                <SelectItem value="most_synced">⭐ Most Synced</SelectItem>
+                <SelectItem value="highest_rated">⭐ Highest Rated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -386,16 +416,38 @@ export default function SearchPage() {
                   <CardDescription>{repo.repo.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
-                  <div className="flex items-center gap-2">
-                    <GitBranch className="h-4 w-4" />
-                    <span>
-                      {repo.repo.language ??
-                        repo.repo.primary_language ??
-                        "Unknown"}
-                      {repo.repo.star_count
-                        ? ` • ${repo.repo.star_count}★`
-                        : ""}
-                    </span>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <GitBranch className="h-4 w-4" />
+                      <span>
+                        {repo.repo.language ??
+                          repo.repo.primary_language ??
+                          "Unknown"}
+                        {repo.repo.star_count
+                          ? ` • ${repo.repo.star_count}★`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {repo.repo.view_count !== undefined &&
+                        repo.repo.view_count > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="text-xs">
+                              {repo.repo.view_count}
+                            </span>
+                          </div>
+                        )}
+                      {repo.repo.sync_count !== undefined &&
+                        repo.repo.sync_count > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            <span className="text-xs">
+                              {repo.repo.sync_count}
+                            </span>
+                          </div>
+                        )}
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button asChild className="flex-1" variant="secondary">

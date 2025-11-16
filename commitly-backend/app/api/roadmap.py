@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Annotated, Optional
+
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import ClerkClaims, require_clerk_auth
+from app.core.auth import ClerkClaims, optional_clerk_auth, require_clerk_auth
 from app.core.database import get_db
 from app.models.roadmap import (
     RatingRequest,
@@ -13,6 +15,7 @@ from app.models.roadmap import (
     RoadmapResponse,
     UserRepoStateResponse,
 )
+from app.services.roadmap_repository import SortOption
 from app.services.roadmap_service import RoadmapService, build_roadmap_service
 
 router = APIRouter()
@@ -26,9 +29,23 @@ def get_roadmap_service(session: Session = Depends(get_db)) -> RoadmapService:
 async def list_roadmaps(
     page: int = 1,
     page_size: int = 20,
+    sort: Annotated[
+        SortOption,
+        "Sort option: newest, most_viewed, most_synced, highest_rated, trending",
+    ] = "newest",
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> RoadmapCatalogPage:
-    return await service.list_catalog(page, page_size)
+    """
+    List roadmaps with pagination and sorting.
+
+    Sort options:
+    - newest: Order by updated_at DESC (default)
+    - most_viewed: Order by view_count DESC
+    - most_synced: Order by sync_count DESC
+    - highest_rated: Order by average rating DESC
+    - trending: Order by trending score (combines views, syncs, and ratings)
+    """
+    return await service.list_catalog(page, page_size, sort)
 
 
 @router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)
@@ -149,3 +166,21 @@ async def get_repository_rating(
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> RatingResponse | None:
     return service.get_user_rating(current_user["sub"], owner, repo)
+
+
+@router.post("/{owner}/{repo}/view", status_code=status.HTTP_204_NO_CONTENT)
+async def record_roadmap_view(
+    owner: str,
+    repo: str,
+    current_user: Optional[ClerkClaims] = Depends(optional_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> Response:
+    """
+    Record a view of a roadmap timeline.
+
+    Authentication is optional. If authenticated, implements anti-spam logic
+    (only one view per user per 24-hour window). Anonymous views are always counted.
+    """
+    user_id = current_user.get("sub") if current_user else None
+    await service.record_roadmap_view(f"{owner}/{repo}", user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

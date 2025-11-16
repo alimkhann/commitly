@@ -33,7 +33,12 @@ from app.services.github import (
 from app.services.github_tokens import GitHubTokenStore
 from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
 from app.services.roadmap_rating_store import RoadmapRatingStore
-from app.services.roadmap_repository import RoadmapResultStore, UserSyncedRepoStore
+from app.services.roadmap_repository import (
+    RoadmapResultStore,
+    SortOption,
+    UserSyncedRepoStore,
+)
+from app.services.roadmap_view_tracker import RoadmapViewTrackerService
 
 
 class RoadmapService:
@@ -45,6 +50,7 @@ class RoadmapService:
         generator: GeminiRoadmapGenerator,
         token_store: GitHubTokenStore,
         rating_store: RoadmapRatingStore | None = None,
+        view_tracker: RoadmapViewTrackerService | None = None,
         cache: RedisJSONCache | None = None,
         cache_ttl: int = settings.roadmap_cache_ttl_seconds,
         commit_limit: int = settings.github_commit_limit,
@@ -61,6 +67,7 @@ class RoadmapService:
         self._result_store = result_store
         self._pin_store = pin_store
         self._rating_store = rating_store
+        self._view_tracker = view_tracker
 
     async def generate(
         self,
@@ -161,8 +168,10 @@ class RoadmapService:
     async def list_synced(self) -> list[RoadmapResponse]:
         return self._result_store.list()
 
-    async def list_catalog(self, page: int, page_size: int) -> RoadmapCatalogPage:
-        items, total = self._result_store.list_paginated(page, page_size)
+    async def list_catalog(
+        self, page: int, page_size: int, sort: SortOption = "newest"
+    ) -> RoadmapCatalogPage:
+        items, total = self._result_store.list_paginated(page, page_size, sort)
         total_pages = max(1, math.ceil(total / page_size)) if total else 1
         return RoadmapCatalogPage(
             items=items,
@@ -171,6 +180,32 @@ class RoadmapService:
             total_count=total,
             total_pages=total_pages,
         )
+
+    async def record_roadmap_view(
+        self, repo_full_name: str, user_id: str | None
+    ) -> None:
+        """
+        Record a roadmap view and increment the view counter if eligible.
+
+        Uses anti-spam logic via RoadmapViewTrackerService to ensure
+        each user can only increment the view count once per 24-hour window.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            user_id: User identifier (optional for anonymous users)
+        """
+        if not self._view_tracker:
+            # View tracking disabled
+            return
+
+        # Check if view should be counted (respects cooldown period)
+        should_count = self._view_tracker.increment_view_if_eligible(
+            repo_full_name, user_id
+        )
+
+        if should_count:
+            # Increment the view count on the roadmap
+            self._result_store.increment_view_count(repo_full_name)
 
     async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
         return self._pin_store.list(user_id)
@@ -423,6 +458,7 @@ def build_roadmap_service(
     result_store = RoadmapResultStore(session)
     pin_store = UserSyncedRepoStore(session, result_store)
     rating_store = RoadmapRatingStore(session, result_store)
+    view_tracker = RoadmapViewTrackerService(session)
     return RoadmapService(
         chunk_store=CommitChunkStore(session),
         generator=generator,
@@ -431,4 +467,5 @@ def build_roadmap_service(
         result_store=result_store,
         pin_store=pin_store,
         rating_store=rating_store,
+        view_tracker=view_tracker,
     )
