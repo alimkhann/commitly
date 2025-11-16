@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,8 +60,9 @@ class Settings(BaseSettings):
     )
     polar_sandbox_enabled: bool = Field(False, validation_alias="POLAR_SANDBOX_SERVER")
 
-    allowed_origins: List[str] = Field(
-        default_factory=lambda: ["*"], validation_alias="ALLOWED_ORIGINS"
+    allowed_origins: Union[str, List[str]] = Field(
+        default="*",
+        validation_alias="ALLOWED_ORIGINS",
     )
 
     # GitHub ingestion
@@ -135,6 +136,16 @@ class Settings(BaseSettings):
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_origins(cls, value: Any) -> List[str]:
+        # Handle empty string or None explicitly to prevent JSON parsing errors
+        if value is None:
+            return ["*"]
+        # Handle empty string
+        if isinstance(value, str) and not value.strip():
+            return ["*"]
+        # If it's already a list, return as-is (or default to ["*"])
+        if isinstance(value, list):
+            return value if value else ["*"]
+        # Try to parse as string (handles comma-separated or JSON)
         parsed = cls._coerce_list(value)
         return parsed or ["*"]
 

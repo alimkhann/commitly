@@ -39,7 +39,12 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-cors_origins = list(settings.allowed_origins or [])
+# Ensure allowed_origins is always a list (validator should handle this, but type-safe check)
+if isinstance(settings.allowed_origins, str):
+    cors_origins = [settings.allowed_origins] if settings.allowed_origins else ["*"]
+else:
+    cors_origins = list(settings.allowed_origins or ["*"])
+
 local_dev_origins = {
     "http://localhost:3000",
     "http://localhost:3700",
