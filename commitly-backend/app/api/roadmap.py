@@ -63,13 +63,17 @@ async def list_roadmaps(
     try:
         logger.info(f"list_roadmaps: Starting with page={page}, page_size={page_size}")
 
-        # Call service method - wrap sync database call in executor to prevent blocking
+        # Call service method - wrap sync database call in executor
+        # SQLAlchemy sessions are not thread-safe, so we must use executor carefully
         import asyncio
+        import time
 
-        # Create a synchronous wrapper function
-        def call_list_catalog():
+        start_time = time.time()
+        logger.info("list_roadmaps: Calling service.list_catalog via executor")
+
+        def call_db():
             try:
-                logger.info("list_roadmaps: Calling result_store.list_catalog")
+                logger.info("list_roadmaps.executor: Starting database call")
                 return service._result_store.list_catalog(
                     page=page,
                     page_size=page_size,
@@ -82,16 +86,32 @@ async def list_roadmaps(
                     sort=sort,
                 )
             except Exception as e:
+                elapsed = time.time() - start_time
                 logger.error(
-                    f"list_roadmaps: Error in result_store.list_catalog: {e}",
+                    f"list_roadmaps.executor: Error after {elapsed:.2f}s - "
+                    f"{type(e).__name__}: {e}",
                     exc_info=True,
                 )
                 raise
 
         loop = asyncio.get_event_loop()
-        items, total_count = await loop.run_in_executor(None, call_list_catalog)
-
-        logger.info(f"list_roadmaps: Retrieved {len(items)} items, total={total_count}")
+        try:
+            items, total_count = await asyncio.wait_for(
+                loop.run_in_executor(None, call_db),
+                timeout=25.0,  # 25 second timeout (less than Render's 30s)
+            )
+            elapsed = time.time() - start_time
+            logger.info(
+                f"list_roadmaps: Query completed in {elapsed:.2f}s - "
+                f"Retrieved {len(items)} items, total={total_count}"
+            )
+        except asyncio.TimeoutError:
+            elapsed = time.time() - start_time
+            logger.error(f"list_roadmaps: Database query timed out after {elapsed:.2f}s")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Database query timed out",
+            )
 
         total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
 
@@ -102,9 +122,11 @@ async def list_roadmaps(
             total_count=total_count,
             total_pages=total_pages,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(
-            f"list_roadmaps: Error - {type(e).__name__}: {e}",
+            f"list_roadmaps: Unexpected error - {type(e).__name__}: {e}",
             exc_info=True,
         )
         raise HTTPException(

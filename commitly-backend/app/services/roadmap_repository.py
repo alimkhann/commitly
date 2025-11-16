@@ -301,74 +301,88 @@ class RoadmapResultStore:
         page_size = max(1, min(100, page_size))
 
         def action() -> tuple[list[RoadmapResponse], int]:
-            query = self._session.query(GeneratedRoadmap)
+            import logging
+            logger = logging.getLogger(__name__)
+            try:
+                logger.info("list_catalog.action: Starting query construction")
+                query = self._session.query(GeneratedRoadmap)
 
-            # Apply filters using direct columns
-            if language:
-                query = query.filter(GeneratedRoadmap.primary_language == language)
+                # Apply filters using direct columns
+                if language:
+                    query = query.filter(GeneratedRoadmap.primary_language == language)
 
-            if tag:
-                # Filter by topics array
-                query = query.filter(GeneratedRoadmap.topics.contains([tag]))
+                if tag:
+                    # Filter by topics array
+                    query = query.filter(GeneratedRoadmap.topics.contains([tag]))
 
-            if difficulty:
-                query = query.filter(GeneratedRoadmap.difficulty == difficulty)
+                if difficulty:
+                    query = query.filter(GeneratedRoadmap.difficulty == difficulty)
 
-            if min_rating is not None:
-                # Calculate average rating from rating_sum / rating_count
-                query = query.filter(
-                    GeneratedRoadmap.rating_count > 0,
-                    (GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count)
-                    >= min_rating,
-                )
-
-            if min_views is not None:
-                query = query.filter(GeneratedRoadmap.view_count >= min_views)
-
-            if min_syncs is not None:
-                query = query.filter(GeneratedRoadmap.sync_count >= min_syncs)
-
-            # Apply sorting
-            if sort == "most_viewed":
-                query = query.order_by(GeneratedRoadmap.view_count.desc())
-            elif sort == "most_synced":
-                query = query.order_by(GeneratedRoadmap.sync_count.desc())
-            elif sort == "highest_rated":
-                # Calculate average rating: rating_sum / rating_count
-                # Use CASE to avoid division by zero
-                avg_rating = case(
-                    (
+                if min_rating is not None:
+                    # Calculate average rating from rating_sum / rating_count
+                    query = query.filter(
                         GeneratedRoadmap.rating_count > 0,
-                        GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count,
-                    ),
-                    else_=0,
-                )
-                query = query.order_by(avg_rating.desc())
-            elif sort == "trending":
-                # Trending: 40% views + 30% syncs + 30% rating*6
-                avg_rating = case(
-                    (
-                        GeneratedRoadmap.rating_count > 0,
-                        GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count,
-                    ),
-                    else_=0,
-                )
-                trending_score = (
-                    (GeneratedRoadmap.view_count * 0.4)
-                    + (GeneratedRoadmap.sync_count * 0.3)
-                    + (avg_rating * 6 * 0.3)
-                )
-                query = query.order_by(trending_score.desc())
-            else:  # newest (default)
-                query = query.order_by(GeneratedRoadmap.updated_at.desc())
+                        (GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count)
+                        >= min_rating,
+                    )
 
-            # Get total count before pagination
-            total = query.count()
+                if min_views is not None:
+                    query = query.filter(GeneratedRoadmap.view_count >= min_views)
 
-            # Apply pagination
-            records = query.offset((page - 1) * page_size).limit(page_size).all()
+                if min_syncs is not None:
+                    query = query.filter(GeneratedRoadmap.sync_count >= min_syncs)
 
-            return [self._to_response(record) for record in records], total
+                # Apply sorting
+                if sort == "most_viewed":
+                    query = query.order_by(GeneratedRoadmap.view_count.desc())
+                elif sort == "most_synced":
+                    query = query.order_by(GeneratedRoadmap.sync_count.desc())
+                elif sort == "highest_rated":
+                    # Calculate average rating: rating_sum / rating_count
+                    # Use CASE to avoid division by zero
+                    avg_rating = case(
+                        (
+                            GeneratedRoadmap.rating_count > 0,
+                            GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count,
+                        ),
+                        else_=0,
+                    )
+                    query = query.order_by(avg_rating.desc())
+                elif sort == "trending":
+                    # Trending: 40% views + 30% syncs + 30% rating*6
+                    avg_rating = case(
+                        (
+                            GeneratedRoadmap.rating_count > 0,
+                            GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count,
+                        ),
+                        else_=0,
+                    )
+                    trending_score = (
+                        (GeneratedRoadmap.view_count * 0.4)
+                        + (GeneratedRoadmap.sync_count * 0.3)
+                        + (avg_rating * 6 * 0.3)
+                    )
+                    query = query.order_by(trending_score.desc())
+                else:  # newest (default)
+                    query = query.order_by(GeneratedRoadmap.updated_at.desc())
+
+                logger.info("list_catalog.action: Executing count query")
+                # Get total count before pagination
+                total = query.count()
+                logger.info(f"list_catalog.action: Count result: {total}")
+
+                logger.info("list_catalog.action: Executing paginated query")
+                # Apply pagination
+                records = query.offset((page - 1) * page_size).limit(page_size).all()
+                logger.info(f"list_catalog.action: Retrieved {len(records)} records")
+
+                logger.info("list_catalog.action: Converting to response objects")
+                results = [self._to_response(record) for record in records]
+                logger.info("list_catalog.action: Query completed successfully")
+                return results, total
+            except Exception as e:
+                logger.error(f"list_catalog.action: Error - {type(e).__name__}: {e}", exc_info=True)
+                raise
 
         return self._with_table_guard(action)
 
