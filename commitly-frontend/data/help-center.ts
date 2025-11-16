@@ -1,19 +1,20 @@
 type HelpCard = {
-  href: string
-  title: string
-  description: string
-}
+  href: string;
+  title: string;
+  description: string;
+};
 
 type FAQ = {
-  question: string
-  answer: string
-}
+  question: string;
+  answer: string;
+};
 
 export const helpCards: HelpCard[] = [
   {
     href: "/help-center/getting-started",
     title: "Getting started",
-    description: "Bootstrap commitly locally, connect GitHub, and run your first repo.",
+    description:
+      "Bootstrap commitly locally, connect GitHub, and run your first repo.",
   },
   {
     href: "/help-center/faq",
@@ -30,13 +31,13 @@ export const helpCards: HelpCard[] = [
     title: "Release notes",
     description: "Highlights from the latest product drops.",
   },
-]
+];
 
 export const onboardingSteps = [
   "Paste any GitHub repo URL from the home screen.",
   "Commitly fetches commits and builds a hands-on learning plan.",
   "Follow the timeline tasks, request hints, and share progress.",
-]
+];
 
 export const faqs: FAQ[] = [
   {
@@ -59,4 +60,4 @@ export const faqs: FAQ[] = [
     answer:
       "Open the account menu inside the app and select “Report bug”. Attach screenshots or logs so the team can reproduce issues quickly.",
   },
-]
+];

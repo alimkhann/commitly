@@ -1,12 +1,12 @@
-import { auth } from '@clerk/nextjs/server'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { auth } from "@clerk/nextjs/server";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { env } from '../config/env'
+import { env } from "../config/env";
 
-const { supabaseUrl, supabaseAnonKey } = env
+const { supabaseUrl, supabaseAnonKey } = env;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase environment variables are not configured')
+if (!(supabaseUrl && supabaseAnonKey)) {
+  throw new Error("Supabase environment variables are not configured");
 }
 
 export function createServerSupabaseClient(): SupabaseClient {
@@ -17,8 +17,8 @@ export function createServerSupabaseClient(): SupabaseClient {
       detectSessionInUrl: false,
     },
     async accessToken() {
-      const { getToken } = await auth()
-      return getToken({ template: 'supabase' })
+      const { getToken } = await auth();
+      return getToken({ template: "supabase" });
     },
-  })
+  });
 }

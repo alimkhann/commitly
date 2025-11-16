@@ -6,6 +6,7 @@ from typing import Iterable
 
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.roadmap import (
     GeneratedRoadmap,
@@ -76,9 +77,16 @@ class RoadmapResultStore:
             )
             if record:
                 record.repo_summary = summary
+                flag_modified(record, "repo_summary")
                 record.timeline = timeline_payload
                 record.cached = response.cached
                 record.generated_at = response.generated_at
+                if record.sync_count is None:
+                    record.sync_count = 0
+                if record.view_count is None:
+                    record.view_count = 0
+                if record.star_count is None:
+                    record.star_count = summary.get("star_count", 0)
             else:
                 record = GeneratedRoadmap(
                     repo_full_name=summary["full_name"],
@@ -86,9 +94,44 @@ class RoadmapResultStore:
                     timeline=timeline_payload,
                     cached=response.cached,
                     generated_at=response.generated_at,
+                    view_count=summary.get("view_count", 0) or 0,
+                    sync_count=summary.get("sync_count", 0) or 0,
+                    star_count=summary.get("star_count", 0) or 0,
+                    fork_count=summary.get("fork_count", 0) or 0,
+                    contributor_count=summary.get("contributor_count", 0) or 0,
                 )
+                if record.primary_language is None and summary.get("primary_language"):
+                    record.primary_language = summary.get("primary_language")
+                if record.languages is None and summary.get("languages"):
+                    record.languages = summary.get("languages")
+                if record.topics is None and summary.get("topics"):
+                    record.topics = summary.get("topics")
+                if record.difficulty is None and summary.get("difficulty"):
+                    record.difficulty = summary.get("difficulty")
                 self._session.add(record)
             try:
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
+
+    def increment_sync_count(self, full_name: str) -> None:
+        def action() -> None:
+            try:
+                record = (
+                    self._session.query(GeneratedRoadmap)
+                    .filter_by(repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if not record:
+                    return
+                record.sync_count = (record.sync_count or 0) + 1
+                summary = (record.repo_summary or {}).copy()
+                summary["sync_count"] = record.sync_count
+                record.repo_summary = summary
+                flag_modified(record, "repo_summary")
                 self._session.commit()
             except SQLAlchemyError:
                 self._session.rollback()
@@ -137,7 +180,18 @@ class RoadmapResultStore:
         return self._with_table_guard(action)
 
     def _to_response(self, record: GeneratedRoadmap) -> RoadmapResponse:
-        summary = RoadmapRepoSummary(**record.repo_summary)
+        summary_payload = dict(record.repo_summary)
+        # Ensure counters stored as columns are surfaced even if repo_summary lacks them
+        summary_payload.setdefault("sync_count", record.sync_count)
+        summary_payload.setdefault("view_count", record.view_count)
+        summary_payload.setdefault("star_count", record.star_count)
+        summary_payload.setdefault("fork_count", record.fork_count)
+        summary_payload.setdefault("contributor_count", record.contributor_count)
+        summary_payload.setdefault("primary_language", record.primary_language)
+        summary_payload.setdefault("languages", record.languages)
+        summary_payload.setdefault("topics", record.topics)
+        summary_payload.setdefault("difficulty", record.difficulty)
+        summary = RoadmapRepoSummary(**summary_payload)
         timeline = [TimelineStage(**stage) for stage in record.timeline]
         return RoadmapResponse(
             repo=summary,
@@ -253,14 +307,15 @@ class UserSyncedRepoStore:
         status: str = "synced",
         is_archived: bool = False,
         progress_percent: int = 0,
-    ) -> None:
-        def action() -> None:
+    ) -> bool:
+        def action() -> bool:
             try:
                 record = (
                     self._session.query(UserSyncedRepo)
                     .filter_by(user_id=user_id, repo_full_name=full_name)
                     .one_or_none()
                 )
+                created = False
                 if record:
                     record.status = status
                     record.is_archived = is_archived
@@ -276,12 +331,14 @@ class UserSyncedRepoStore:
                             progress_percent=progress_percent,
                         )
                     )
+                    created = True
                 self._session.commit()
+                return created
             except SQLAlchemyError:
                 self._session.rollback()
                 raise
 
-        self._with_table_guard(action)
+        return self._with_table_guard(action)
 
     def list_states(self, user_id: str | None) -> list[UserRepoStateResponse]:
         if not user_id:

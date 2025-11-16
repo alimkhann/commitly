@@ -1,49 +1,49 @@
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type NextFetchOptions = {
-  revalidate?: number | false
-  tags?: string[]
-}
+  revalidate?: number | false;
+  tags?: string[];
+};
 
 type ApiClientOptions<TBody> = {
-  path: string
-  method?: HttpMethod
-  body?: TBody
-  headers?: HeadersInit
-  authToken?: string
-  cache?: RequestCache
-  next?: NextFetchOptions
-  signal?: AbortSignal
-}
+  path: string;
+  method?: HttpMethod;
+  body?: TBody;
+  headers?: HeadersInit;
+  authToken?: string;
+  cache?: RequestCache;
+  next?: NextFetchOptions;
+  signal?: AbortSignal;
+};
 
 export type ApiClientResponse<TData> = {
-  ok: boolean
-  status: number
-  data?: TData | null
-  error?: string
-}
+  ok: boolean;
+  status: number;
+  data?: TData | null;
+  error?: string;
+};
 
 const buildHeaders = (
   headers: HeadersInit | undefined,
   hasJsonBody: boolean,
   authToken?: string
 ): Headers => {
-  const resolved = new Headers(headers)
+  const resolved = new Headers(headers);
   if (hasJsonBody && !resolved.has("Content-Type")) {
-    resolved.set("Content-Type", "application/json")
+    resolved.set("Content-Type", "application/json");
   }
   if (authToken) {
-    resolved.set("Authorization", `Bearer ${authToken}`)
+    resolved.set("Authorization", `Bearer ${authToken}`);
   }
-  return resolved
-}
+  return resolved;
+};
 
 const resolveUrl = (path: string, baseUrl: string) => {
   if (path.startsWith("http")) {
-    return path
+    return path;
   }
-  return new URL(path, baseUrl).toString()
-}
+  return new URL(path, baseUrl).toString();
+};
 
 export async function apiClient<TResponse, TBody = unknown>(
   baseUrl: string,
@@ -58,8 +58,8 @@ export async function apiClient<TResponse, TBody = unknown>(
     signal,
   }: ApiClientOptions<TBody>
 ): Promise<ApiClientResponse<TResponse>> {
-  const hasJsonBody = body !== undefined
-  const requestHeaders = buildHeaders(headers, hasJsonBody, authToken)
+  const hasJsonBody = body !== undefined;
+  const requestHeaders = buildHeaders(headers, hasJsonBody, authToken);
 
   try {
     const response = await fetch(resolveUrl(path, baseUrl), {
@@ -69,11 +69,11 @@ export async function apiClient<TResponse, TBody = unknown>(
       body: hasJsonBody ? JSON.stringify(body) : undefined,
       next,
       signal,
-    })
+    });
 
-    const contentType = response.headers.get("content-type")
-    const isJson = contentType?.includes("application/json")
-    const payload = isJson ? await response.json().catch(() => null) : null
+    const contentType = response.headers.get("content-type");
+    const isJson = contentType?.includes("application/json");
+    const payload = isJson ? await response.json().catch(() => null) : null;
 
     if (!response.ok) {
       return {
@@ -83,19 +83,19 @@ export async function apiClient<TResponse, TBody = unknown>(
           (payload as { message?: string })?.message ??
           response.statusText ??
           "Request failed",
-      }
+      };
     }
 
     return {
       ok: true,
       status: response.status,
       data: payload as TResponse | null,
-    }
+    };
   } catch (error) {
     return {
       ok: false,
       status: 0,
       error: error instanceof Error ? error.message : "Network request failed",
-    }
+    };
   }
 }

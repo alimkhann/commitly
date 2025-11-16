@@ -77,3 +77,13 @@ async def list_user_repositories(
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> list[UserRepoStateResponse]:
     return await service.list_user_repos(current_user["sub"])
+
+
+@router.post("/sync/{owner}/{repo}", response_model=UserRepoStateResponse)
+async def sync_repository(
+    owner: str,
+    repo: str,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> UserRepoStateResponse:
+    return await service.sync_repo(owner, repo, current_user["sub"])

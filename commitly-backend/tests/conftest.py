@@ -30,7 +30,8 @@ from app.main import app  # noqa: E402
 from app.models.roadmap import GeneratedRoadmap, UserSyncedRepo  # noqa: E402
 from app.models.waitlist import Waitlist  # noqa: E402
 
-# Create tables once for the test database
+# Reset schema to reflect latest models (avoids stale columns in sqlite test DB)
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 

@@ -1,35 +1,35 @@
-export type RepoDifficulty = "beginner" | "intermediate" | "advanced"
+export type RepoDifficulty = "beginner" | "intermediate" | "advanced";
 
 export type RepoTimelineStage = {
-  id: string
-  title: string
-  summary: string
-  status: "not-started" | "in-progress" | "done"
-  eta: string
-  tasks: string[]
-  resources: { label: string; href: string }[]
-}
+  id: string;
+  title: string;
+  summary: string;
+  status: "not-started" | "in-progress" | "done";
+  eta: string;
+  tasks: string[];
+  resources: { label: string; href: string }[];
+};
 
 export type RepoGuideMessage = {
-  id: string
-  role: "guide" | "user"
-  message: string
-  timestamp: string
-}
+  id: string;
+  role: "guide" | "user";
+  message: string;
+  timestamp: string;
+};
 
 export type RepoRecord = {
-  id: string
-  name: string
-  description: string
-  stars: string
-  language: string
-  updatedAt: string
-  difficulty: RepoDifficulty
-  tags: string[]
-  progress: number
-  timeline: RepoTimelineStage[]
-  guideThread: RepoGuideMessage[]
-}
+  id: string;
+  name: string;
+  description: string;
+  stars: string;
+  language: string;
+  updatedAt: string;
+  difficulty: RepoDifficulty;
+  tags: string[];
+  progress: number;
+  timeline: RepoTimelineStage[];
+  guideThread: RepoGuideMessage[];
+};
 
 export const repos: RepoRecord[] = [
   {
@@ -178,9 +178,7 @@ export const repos: RepoRecord[] = [
           "Record kernel id & workspace trust state",
           "Document payload contract",
         ],
-        resources: [
-          { label: "Telemetry checklist", href: "#" },
-        ],
+        resources: [{ label: "Telemetry checklist", href: "#" }],
       },
     ],
     guideThread: [
@@ -230,9 +228,7 @@ export const repos: RepoRecord[] = [
           "Verify `glslc` on PATH",
           "Run `./build-android-armeabi-v7a.sh`",
         ],
-        resources: [
-          { label: "Android build doc", href: "#" },
-        ],
+        resources: [{ label: "Android build doc", href: "#" }],
       },
       {
         id: "stage-2",
@@ -263,9 +259,7 @@ export const repos: RepoRecord[] = [
           "Strip symbols after linking",
           "Upload checksums for release manager",
         ],
-        resources: [
-          { label: "CI storage policy", href: "#" },
-        ],
+        resources: [{ label: "CI storage policy", href: "#" }],
       },
     ],
     guideThread: [
@@ -292,9 +286,9 @@ export const repos: RepoRecord[] = [
       },
     ],
   },
-]
+];
 
-export type RepoId = (typeof repos)[number]["id"]
+export type RepoId = (typeof repos)[number]["id"];
 
 export const getRepoById = (id: string) =>
-  repos.find((repo) => repo.id === id) ?? null
+  repos.find((repo) => repo.id === id) ?? null;
