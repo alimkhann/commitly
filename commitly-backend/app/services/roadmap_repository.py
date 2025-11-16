@@ -258,11 +258,20 @@ class RoadmapResultStore:
 
         return self._with_table_guard(action)
 
-    def list_paginated(
-        self, page: int, page_size: int, sort: SortOption = "newest"
+    def list_catalog(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        language: str | None = None,
+        tag: str | None = None,
+        difficulty: str | None = None,
+        min_rating: float | None = None,
+        min_views: int | None = None,
+        min_syncs: int | None = None,
+        sort: str = "newest",
     ) -> tuple[list[RoadmapResponse], int]:
         """
-        List roadmaps with pagination and sorting.
+        List roadmaps with filters, pagination and sorting.
 
         Sort options:
         - newest: Order by updated_at DESC (default)
@@ -277,6 +286,12 @@ class RoadmapResultStore:
         Args:
             page: Page number (1-indexed)
             page_size: Number of items per page
+            language: Filter by primary language
+            tag: Filter by topic tag
+            difficulty: Filter by difficulty level
+            min_rating: Minimum average rating
+            min_views: Minimum view count
+            min_syncs: Minimum sync count
             sort: Sort option
 
         Returns:
@@ -287,6 +302,31 @@ class RoadmapResultStore:
 
         def action() -> tuple[list[RoadmapResponse], int]:
             query = self._session.query(GeneratedRoadmap)
+
+            # Apply filters using direct columns
+            if language:
+                query = query.filter(GeneratedRoadmap.primary_language == language)
+
+            if tag:
+                # Filter by topics array
+                query = query.filter(GeneratedRoadmap.topics.contains([tag]))
+
+            if difficulty:
+                query = query.filter(GeneratedRoadmap.difficulty == difficulty)
+
+            if min_rating is not None:
+                # Calculate average rating from rating_sum / rating_count
+                query = query.filter(
+                    GeneratedRoadmap.rating_count > 0,
+                    (GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count)
+                    >= min_rating,
+                )
+
+            if min_views is not None:
+                query = query.filter(GeneratedRoadmap.view_count >= min_views)
+
+            if min_syncs is not None:
+                query = query.filter(GeneratedRoadmap.sync_count >= min_syncs)
 
             # Apply sorting
             if sort == "most_viewed":
@@ -322,8 +362,12 @@ class RoadmapResultStore:
             else:  # newest (default)
                 query = query.order_by(GeneratedRoadmap.updated_at.desc())
 
+            # Get total count before pagination
             total = query.count()
+
+            # Apply pagination
             records = query.offset((page - 1) * page_size).limit(page_size).all()
+
             return [self._to_response(record) for record in records], total
 
         return self._with_table_guard(action)

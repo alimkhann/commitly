@@ -112,7 +112,11 @@ export default function SearchPage() {
     let cancelled = false;
     const load = async () => {
       setPublicLoading(true);
-      const response = await repoService.listCatalog(1, 50, sortBy);
+      const response = await repoService.listCatalog({
+        page: 1,
+        page_size: 50,
+        sort: sortBy,
+      });
       if (cancelled) {
         return;
       }

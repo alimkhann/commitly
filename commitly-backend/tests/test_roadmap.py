@@ -69,14 +69,19 @@ def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse
         async def list_synced(self):
             return [roadmap_payload]
 
-        async def list_catalog(self, page: int, page_size: int, sort: str = "newest"):
-            return {
-                "items": [roadmap_payload],
-                "page": page,
-                "page_size": page_size,
-                "total_count": 1,
-                "total_pages": 1,
-            }
+        async def list_catalog(
+            self,
+            page: int = 1,
+            page_size: int = 20,
+            language: str | None = None,
+            tag: str | None = None,
+            difficulty: str | None = None,
+            min_rating: float | None = None,
+            min_views: int | None = None,
+            min_syncs: int | None = None,
+            sort: str = "newest",
+        ):
+            return [roadmap_payload], 1
 
         async def list_user_pins(self, user_id: str):
             assert user_id == "user_123"

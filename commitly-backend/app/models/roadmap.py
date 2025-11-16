@@ -155,6 +155,34 @@ class RoadmapRequest(BaseModel):
     )
 
 
+class CatalogFilters(BaseModel):
+    """Filters for roadmap catalog search."""
+
+    language: Optional[str] = Field(None, description="Filter by programming language")
+    tag: Optional[str] = Field(None, description="Filter by topic/tag")
+    difficulty: Optional[Literal["beginner", "intermediate", "advanced"]] = Field(
+        None, description="Filter by difficulty level"
+    )
+    min_rating: Optional[float] = Field(
+        None, ge=1.0, le=5.0, description="Minimum average rating"
+    )
+    min_views: Optional[int] = Field(None, ge=0, description="Minimum view count")
+    min_syncs: Optional[int] = Field(None, ge=0, description="Minimum sync count")
+    sort: Optional[
+        Literal["newest", "most_viewed", "most_synced", "highest_rated", "trending"]
+    ] = Field("newest", description="Sort order")
+
+
+class CatalogPage(BaseModel):
+    """Paginated catalog response."""
+
+    items: List["RoadmapResponse"]
+    page: int = Field(ge=1, description="Current page number")
+    page_size: int = Field(ge=1, le=100, description="Number of items per page")
+    total_count: int = Field(ge=0, description="Total number of items")
+    total_pages: int = Field(ge=0, description="Total number of pages")
+
+
 class TimelineResource(BaseModel):
     label: str
     href: Annotated[str, Field(max_length=500)]
