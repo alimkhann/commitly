@@ -91,7 +91,9 @@ export default function SearchPage() {
       const token = await getToken();
       const response = await githubService.status(token ?? undefined);
       if (!cancelled) {
-        setGithubConnected(Boolean(response.ok && response.data?.connected));
+        const connected =
+          response.ok && "data" in response && response.data?.connected;
+        setGithubConnected(Boolean(connected));
         setIsCheckingGithub(false);
       }
     };
@@ -159,6 +161,7 @@ export default function SearchPage() {
     }
     const lower = query.toLowerCase();
     return userRepoList.filter((repo) => {
+      if (!repo.repo) return false;
       const summary = repo.repo.description?.toLowerCase() ?? "";
       return (
         repo.repo.full_name.toLowerCase().includes(lower) ||
@@ -266,7 +269,9 @@ export default function SearchPage() {
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">Sort by:</span>
             <Select
-              onValueChange={(value) => setSortBy(value as typeof sortBy)}
+              onValueChange={(value: string) =>
+                setSortBy(value as typeof sortBy)
+              }
               value={sortBy}
             >
               <SelectTrigger className="w-[180px]">
@@ -301,7 +306,7 @@ export default function SearchPage() {
                 <CardHeader className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-xl">
-                      {repo.repo.full_name}
+                      {repo.repo?.full_name ?? repo.repo_full_name}
                     </CardTitle>
                     <Badge
                       className="text-xs uppercase tracking-wide"
@@ -311,13 +316,15 @@ export default function SearchPage() {
                       stages
                     </Badge>
                   </div>
-                  <CardDescription>{repo.repo.description}</CardDescription>
+                  <CardDescription>
+                    {repo.repo?.description ?? "No description"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
                   <div className="flex items-center gap-2">
                     <GitBranch className="h-4 w-4" />
                     <span>
-                      {repo.repo.language ?? "Unknown"} •{" "}
+                      {repo.repo?.language ?? "Unknown"} •{" "}
                       {new Date(
                         syncedMap.get(repo.repo_full_name)?.generated_at ??
                           nowIso
@@ -429,7 +436,8 @@ export default function SearchPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-4">
-                      {repo.repo.view_count !== undefined &&
+                      {repo.repo?.view_count !== undefined &&
+                        repo.repo.view_count !== null &&
                         repo.repo.view_count > 0 && (
                           <div className="flex items-center gap-1">
                             <Eye className="h-3.5 w-3.5" />
@@ -438,7 +446,8 @@ export default function SearchPage() {
                             </span>
                           </div>
                         )}
-                      {repo.repo.sync_count !== undefined &&
+                      {repo.repo?.sync_count !== undefined &&
+                        repo.repo.sync_count !== null &&
                         repo.repo.sync_count > 0 && (
                           <div className="flex items-center gap-1">
                             <Users className="h-3.5 w-3.5" />
