@@ -126,7 +126,25 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       return [nextRecord, ...previous]
     })
     setPending((previous) => previous.filter((item) => item.fullName !== roadmap.repo.full_name))
-  }, [])
+    setYourRepos((previous) => {
+      if (!isSignedIn) return previous
+      const next: UserRepoState = {
+        repo_full_name: roadmap.repo.full_name,
+        status: "synced",
+        is_archived: false,
+        progress_percent: 0,
+        pinned_at: new Date().toISOString(),
+        repo: roadmap.repo,
+      }
+      const idx = previous.findIndex((item) => item.repo_full_name === roadmap.repo.full_name)
+      if (idx >= 0) {
+        const clone = [...previous]
+        clone[idx] = next
+        return clone
+      }
+      return [next, ...previous]
+    })
+  }, [isSignedIn])
 
   const markPending = useCallback((identity: RepoIdentity) => {
     setPending((previous) => {
