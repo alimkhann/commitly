@@ -457,6 +457,98 @@ class GeminiRoadmapGenerator:
         logger.debug("Gemini call success", extra=extra)
         return response.json()
 
+    async def classify_difficulty(
+        self,
+        repo: RepositoryMetadata,
+        chunks: Sequence[CommitChunk],
+    ) -> str:
+        """Classify repository difficulty as 'intro', 'easy', 'medium', or 'hard'."""
+        languages_str = (
+            ", ".join(repo.languages.keys()) if repo.languages else "Unknown"
+        )
+        topics_str = ", ".join(repo.topics) if repo.topics else "None"
+        context = self._render_context(list(chunks)[:10])
+
+        difficulty_prompt = f"""Analyze this GitHub repository and classify its difficulty level for new contributors.
+
+Repository: {repo.full_name}
+Description: {repo.description or 'No description'}
+Primary Language: {repo.language or 'Unknown'}
+Languages: {languages_str}
+Topics: {topics_str}
+Stars: {repo.stars}
+Forks: {repo.fork_count}
+Contributors: {repo.contributor_count}
+
+Commit History Summary:
+{context}
+
+Based on the repository's complexity, codebase size, technologies used, and commit patterns, classify the difficulty as one of:
+- "intro": Very simple, beginner-friendly projects (tutorials, simple scripts, basic examples)
+- "easy": Straightforward projects with clear structure (simple web apps, basic tools)
+- "medium": Moderate complexity requiring some experience (full-stack apps, libraries with multiple features)
+- "hard": Complex projects requiring advanced knowledge (large frameworks, system software, complex algorithms)
+
+Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
+"""  # noqa: E501
+
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": difficulty_prompt}],
+                }
+            ],
+            "generation_config": {
+                "temperature": 0.3,
+                "top_p": 0.8,
+                "max_output_tokens": 10,
+            },
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(
+                    self._endpoint,
+                    params={"key": self._api_key},
+                    json=payload,
+                )
+            if response.status_code >= 400:
+                logger.warning(
+                    "Difficulty classification failed, defaulting to 'medium'",
+                    extra={"repo": repo.full_name, "status": response.status_code},
+                )
+                return "medium"
+
+            result = response.json()
+            text = ""
+            for candidate in result.get("candidates", []):
+                for part in candidate.get("content", {}).get("parts", []):
+                    if "text" in part:
+                        text += part["text"]
+
+            difficulty = text.strip().lower()
+            # Validate and normalize difficulty
+            valid_difficulties = {"intro", "easy", "medium", "hard"}
+            if difficulty in valid_difficulties:
+                return difficulty
+            # Try to extract from text if it contains the word
+            for valid in valid_difficulties:
+                if valid in difficulty:
+                    return valid
+            logger.warning(
+                f"Invalid difficulty classification: {difficulty}, "
+                f"defaulting to 'medium'",
+                extra={"repo": repo.full_name},
+            )
+            return "medium"
+        except Exception as exc:
+            logger.warning(
+                "Difficulty classification error, defaulting to 'medium'",
+                extra={"repo": repo.full_name, "error": str(exc)},
+            )
+            return "medium"
+
     def _fallback_timeline(
         self,
         repo: RepositoryMetadata,
