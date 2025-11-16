@@ -228,7 +228,9 @@ class RoadmapService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Timeline has not been generated for this repository.",
             )
-        state, transitioned = self._user_repo_store.mark_unsynced(user_id, repo_full_name)
+        state, transitioned = self._user_repo_store.mark_unsynced(
+            user_id, repo_full_name
+        )
         if state is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -286,9 +288,7 @@ class RoadmapService:
             rating_count=public_record.stats.rating_count,
         )
 
-    async def get_rating(
-        self, user_id: str, repo_full_name: str
-    ) -> RatingResponse:
+    async def get_rating(self, user_id: str, repo_full_name: str) -> RatingResponse:
         public_record = self._get_public_record_or_404(repo_full_name)
         record = self._rating_store.get(user_id, repo_full_name)
         return RatingResponse(
@@ -377,7 +377,9 @@ class RoadmapService:
         star_score = repo.stars
         fork_score = repo.forks
         stage_score = len(timeline)
-        composite = star_score + fork_score * 2 + contributor_score * 10 + stage_score * 25
+        composite = (
+            star_score + fork_score * 2 + contributor_score * 10 + stage_score * 25
+        )
         if composite < 500:
             return "intro"
         if composite < 2000:

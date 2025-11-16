@@ -61,12 +61,16 @@ class GeneratedRoadmap(Base):
     difficulty: Mapped[Optional[str]] = mapped_column(String(32))
     star_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     fork_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    contributor_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    contributor_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
     last_pushed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     license: Mapped[Optional[str]] = mapped_column(String(128))
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     sync_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    rating_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rating_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
     rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -92,7 +96,9 @@ class UserRepoState(Base):
     repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="unsynced")
     progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True
+    )
     synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_viewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -109,7 +115,9 @@ class UserRepoState(Base):
 class RoadmapRating(Base):
     __tablename__ = "roadmap_ratings"
     __table_args__ = (
-        UniqueConstraint("user_id", "repo_full_name", name="uq_roadmap_rating_user_repo"),
+        UniqueConstraint(
+            "user_id", "repo_full_name", name="uq_roadmap_rating_user_repo"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

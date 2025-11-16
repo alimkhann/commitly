@@ -8,7 +8,6 @@ Create Date: 2025-11-15 18:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision = "20241115_upgrade_repository_system"
 down_revision = "20241115_add_user_synced_repos"
@@ -79,18 +78,14 @@ def upgrade() -> None:
     for column in USER_STATE_NEW_COLUMNS:
         op.add_column("user_repo_states", column)
 
-    op.drop_constraint(
-        "uq_user_synced_repo", "user_repo_states", type_="unique"
-    )
+    op.drop_constraint("uq_user_synced_repo", "user_repo_states", type_="unique")
     op.create_unique_constraint(
         "uq_user_repo_state",
         "user_repo_states",
         ["user_id", "repo_full_name"],
     )
 
-    op.rename_index(
-        "ix_user_synced_repos_user_id", "ix_user_repo_states_user_id"
-    )
+    op.rename_index("ix_user_synced_repos_user_id", "ix_user_repo_states_user_id")
     op.create_index(
         "ix_user_repo_states_is_archived",
         "user_repo_states",
@@ -119,9 +114,7 @@ def upgrade() -> None:
             "user_id", "repo_full_name", name="uq_roadmap_rating_user_repo"
         ),
     )
-    op.create_index(
-        "ix_roadmap_ratings_user_id", "roadmap_ratings", ["user_id"]
-    )
+    op.create_index("ix_roadmap_ratings_user_id", "roadmap_ratings", ["user_id"])
     op.create_index(
         "ix_roadmap_ratings_repo_full_name",
         "roadmap_ratings",
@@ -130,16 +123,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_roadmap_ratings_repo_full_name", table_name="roadmap_ratings"
-    )
+    op.drop_index("ix_roadmap_ratings_repo_full_name", table_name="roadmap_ratings")
     op.drop_index("ix_roadmap_ratings_user_id", table_name="roadmap_ratings")
     op.drop_table("roadmap_ratings")
 
     op.drop_index("ix_user_repo_states_is_archived", table_name="user_repo_states")
-    op.drop_constraint(
-        "uq_user_repo_state", "user_repo_states", type_="unique"
-    )
+    op.drop_constraint("uq_user_repo_state", "user_repo_states", type_="unique")
     op.create_unique_constraint(
         "uq_user_synced_repo",
         "user_repo_states",
@@ -163,9 +152,7 @@ def downgrade() -> None:
         existing_type=sa.DateTime(timezone=True),
         existing_nullable=False,
     )
-    op.rename_index(
-        "ix_user_repo_states_user_id", "ix_user_synced_repos_user_id"
-    )
+    op.rename_index("ix_user_repo_states_user_id", "ix_user_synced_repos_user_id")
     op.rename_table("user_repo_states", "user_synced_repos")
 
     for column_name in (

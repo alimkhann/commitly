@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import json
-from typing import Iterable, Sequence
+from typing import Iterable
 
-from sqlalchemy import Float, String, and_, case, func, or_
+from sqlalchemy import Float, String, case, func, or_
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -87,7 +87,9 @@ class RoadmapResultStore:
                 self._ensure_table_exists()
                 continue
 
-    def upsert(self, response: RoadmapResponse, metadata: GeneratedRoadmapMetadata) -> None:
+    def upsert(
+        self, response: RoadmapResponse, metadata: GeneratedRoadmapMetadata
+    ) -> None:
         def action() -> None:
             summary = json.loads(response.repo.model_dump_json())
             timeline_payload = [
@@ -258,7 +260,9 @@ class RoadmapResultStore:
             stmt = stmt.filter(or_(*lang_checks))
         if query.topics:
             topic_text = func.lower(func.cast(GeneratedRoadmap.topics, String))
-            topic_checks = [topic_text.like(f'%"{topic.lower()}"%') for topic in query.topics]
+            topic_checks = [
+                topic_text.like(f'%"{topic.lower()}"%') for topic in query.topics
+            ]
             stmt = stmt.filter(or_(*topic_checks))
         if query.difficulty:
             stmt = stmt.filter(
@@ -309,15 +313,12 @@ class RoadmapResultStore:
     def _to_public_record(self, record: GeneratedRoadmap) -> PublicRoadmapRecord:
         summary = RoadmapRepoSummary(**record.repo_summary)
         average_rating = (
-            record.rating_sum / record.rating_count
-            if record.rating_count
-            else None
+            record.rating_sum / record.rating_count if record.rating_count else None
         )
         stats = RoadmapStats(
             primary_language=record.primary_language or summary.language,
-            languages=list(record.languages or []) or (
-                [summary.language] if summary.language else []
-            ),
+            languages=list(record.languages or [])
+            or ([summary.language] if summary.language else []),
             topics=list(record.topics or []),
             difficulty=record.difficulty,
             star_count=record.star_count or summary.stars,
@@ -359,7 +360,8 @@ class UserRepoStateStore:
             return False
         message = str(exc).lower()
         missing = any(
-            marker in message for marker in ("undefined", "does not exist", "no such table")
+            marker in message
+            for marker in ("undefined", "does not exist", "no such table")
         )
         handled = False
         if missing and "user_repo_states" in message:
@@ -517,7 +519,10 @@ class UserRepoStateStore:
                 state = UserRepoState(user_id=user_id, repo_full_name=repo_full_name)
                 self._session.add(state)
                 should_increment = True
-            elif not state.last_viewed_at or now - state.last_viewed_at >= self.VIEW_COOLDOWN:
+            elif (
+                not state.last_viewed_at
+                or now - state.last_viewed_at >= self.VIEW_COOLDOWN
+            ):
                 should_increment = True
             state.last_viewed_at = now
             state.is_archived = False
@@ -547,10 +552,7 @@ class UserRepoStateStore:
             )
             if not include_archived:
                 query = query.filter(UserRepoState.is_archived.is_(False))
-            return (
-                query.order_by(UserRepoState.updated_at.desc())
-                .all()
-            )
+            return query.order_by(UserRepoState.updated_at.desc()).all()
 
         return self._with_table_guard(action)
 
@@ -585,9 +587,7 @@ class RoadmapRatingStore:
                     continue
                 raise
 
-    def upsert(
-        self, user_id: str, repo_full_name: str, rating: int
-    ) -> RoadmapRating:
+    def upsert(self, user_id: str, repo_full_name: str, rating: int) -> RoadmapRating:
         def action() -> RoadmapRating:
             record = (
                 self._session.query(RoadmapRating)

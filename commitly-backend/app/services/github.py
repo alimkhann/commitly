@@ -215,9 +215,7 @@ def parse_github_url(url: str) -> RepositoryIdentity:
     raise GitHubServiceError("Only GitHub repositories are supported")
 
     async def _fetch_languages(self, identity: RepositoryIdentity) -> List[str]:
-        response = await self._request(
-            "GET", f"/repos/{identity.full_name}/languages"
-        )
+        response = await self._request("GET", f"/repos/{identity.full_name}/languages")
         payload = response.json()
         if isinstance(payload, dict):
             return [key for key, value in payload.items() if value]
