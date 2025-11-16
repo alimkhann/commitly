@@ -312,11 +312,25 @@ export const repoService = {
     repo: string,
     rating: number,
     authToken?: string
-  ): Promise<ApiClientResponse<{ rating: number; repo_full_name: string; user_id: string; created_at: string; updated_at: string }>> {
+  ): Promise<
+    ApiClientResponse<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>
+  > {
     if (!env.apiBaseUrl) {
       return { ok: false, status: 0, error: "API base URL missing" };
     }
-    return apiClient<{ rating: number; repo_full_name: string; user_id: string; created_at: string; updated_at: string }>(env.apiBaseUrl, {
+    return apiClient<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>(env.apiBaseUrl, {
       path: API_ROUTES.rating(owner, repo),
       method: "POST",
       body: { rating },
@@ -328,11 +342,25 @@ export const repoService = {
     owner: string,
     repo: string,
     authToken?: string
-  ): Promise<ApiClientResponse<{ rating: number; repo_full_name: string; user_id: string; created_at: string; updated_at: string } | null>> {
+  ): Promise<
+    ApiClientResponse<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    } | null>
+  > {
     if (!env.apiBaseUrl) {
       return { ok: false, status: 0, error: "API base URL missing" };
     }
-    return apiClient<{ rating: number; repo_full_name: string; user_id: string; created_at: string; updated_at: string } | null>(env.apiBaseUrl, {
+    return apiClient<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    } | null>(env.apiBaseUrl, {
       path: API_ROUTES.rating(owner, repo),
       cache: "no-store",
       authToken,

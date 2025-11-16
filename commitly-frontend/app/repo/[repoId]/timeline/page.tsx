@@ -222,7 +222,7 @@ export default function RepoTimelinePage() {
 
   // Fetch user rating when identity and auth are available
   useEffect(() => {
-    if (!identity || !isSignedIn) {
+    if (!(identity && isSignedIn)) {
       setUserRating(null);
       return;
     }
@@ -253,7 +253,7 @@ export default function RepoTimelinePage() {
 
   const handleRatingChange = useCallback(
     async (newRating: number) => {
-      if (!identity || !isSignedIn) {
+      if (!(identity && isSignedIn)) {
         return;
       }
       setIsRatingLoading(true);
@@ -292,9 +292,7 @@ export default function RepoTimelinePage() {
     ) {
       return null;
     }
-    return (
-      activeRoadmap.repo.rating_sum / activeRoadmap.repo.rating_count
-    );
+    return activeRoadmap.repo.rating_sum / activeRoadmap.repo.rating_count;
   }, [activeRoadmap]);
 
   const timelineStages = useMemo(() => {
@@ -420,33 +418,30 @@ export default function RepoTimelinePage() {
           <p className="mt-4 text-muted-foreground text-sm">
             Generated {new Date(activeRoadmap.generated_at).toLocaleString()}
           </p>
-          
+
           {/* Rating Section */}
           {syncedState && isSignedIn && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-xs">Your rating:</span>
+                  <span className="text-muted-foreground text-xs">
+                    Your rating:
+                  </span>
                   <StarRating
-                    value={userRating ?? 0}
                     onValueChange={handleRatingChange}
                     readonly={isRatingLoading}
                     size="sm"
+                    value={userRating ?? 0}
                   />
                 </div>
               </div>
             </div>
           )}
-          
+
           {/* Average Rating Display */}
           {averageRating !== null && (
             <div className="mt-3 flex items-center gap-2">
-              <StarRating
-                value={averageRating}
-                readonly
-                size="sm"
-                showValue
-              />
+              <StarRating readonly showValue size="sm" value={averageRating} />
               <span className="text-muted-foreground text-xs">
                 ({activeRoadmap.repo.rating_count}{" "}
                 {activeRoadmap.repo.rating_count === 1 ? "rating" : "ratings"})

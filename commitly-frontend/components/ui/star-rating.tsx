@@ -44,19 +44,19 @@ export function StarRating({
         {[1, 2, 3, 4, 5].map((starValue) => {
           const isFilled = value >= starValue;
           const isHalfFilled = value >= starValue - 0.5 && value < starValue;
-          
+
           return (
             <button
-              key={starValue}
-              type="button"
-              disabled={readonly}
-              onClick={() => handleClick(starValue)}
-              onMouseEnter={() => handleMouseEnter(starValue)}
               className={cn(
                 "transition-colors",
                 !readonly && "cursor-pointer hover:opacity-80",
                 readonly && "cursor-default"
               )}
+              disabled={readonly}
+              key={starValue}
+              onClick={() => handleClick(starValue)}
+              onMouseEnter={() => handleMouseEnter(starValue)}
+              type="button"
             >
               <Star
                 className={cn(
@@ -73,11 +73,10 @@ export function StarRating({
         })}
       </div>
       {showValue && value > 0 && (
-        <span className="text-muted-foreground text-xs ml-1">
+        <span className="ml-1 text-muted-foreground text-xs">
           {value.toFixed(1)}
         </span>
       )}
     </div>
   );
 }
-

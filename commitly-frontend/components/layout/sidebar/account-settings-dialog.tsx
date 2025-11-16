@@ -10,7 +10,6 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { githubService } from "@/lib/services/github";
-import { repoService } from "@/lib/services/repos";
 
 type AccountSettingsDialogProps = {
   open: boolean;
@@ -175,10 +174,10 @@ function GithubConnectionPreferences() {
         if (cancelled) {
           return;
         }
-        if (response.ok && response.data) {
+        if (response.ok && "data" in response && response.data) {
           setConnected(response.data.connected);
           setGithubLogin(response.data.github_login ?? null);
-        } else if (response.status === 401) {
+        } else if ("status" in response && response.status === 401) {
           setConnected(false);
           setGithubLogin(null);
         }
@@ -231,9 +230,9 @@ function GithubConnectionPreferences() {
         token,
         typeof window !== "undefined" ? window.location.href : undefined
       );
-      if (response.ok && response.data) {
+      if (response.ok && "data" in response && response.data) {
         window.location.href = response.data.authorize_url;
-      } else if (response.error) {
+      } else if ("error" in response && response.error) {
         setError(response.error);
       }
     } catch {
