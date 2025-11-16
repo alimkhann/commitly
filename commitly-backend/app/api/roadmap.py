@@ -87,3 +87,14 @@ async def sync_repository(
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> UserRepoStateResponse:
     return await service.sync_repo(owner, repo, current_user["sub"])
+
+
+@router.delete("/sync/{owner}/{repo}", status_code=status.HTTP_204_NO_CONTENT)
+async def desync_repository(
+    owner: str,
+    repo: str,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> Response:
+    await service.desync_repo(owner, repo, current_user["sub"])
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

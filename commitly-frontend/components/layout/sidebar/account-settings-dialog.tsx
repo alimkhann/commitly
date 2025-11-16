@@ -153,14 +153,19 @@ function GithubConnectionPreferences() {
 
   useEffect(() => {
     let cancelled = false;
+    /* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: manageable auth/status flow */
     async function loadStatus() {
-      if (!isSignedIn) return;
+      if (!isSignedIn) {
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
         const token = (await getToken?.()) ?? undefined;
         const response = await githubService.status(token);
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         if (response.ok && response.data) {
           setConnected(response.data.connected);
           setGithubLogin(response.data.github_login ?? null);
@@ -169,9 +174,13 @@ function GithubConnectionPreferences() {
           setGithubLogin(null);
         }
       } catch {
-        if (!cancelled) setError("Failed to check GitHub connection");
+        if (!cancelled) {
+          setError("Failed to check GitHub connection");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
     loadStatus();
@@ -181,7 +190,9 @@ function GithubConnectionPreferences() {
   }, [getToken, isSignedIn]);
 
   const handleDisconnect = async () => {
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -200,7 +211,9 @@ function GithubConnectionPreferences() {
   };
 
   const handleConnect = async () => {
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

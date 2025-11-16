@@ -5,6 +5,17 @@ import { Filter, GitBranch, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +26,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { RepoRecord } from "@/data/repos";
 import { githubService } from "@/lib/services/github";
 import { type RoadmapResponseBody, repoService } from "@/lib/services/repos";
 
@@ -42,7 +54,8 @@ export default function SearchPage() {
     "all" | "beginner" | "intermediate" | "advanced"
   >("all");
   const repoList = useMemo(() => repoService.list(), []);
-  const { synced, yourRepos, loading, refreshUserRepos } = useRoadmapCatalog();
+  const { synced, yourRepos, loading, refreshUserRepos, desync } =
+    useRoadmapCatalog();
   const { isSignedIn, getToken } = useAuth();
   const [publicRepos, setPublicRepos] = useState<RoadmapResponseBody[]>([]);
   const [publicMeta, setPublicMeta] = useState<{
@@ -55,6 +68,7 @@ export default function SearchPage() {
   const [githubConnected, setGithubConnected] = useState(false);
   const [isCheckingGithub, setIsCheckingGithub] = useState(false);
   const [syncingRepo, setSyncingRepo] = useState<string | null>(null);
+  const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,12 +94,16 @@ export default function SearchPage() {
   const backendConfigured = repoService.isBackendConfigured();
 
   useEffect(() => {
-    if (!backendConfigured) return;
+    if (!backendConfigured) {
+      return;
+    }
     let cancelled = false;
     const load = async () => {
       setPublicLoading(true);
       const response = await repoService.listCatalog(1, 50);
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       if (response.ok && response.data) {
         setPublicRepos(response.data.items);
         setPublicMeta({
@@ -120,13 +138,15 @@ export default function SearchPage() {
           const identity = repoService.buildIdentityFromFullName(
             repo.repo_full_name
           );
-          return { ...repo, repo: repo.repo!, slug: identity.slug };
+          return { ...repo, repo: repo.repo, slug: identity.slug };
         }),
     [yourRepos]
   );
 
   const syncedMatches = useMemo(() => {
-    if (!query.trim()) return userRepoList;
+    if (!query.trim()) {
+      return userRepoList;
+    }
     const lower = query.toLowerCase();
     return userRepoList.filter((repo) => {
       const summary = repo.repo.description?.toLowerCase() ?? "";
@@ -158,7 +178,9 @@ export default function SearchPage() {
   }, [backendConfigured, filteredRepos, publicRepos]);
 
   const handleImplement = async (fullName: string) => {
-    if (!(isSignedIn && githubConnected)) return;
+    if (!(isSignedIn && githubConnected)) {
+      return;
+    }
     const identity = repoService.buildIdentityFromFullName(fullName);
     setSyncingRepo(identity.slug);
     const token = await getToken?.();
@@ -173,6 +195,18 @@ export default function SearchPage() {
       setPublicError(response.error ?? "Unable to sync repository.");
     }
     setSyncingRepo(null);
+  };
+
+  const handleDesync = async (fullName: string) => {
+    if (!isSignedIn) {
+      return;
+    }
+    setDesyncingRepo(fullName);
+    const success = await desync(fullName);
+    if (success) {
+      await refreshUserRepos();
+    }
+    setDesyncingRepo(null);
   };
 
   return (
@@ -260,11 +294,47 @@ export default function SearchPage() {
                       ).toLocaleDateString()}
                     </span>
                   </div>
-                  <Button asChild className="w-full" variant="secondary">
-                    <Link href={`/repo/${repo.slug}/timeline`}>
-                      Open timeline
-                    </Link>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button asChild className="flex-1" variant="secondary">
+                      <Link href={`/repo/${repo.slug}/timeline`}>
+                        Open timeline
+                      </Link>
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          className="flex-1"
+                          disabled={desyncingRepo === repo.repo_full_name}
+                          variant="outline"
+                        >
+                          {desyncingRepo === repo.repo_full_name
+                            ? "Desyncing…"
+                            : "Desync"}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Desync this repository?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to desync? This removes your
+                            personal implementation state. The public timeline
+                            will remain available.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            disabled={desyncingRepo === repo.repo_full_name}
+                            onClick={() => handleDesync(repo.repo_full_name)}
+                          >
+                            Confirm desync
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -333,25 +403,54 @@ export default function SearchPage() {
                         Open timeline
                       </Link>
                     </Button>
-                    {isSignedIn && githubConnected && (
+                    {isSignedIn && githubConnected && !isSynced && (
                       <Button
                         className="flex-1"
                         disabled={
-                          syncingRepo === identity.slug ||
-                          isSynced ||
-                          isCheckingGithub
+                          syncingRepo === identity.slug || isCheckingGithub
                         }
-                        onClick={() =>
-                          void handleImplement(repo.repo.full_name)
-                        }
-                        variant={isSynced ? "outline" : "default"}
+                        onClick={() => handleImplement(repo.repo.full_name)}
                       >
-                        {isSynced
-                          ? "Synced"
-                          : syncingRepo === identity.slug
-                            ? "Syncing…"
-                            : "Implement"}
+                        {syncingRepo === identity.slug
+                          ? "Syncing…"
+                          : "Implement"}
                       </Button>
+                    )}
+                    {isSignedIn && isSynced && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            className="flex-1"
+                            disabled={desyncingRepo === repo.repo.full_name}
+                            variant="outline"
+                          >
+                            {desyncingRepo === repo.repo.full_name
+                              ? "Desyncing…"
+                              : "Desync"}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Desync this repository?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to desync? This removes your
+                              personal implementation state. The public timeline
+                              will remain available.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              disabled={desyncingRepo === repo.repo.full_name}
+                              onClick={() => handleDesync(repo.repo.full_name)}
+                            >
+                              Confirm desync
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     )}
                   </div>
                 </CardContent>

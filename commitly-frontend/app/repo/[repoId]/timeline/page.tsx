@@ -12,6 +12,16 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { type JSX, useCallback, useEffect, useMemo, useState } from "react";
 import TabSwitch from "@/components/navigation/tab-switch";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +54,7 @@ export default function RepoTimelinePage() {
   const auth = useAuth();
   const isSignedIn = Boolean(auth.isSignedIn);
   const getToken = auth.getToken;
-  const { getBySlug, upsertRoadmap, yourRepos } = useRoadmapCatalog();
+  const { getBySlug, upsertRoadmap, yourRepos, desync } = useRoadmapCatalog();
   const repoId = params.repoId as string;
   const cachedRecord = getBySlug(repoId);
   const fallbackRecord = repoService.findById(repoId);
@@ -78,7 +88,9 @@ export default function RepoTimelinePage() {
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
   useEffect(() => {
-    if (!identity || roadmap || isGenerating) return;
+    if (!identity || roadmap || isGenerating) {
+      return;
+    }
     let cancelled = false;
     const fetchCached = async () => {
       setFetchState("loading");
@@ -86,7 +98,9 @@ export default function RepoTimelinePage() {
         identity.owner,
         identity.repoName
       );
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       if (response.ok && response.data) {
         setRoadmap(response.data);
         upsertRoadmap(response.data);
@@ -106,7 +120,9 @@ export default function RepoTimelinePage() {
   }, [identity, roadmap, isGenerating, repoUrlParam, upsertRoadmap]);
 
   const retryLoad = useCallback(async () => {
-    if (!identity) return;
+    if (!identity) {
+      return;
+    }
     setFetchState("loading");
     const response = await repoService.getCachedRoadmap(
       identity.owner,
@@ -141,7 +157,9 @@ export default function RepoTimelinePage() {
         repoUrl,
         token ?? undefined
       );
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       setIsGenerating(false);
       if (response.ok && response.data) {
         setRoadmap(response.data);
@@ -177,16 +195,32 @@ export default function RepoTimelinePage() {
 
   const activeRoadmap = roadmap ?? fallbackRoadmap;
 
+  const [desyncOpen, setDesyncOpen] = useState(false);
+
   const syncedState = useMemo(() => {
-    if (!identity) return null;
+    if (!identity) {
+      return null;
+    }
     return (
       yourRepos.find((repo) => repo.repo_full_name === identity.fullName) ??
       null
     );
   }, [identity, yourRepos]);
 
+  const handleDesync = useCallback(async () => {
+    if (!syncedState) {
+      return;
+    }
+    const success = await desync(syncedState.repo_full_name);
+    if (success) {
+      setDesyncOpen(false);
+    }
+  }, [desync, syncedState]);
+
   const timelineStages = useMemo(() => {
-    if (!activeRoadmap) return [];
+    if (!activeRoadmap) {
+      return [];
+    }
     return activeRoadmap.timeline.map((stage) => ({
       ...stage,
       status: (isSignedIn
@@ -217,12 +251,40 @@ export default function RepoTimelinePage() {
 
   return (
     <div className="flex flex-1 flex-col gap-10 px-6 py-10 lg:px-12">
+      <AlertDialog onOpenChange={setDesyncOpen} open={desyncOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desync this repository?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to desync? This removes your personal
+              implementation state. The public timeline will remain available.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDesync}>
+              Confirm desync
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col">
           <p className="text-muted-foreground text-sm">Timeline</p>
           <h1 className="font-semibold text-2xl">{headerTitle}</h1>
         </div>
-        <TabSwitch repoId={repoId} />
+        <div className="flex items-center gap-2">
+          {syncedState && (
+            <Button
+              onClick={() => setDesyncOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              Desync
+            </Button>
+          )}
+          <TabSwitch repoId={repoId} />
+        </div>
       </div>
 
       {(showLoadingState || error) && (
