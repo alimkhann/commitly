@@ -88,10 +88,11 @@ class RoadmapRatingStore:
                     )
                     self._session.add(record)
 
-                # Update aggregated stats on GeneratedRoadmap
+                # Update aggregated stats on GeneratedRoadmap atomically
                 roadmap = (
                     self._session.query(GeneratedRoadmap)
                     .filter_by(repo_full_name=repo_full_name)
+                    .with_for_update()
                     .one_or_none()
                 )
 
