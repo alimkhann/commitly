@@ -1,10 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Filter, GitBranch, Search } from "lucide-react"
+import { useAuth } from "@clerk/nextjs"
 
 import { repoService, type RoadmapResponseBody } from "@/lib/services/repos"
+import { githubService } from "@/lib/services/github"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,11 +41,36 @@ export default function SearchPage() {
   const [query, setQuery] = useState("")
   const [difficulty, setDifficulty] = useState<"all" | "beginner" | "intermediate" | "advanced">("all")
   const repoList = useMemo(() => repoService.list(), [])
-  const { synced, yourRepos, loading } = useRoadmapCatalog()
+  const { synced, yourRepos, loading, refreshUserRepos } = useRoadmapCatalog()
+  const { isSignedIn, getToken } = useAuth()
   const [publicRepos, setPublicRepos] = useState<RoadmapResponseBody[]>([])
   const [publicMeta, setPublicMeta] = useState<{ total_count: number; page: number; total_pages: number } | null>(null)
   const [publicLoading, setPublicLoading] = useState(false)
   const [publicError, setPublicError] = useState<string | null>(null)
+  const [githubConnected, setGithubConnected] = useState(false)
+  const [isCheckingGithub, setIsCheckingGithub] = useState(false)
+  const [syncingRepo, setSyncingRepo] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const checkStatus = async () => {
+      if (!isSignedIn || !getToken) {
+        setGithubConnected(false)
+        return
+      }
+      setIsCheckingGithub(true)
+      const token = await getToken()
+      const response = await githubService.status(token ?? undefined)
+      if (!cancelled) {
+        setGithubConnected(Boolean(response.ok && response.data?.connected))
+        setIsCheckingGithub(false)
+      }
+    }
+    void checkStatus()
+    return () => {
+      cancelled = true
+    }
+  }, [getToken, isSignedIn])
 
   const backendConfigured = repoService.isBackendConfigured()
 
@@ -117,6 +144,20 @@ export default function SearchPage() {
     }
     return publicRepos
   }, [backendConfigured, filteredRepos, publicRepos])
+
+  const handleImplement = async (fullName: string) => {
+    if (!isSignedIn || !githubConnected) return
+    const identity = repoService.buildIdentityFromFullName(fullName)
+    setSyncingRepo(identity.slug)
+    const token = await getToken?.()
+    const response = await repoService.syncRepo(identity.owner, identity.repoName, token ?? undefined)
+    if (response.ok) {
+      await refreshUserRepos()
+    } else {
+      setPublicError(response.error ?? "Unable to sync repository.")
+    }
+    setSyncingRepo(null)
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">
@@ -220,6 +261,7 @@ export default function SearchPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {publicRepoList.map((repo) => {
             const identity = repoService.buildIdentityFromFullName(repo.repo.full_name)
+            const isSynced = yourRepos.some((item) => item.repo_full_name === repo.repo.full_name)
             return (
               <Card
                 key={identity.slug}
@@ -242,9 +284,21 @@ export default function SearchPage() {
                       {repo.repo.star_count ? ` • ${repo.repo.star_count}★` : ""}
                     </span>
                   </div>
-                  <Button className="w-full" variant="secondary" asChild>
-                    <Link href={`/repo/${identity.slug}/timeline`}>Open timeline</Link>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button className="flex-1" variant="secondary" asChild>
+                      <Link href={`/repo/${identity.slug}/timeline`}>Open timeline</Link>
+                    </Button>
+                    {isSignedIn && githubConnected && (
+                      <Button
+                        className="flex-1"
+                        variant={isSynced ? "outline" : "default"}
+                        disabled={syncingRepo === identity.slug || isSynced || isCheckingGithub}
+                        onClick={() => void handleImplement(repo.repo.full_name)}
+                      >
+                        {isSynced ? "Synced" : syncingRepo === identity.slug ? "Syncing…" : "Implement"}
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )

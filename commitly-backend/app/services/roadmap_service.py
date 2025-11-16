@@ -166,6 +166,41 @@ class RoadmapService:
     async def list_user_repos(self, user_id: str) -> list[UserRepoStateResponse]:
         return self._pin_store.list_states(user_id)
 
+    async def sync_repo(
+        self, owner: str, repo: str, user_id: str
+    ) -> UserRepoStateResponse:
+        full_name = f"{owner}/{repo}"
+        roadmap = self._result_store.get(full_name)
+        if roadmap is None:
+            await self.generate(
+                repo_url=f"https://github.com/{full_name}",
+                force_refresh=False,
+                actor_id=user_id,
+            )
+            roadmap = self._result_store.get(full_name)
+        if roadmap is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Roadmap could not be generated for this repository.",
+            )
+        created = self._pin_store.upsert_state(
+            user_id,
+            full_name,
+            status="synced",
+            is_archived=False,
+            progress_percent=0,
+        )
+        if created:
+            self._result_store.increment_sync_count(full_name)
+        return UserRepoStateResponse(
+            repo_full_name=full_name,
+            status="synced",
+            is_archived=False,
+            progress_percent=0,
+            pinned_at=datetime.now(timezone.utc),
+            repo=roadmap.repo,
+        )
+
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
         self._pin_store.unpin(user_id, repo_full_name)
 

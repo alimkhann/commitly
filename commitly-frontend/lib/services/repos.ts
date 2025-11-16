@@ -13,6 +13,7 @@ const API_ROUTES = {
   catalog: "/api/v1/roadmap/catalog",
   cached: (owner: string, repo: string) => `/api/v1/roadmap/cached/${owner}/${repo}`,
   userRepos: "/api/v1/roadmap/user-repos",
+  sync: (owner: string, repo: string) => `/api/v1/roadmap/sync/${owner}/${repo}`,
 }
 
 export type RepoIdentity = {
@@ -219,6 +220,21 @@ export const repoService = {
     return apiClient<UserRepoState[]>(env.apiBaseUrl, {
       path: API_ROUTES.userRepos,
       cache: "no-store",
+      authToken,
+    })
+  },
+
+  async syncRepo(
+    owner: string,
+    repo: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<UserRepoState>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" }
+    }
+    return apiClient<UserRepoState>(env.apiBaseUrl, {
+      path: API_ROUTES.sync(owner, repo),
+      method: "POST",
       authToken,
     })
   },

@@ -40,7 +40,7 @@ export default function RepoTimelinePage() {
   const auth = useAuth()
   const isSignedIn = Boolean(auth.isSignedIn)
   const getToken = auth.getToken
-  const { getBySlug, upsertRoadmap } = useRoadmapCatalog()
+  const { getBySlug, upsertRoadmap, yourRepos } = useRoadmapCatalog()
   const repoId = params.repoId as string
   const cachedRecord = getBySlug(repoId)
   const fallbackRecord = repoService.findById(repoId)
@@ -153,6 +153,11 @@ export default function RepoTimelinePage() {
 
   const activeRoadmap = roadmap ?? fallbackRoadmap
 
+  const syncedState = useMemo(() => {
+    if (!identity) return null
+    return yourRepos.find((repo) => repo.repo_full_name === identity.fullName) ?? null
+  }, [identity, yourRepos])
+
   const timelineStages = useMemo(() => {
     if (!activeRoadmap) return []
     return activeRoadmap.timeline.map((stage) => ({
@@ -223,6 +228,11 @@ export default function RepoTimelinePage() {
                 Cached hit
               </Badge>
             )}
+            {syncedState && (
+              <Badge variant="accent" className="text-xs uppercase">
+                Synced
+              </Badge>
+            )}
           </div>
           {activeRoadmap.repo.description && (
             <p className="mt-4 text-base text-muted-foreground">
@@ -232,6 +242,20 @@ export default function RepoTimelinePage() {
           <p className="mt-4 text-sm text-muted-foreground">
             Generated {new Date(activeRoadmap.generated_at).toLocaleString()}
           </p>
+          {syncedState && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Progress</span>
+                <span>{syncedState.progress_percent}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-border/50">
+                <div
+                  className="h-2 rounded-full bg-primary"
+                  style={{ width: `${Math.min(100, Math.max(0, syncedState.progress_percent))}%` }}
+                />
+              </div>
+            </div>
+          )}
         </section>
       )}
 

@@ -96,6 +96,24 @@ class RoadmapResultStore:
 
         self._with_table_guard(action)
 
+    def increment_sync_count(self, full_name: str) -> None:
+        def action() -> None:
+            try:
+                record = (
+                    self._session.query(GeneratedRoadmap)
+                    .filter_by(repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if not record:
+                    return
+                record.sync_count = (record.sync_count or 0) + 1
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
+
     def get(self, full_name: str) -> RoadmapResponse | None:
         def action() -> RoadmapResponse | None:
             record = (
@@ -253,7 +271,7 @@ class UserSyncedRepoStore:
         status: str = "synced",
         is_archived: bool = False,
         progress_percent: int = 0,
-    ) -> None:
+    ) -> bool:
         def action() -> None:
             try:
                 record = (
@@ -261,6 +279,7 @@ class UserSyncedRepoStore:
                     .filter_by(user_id=user_id, repo_full_name=full_name)
                     .one_or_none()
                 )
+                created = False
                 if record:
                     record.status = status
                     record.is_archived = is_archived
@@ -276,12 +295,14 @@ class UserSyncedRepoStore:
                             progress_percent=progress_percent,
                         )
                     )
+                    created = True
                 self._session.commit()
+                return created
             except SQLAlchemyError:
                 self._session.rollback()
                 raise
 
-        self._with_table_guard(action)
+        return self._with_table_guard(action)
 
     def list_states(self, user_id: str | None) -> list[UserRepoStateResponse]:
         if not user_id:
