@@ -16,6 +16,11 @@ const API_ROUTES = {
   userRepos: "/api/v1/roadmap/user-repos",
   sync: (owner: string, repo: string) =>
     `/api/v1/roadmap/sync/${owner}/${repo}`,
+  archive: (owner: string, repo: string) =>
+    `/api/v1/roadmap/archive/${owner}/${repo}`,
+  unarchive: (owner: string, repo: string) =>
+    `/api/v1/roadmap/unarchive/${owner}/${repo}`,
+  archived: "/api/v1/roadmap/archived",
 };
 
 export type RepoIdentity = {
@@ -253,6 +258,49 @@ export const repoService = {
     return apiClient<null>(env.apiBaseUrl, {
       path: API_ROUTES.sync(owner, repo),
       method: "DELETE",
+      authToken,
+    });
+  },
+
+  async archiveRepo(
+    owner: string,
+    repo: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<UserRepoState>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<UserRepoState>(env.apiBaseUrl, {
+      path: API_ROUTES.archive(owner, repo),
+      method: "POST",
+      authToken,
+    });
+  },
+
+  async unarchiveRepo(
+    owner: string,
+    repo: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<UserRepoState>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<UserRepoState>(env.apiBaseUrl, {
+      path: API_ROUTES.unarchive(owner, repo),
+      method: "POST",
+      authToken,
+    });
+  },
+
+  async listArchivedRepos(
+    authToken?: string
+  ): Promise<ApiClientResponse<UserRepoState[]>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<UserRepoState[]>(env.apiBaseUrl, {
+      path: API_ROUTES.archived,
+      cache: "no-store",
       authToken,
     });
   },

@@ -98,3 +98,31 @@ async def desync_repository(
 ) -> Response:
     await service.desync_repo(owner, repo, current_user["sub"])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/archive/{owner}/{repo}", response_model=UserRepoStateResponse)
+async def archive_repository(
+    owner: str,
+    repo: str,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> UserRepoStateResponse:
+    return await service.archive_repo(owner, repo, current_user["sub"])
+
+
+@router.post("/unarchive/{owner}/{repo}", response_model=UserRepoStateResponse)
+async def unarchive_repository(
+    owner: str,
+    repo: str,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> UserRepoStateResponse:
+    return await service.unarchive_repo(owner, repo, current_user["sub"])
+
+
+@router.get("/archived", response_model=list[UserRepoStateResponse])
+async def list_archived_repositories(
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> list[UserRepoStateResponse]:
+    return await service.list_archived_repos(current_user["sub"])
