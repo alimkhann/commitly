@@ -1,7 +1,7 @@
 """Tests for roadmap view tracking and trending sort feature."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy.orm import Session
@@ -43,9 +43,8 @@ class TestRoadmapViewTrackerService:
     def test_can_increment_view_new_user(self, view_tracker_service, mock_session):
         """First-time viewers should be able to increment views."""
         # Mock no existing record
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            None
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = None
 
         result = view_tracker_service.can_increment_view("owner/repo", "user123")
         assert result is True
@@ -57,21 +56,21 @@ class TestRoadmapViewTrackerService:
         # Mock existing record from 1 hour ago (within 24-hour cooldown)
         mock_record = MagicMock(spec=RoadmapViewTracker)
         mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_record
 
         result = view_tracker_service.can_increment_view("owner/repo", "user123")
         assert result is False
 
-    def test_can_increment_view_after_cooldown(self, view_tracker_service, mock_session):
+    def test_can_increment_view_after_cooldown(
+        self, view_tracker_service, mock_session
+    ):
         """Users viewing after cooldown period should be able to increment views."""
         # Mock existing record from 25 hours ago (outside 24-hour cooldown)
         mock_record = MagicMock(spec=RoadmapViewTracker)
         mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=25)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_record
 
         result = view_tracker_service.can_increment_view("owner/repo", "user123")
         assert result is True
@@ -89,9 +88,8 @@ class TestRoadmapViewTrackerService:
     def test_record_view_creates_new_record(self, view_tracker_service, mock_session):
         """First view should create a new tracker record."""
         # Mock no existing record
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            None
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = None
 
         view_tracker_service.record_view("owner/repo", "user123")
 
@@ -106,14 +104,15 @@ class TestRoadmapViewTrackerService:
         # Mock existing record
         mock_record = MagicMock(spec=RoadmapViewTracker)
         mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=25)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_record
 
         view_tracker_service.record_view("owner/repo", "user123")
 
         # Verify record was updated (viewed_at should be updated)
-        assert mock_record.viewed_at != datetime.now(timezone.utc) - timedelta(hours=25)
+        assert mock_record.viewed_at != datetime.now(timezone.utc) - timedelta(
+            hours=25
+        )
         mock_session.commit.assert_called()
 
     def test_increment_view_if_eligible_returns_true_when_eligible(
@@ -121,9 +120,8 @@ class TestRoadmapViewTrackerService:
     ):
         """Should return True and record view when eligible."""
         # Mock no existing record (eligible)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            None
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = None
 
         result = view_tracker_service.increment_view_if_eligible(
             "owner/repo", "user123"
@@ -139,9 +137,8 @@ class TestRoadmapViewTrackerService:
         # Mock existing record from 1 hour ago (not eligible)
         mock_record = MagicMock(spec=RoadmapViewTracker)
         mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_record
 
         result = view_tracker_service.increment_view_if_eligible(
             "owner/repo", "user123"
@@ -153,23 +150,23 @@ class TestRoadmapViewTrackerService:
 class TestRoadmapResultStoreIncrement:
     """Test suite for view count increment in RoadmapResultStore."""
 
-    def test_increment_view_count_updates_counter(self, result_store, mock_session):
-        """Incrementing view count should update both the counter and repo_summary."""
-        # Mock existing roadmap with SQLAlchemy instance state
+    def test_increment_view_count_updates_counter(
+        self, result_store, mock_session
+    ):
+        """Should increment view count for existing roadmap."""
+        # Mock existing roadmap
         mock_roadmap = MagicMock(spec=GeneratedRoadmap)
         mock_roadmap.view_count = 5
-        mock_roadmap.repo_summary = {"full_name": "owner/repo", "view_count": 5}
+        mock_roadmap.repo_summary = {"full_name": "owner/repo"}
         mock_roadmap._sa_instance_state = MagicMock()  # Add SQLAlchemy state
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_roadmap
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_roadmap
 
         result_store.increment_view_count("owner/repo")
 
-        # Verify view_count was incremented
         assert mock_roadmap.view_count == 6
         assert mock_roadmap.repo_summary["view_count"] == 6
-        mock_session.commit.assert_called()
+        mock_session.commit.assert_called_once()
 
     def test_increment_view_count_handles_none_view_count(
         self, result_store, mock_session
@@ -180,9 +177,8 @@ class TestRoadmapResultStoreIncrement:
         mock_roadmap.view_count = None
         mock_roadmap.repo_summary = {"full_name": "owner/repo"}
         mock_roadmap._sa_instance_state = MagicMock()  # Add SQLAlchemy state
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_roadmap
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_roadmap
 
         result_store.increment_view_count("owner/repo")
 
@@ -190,14 +186,11 @@ class TestRoadmapResultStoreIncrement:
         assert mock_roadmap.view_count == 1
         assert mock_roadmap.repo_summary["view_count"] == 1
 
-    def test_increment_view_count_nonexistent_roadmap(
-        self, result_store, mock_session
-    ):
+    def test_increment_view_count_nonexistent_roadmap(self, result_store, mock_session):
         """Should handle gracefully when roadmap doesn't exist."""
         # Mock no existing roadmap
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            None
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = None
 
         # Should not raise an error
         result_store.increment_view_count("owner/nonexistent")
@@ -410,7 +403,9 @@ class TestTrendingScoreCalculation:
         rating_count = 10
         avg_rating = rating_sum / rating_count  # 4.5
 
-        expected_score = (view_count * 0.4) + (sync_count * 0.3) + (avg_rating * 6 * 0.3)
+        expected_score = (
+            (view_count * 0.4) + (sync_count * 0.3) + (avg_rating * 6 * 0.3)
+        )
 
         # Calculate: 40 + 15 + 8.1 = 63.1
         assert expected_score == pytest.approx(63.1)
@@ -419,10 +414,12 @@ class TestTrendingScoreCalculation:
         """Trending score should handle repositories with no ratings."""
         view_count = 100
         sync_count = 50
-        rating_count = 0
+        _ = 0
         avg_rating = 0  # No ratings
 
-        expected_score = (view_count * 0.4) + (sync_count * 0.3) + (avg_rating * 6 * 0.3)
+        expected_score = (
+            (view_count * 0.4) + (sync_count * 0.3) + (avg_rating * 6 * 0.3)
+        )
 
         # Calculate: 40 + 15 + 0 = 55
         assert expected_score == 55.0
@@ -445,9 +442,8 @@ class TestViewTrackingIntegration:
         mock_roadmap.view_count = 10
         mock_roadmap.repo_summary = {"full_name": "owner/repo", "view_count": 10}
         mock_roadmap._sa_instance_state = MagicMock()  # Add SQLAlchemy state
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_roadmap
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_roadmap
 
         # 1. Check if view can be incremented (should be True for anonymous)
         can_increment = view_tracker_service.can_increment_view("owner/repo", None)
@@ -467,13 +463,15 @@ class TestViewTrackingIntegration:
     ):
         """Test complete workflow for first-time authenticated user."""
         # Setup: No existing view record
-        mock_session.query.return_value.filter_by.return_value.one_or_none.side_effect = [
+        side_effect_values = [
             None,  # First call: no view record
             None,  # Second call: still no view record (for record_view)
             MagicMock(
                 spec=GeneratedRoadmap, view_count=10, repo_summary={"view_count": 10}
             ),  # Third call: roadmap exists
         ]
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            side_effect = side_effect_values
 
         # 1. Check if view can be incremented (should be True for new user)
         can_increment = view_tracker_service.can_increment_view("owner/repo", "user123")
@@ -492,9 +490,8 @@ class TestViewTrackingIntegration:
         # Setup: Existing view record from 1 hour ago
         mock_record = MagicMock(spec=RoadmapViewTracker)
         mock_record.viewed_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter_by.return_value.one_or_none.\
+            return_value = mock_record
 
         # Check if view can be incremented (should be False within cooldown)
         can_increment = view_tracker_service.can_increment_view("owner/repo", "user123")
