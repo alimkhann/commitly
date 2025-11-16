@@ -357,7 +357,7 @@ class TestRoadmapSorting:
         )
         mock_session.query.return_value = mock_query
 
-        items, total = result_store.list_paginated(1, 10, "newest")
+        items, total = result_store.list_catalog(1, 10, sort="newest")
 
         # Verify order_by was called with updated_at.desc()
         assert total == 3
@@ -372,7 +372,7 @@ class TestRoadmapSorting:
         )
         mock_session.query.return_value = mock_query
 
-        items, total = result_store.list_paginated(1, 10, "most_viewed")
+        items, total = result_store.list_catalog(1, 10, sort="most_viewed")
 
         # Verify order_by was called
         assert total == 3
@@ -387,7 +387,7 @@ class TestRoadmapSorting:
         )
         mock_session.query.return_value = mock_query
 
-        items, total = result_store.list_paginated(1, 10, "most_synced")
+        items, total = result_store.list_catalog(1, 10, sort="most_synced")
 
         assert total == 3
 
@@ -401,7 +401,7 @@ class TestRoadmapSorting:
         )
         mock_session.query.return_value = mock_query
 
-        items, total = result_store.list_paginated(1, 10, "highest_rated")
+        items, total = result_store.list_catalog(1, 10, sort="highest_rated")
 
         assert total == 3
 
@@ -415,7 +415,7 @@ class TestRoadmapSorting:
         )
         mock_session.query.return_value = mock_query
 
-        items, total = result_store.list_paginated(1, 10, "trending")
+        items, total = result_store.list_catalog(1, 10, sort="trending")
 
         assert total == 3
 
@@ -427,7 +427,7 @@ class TestRoadmapSorting:
         mock_query.offset.return_value.limit.return_value.all.return_value = []
         mock_session.query.return_value = mock_query
 
-        items, total = result_store.list_paginated(2, 10, "newest")
+        items, total = result_store.list_catalog(2, 10, sort="newest")
 
         # Verify offset and limit were called correctly
         mock_query.offset.assert_called_with(10)  # (page - 1) * page_size
@@ -442,7 +442,7 @@ class TestRoadmapSorting:
         mock_session.query.return_value = mock_query
 
         # Request page_size > 100
-        items, total = result_store.list_paginated(1, 200, "newest")
+        items, total = result_store.list_catalog(1, 200, sort="newest")
 
         # Verify limit was capped at 100
         mock_query.offset.return_value.limit.assert_called_with(100)
