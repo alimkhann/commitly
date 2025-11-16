@@ -620,3 +620,364 @@ def test_archive_unarchive_cycle(client: TestClient, auth_headers, db_session):
     states = pin_store.list_states("user_123")
     assert len(states) == 1
     assert states[0].is_archived is True
+
+
+def test_metadata_collection_in_upsert(db_session):
+    """Test that metadata fields are properly stored when upserting a roadmap."""
+    from app.services.roadmap_repository import RoadmapResultStore
+
+    result_store = RoadmapResultStore(db_session)
+
+    # Create a roadmap with full metadata
+    roadmap = RoadmapResponse(
+        repo=RoadmapRepoSummary(
+            full_name="acme/widgets",
+            description="Test repo with metadata",
+            language="Python",
+            stars=100,
+            default_branch="main",
+            html_url="https://github.com/acme/widgets",
+            owner_avatar_url="https://avatars.githubusercontent.com/u/1?v=4",
+            primary_language="Python",
+            languages=["Python", "TypeScript", "JavaScript"],
+            topics=["web", "api", "framework"],
+            difficulty="medium",
+            star_count=100,
+            fork_count=25,
+            last_pushed_at=datetime.now(timezone.utc),
+            license="MIT",
+            contributor_count=15,
+        ),
+        timeline=[],
+        cached=False,
+        generated_at=datetime.now(timezone.utc),
+    )
+
+    result_store.upsert(roadmap)
+
+    # Verify metadata was stored by querying the database directly
+    from app.models.roadmap import GeneratedRoadmap
+
+    record = (
+        db_session.query(GeneratedRoadmap)
+        .filter_by(repo_full_name="acme/widgets")
+        .first()
+    )
+    assert record is not None
+    assert record.primary_language == "Python"
+    assert record.languages == ["Python", "TypeScript", "JavaScript"]
+    assert record.topics == ["web", "api", "framework"]
+    assert record.difficulty == "medium"
+    assert record.star_count == 100
+    assert record.fork_count == 25
+    assert record.contributor_count == 15
+    assert record.license == "MIT"
+    assert record.last_pushed_at is not None
+
+
+def test_metadata_update_on_upsert(db_session):
+    """Test that metadata fields are updated when upserting an existing roadmap."""
+    from app.services.roadmap_repository import RoadmapResultStore
+
+    result_store = RoadmapResultStore(db_session)
+
+    # Create initial roadmap
+    initial_roadmap = RoadmapResponse(
+        repo=RoadmapRepoSummary(
+            full_name="acme/widgets",
+            description="Initial",
+            language="Python",
+            stars=50,
+            default_branch="main",
+            html_url="https://github.com/acme/widgets",
+            owner_avatar_url=None,
+            difficulty="easy",
+            star_count=50,
+            fork_count=10,
+        ),
+        timeline=[],
+        cached=False,
+        generated_at=datetime.now(timezone.utc),
+    )
+    result_store.upsert(initial_roadmap)
+
+    # Update with new metadata
+    updated_roadmap = RoadmapResponse(
+        repo=RoadmapRepoSummary(
+            full_name="acme/widgets",
+            description="Updated",
+            language="Python",
+            stars=100,
+            default_branch="main",
+            html_url="https://github.com/acme/widgets",
+            owner_avatar_url=None,
+            primary_language="Python",
+            languages=["Python", "TypeScript"],
+            topics=["web", "api"],
+            difficulty="medium",
+            star_count=100,
+            fork_count=25,
+            contributor_count=15,
+            license="MIT",
+        ),
+        timeline=[],
+        cached=True,
+        generated_at=datetime.now(timezone.utc),
+    )
+    result_store.upsert(updated_roadmap)
+
+    # Verify metadata was updated by querying the database directly
+    from app.models.roadmap import GeneratedRoadmap
+
+    record = (
+        db_session.query(GeneratedRoadmap)
+        .filter_by(repo_full_name="acme/widgets")
+        .first()
+    )
+    assert record is not None
+    assert record.primary_language == "Python"
+    assert record.languages == ["Python", "TypeScript"]
+    assert record.topics == ["web", "api"]
+    assert record.difficulty == "medium"
+    assert record.star_count == 100
+    assert record.fork_count == 25
+    assert record.contributor_count == 15
+    assert record.license == "MIT"
+
+
+def test_to_summary_includes_all_metadata(db_session):
+    """Test that _to_summary includes all metadata fields."""
+    from app.services.github import RepositoryMetadata
+    from app.services.github_tokens import GitHubTokenStore
+    from app.services.rag import CommitChunkStore
+    from app.services.roadmap_repository import RoadmapResultStore
+    from app.services.roadmap_service import RoadmapService
+
+    service = RoadmapService(
+        chunk_store=CommitChunkStore(db_session),
+        result_store=RoadmapResultStore(db_session),
+        pin_store=None,  # type: ignore
+        generator=None,  # type: ignore
+        token_store=GitHubTokenStore(db_session),
+    )
+
+    # Create repository metadata with all fields
+    repo_metadata = RepositoryMetadata(
+        id=123,
+        name="widgets",
+        full_name="acme/widgets",
+        description="Test repo",
+        default_branch="main",
+        stars=100,
+        language="Python",
+        html_url="https://github.com/acme/widgets",
+        owner_avatar_url="https://avatars.githubusercontent.com/u/1?v=4",
+        languages={"Python": 50000, "TypeScript": 20000, "JavaScript": 10000},
+        topics=["web", "api", "framework"],
+        fork_count=25,
+        last_pushed_at=datetime.now(timezone.utc),
+        license="MIT",
+        contributor_count=15,
+    )
+
+    summary = service._to_summary(repo_metadata, difficulty="medium")
+
+    assert summary.primary_language == "Python"
+    assert summary.languages == ["Python", "TypeScript", "JavaScript"]
+    assert summary.topics == ["web", "api", "framework"]
+    assert summary.difficulty == "medium"
+    assert summary.star_count == 100
+    assert summary.fork_count == 25
+    assert summary.contributor_count == 15
+    assert summary.license == "MIT"
+    assert summary.last_pushed_at == repo_metadata.last_pushed_at
+
+
+def test_to_summary_handles_missing_metadata(db_session):
+    """Test that _to_summary handles missing metadata gracefully."""
+    from app.services.github import RepositoryMetadata
+    from app.services.github_tokens import GitHubTokenStore
+    from app.services.rag import CommitChunkStore
+    from app.services.roadmap_repository import RoadmapResultStore
+    from app.services.roadmap_service import RoadmapService
+
+    service = RoadmapService(
+        chunk_store=CommitChunkStore(db_session),
+        result_store=RoadmapResultStore(db_session),
+        pin_store=None,  # type: ignore
+        generator=None,  # type: ignore
+        token_store=GitHubTokenStore(db_session),
+    )
+
+    # Create repository metadata with minimal fields
+    repo_metadata = RepositoryMetadata(
+        id=123,
+        name="widgets",
+        full_name="acme/widgets",
+        description=None,
+        default_branch="main",
+        stars=0,
+        language=None,
+        html_url=None,
+        owner_avatar_url=None,
+    )
+
+    summary = service._to_summary(repo_metadata, difficulty="easy")
+
+    assert summary.primary_language is None
+    assert summary.languages is None
+    assert summary.topics is None
+    assert summary.difficulty == "easy"
+    assert summary.star_count == 0
+    assert summary.fork_count == 0
+    assert summary.contributor_count == 0
+    assert summary.license is None
+    assert summary.last_pushed_at is None
+
+
+@pytest.mark.asyncio
+async def test_difficulty_classification(db_session):
+    """Test difficulty classification using Gemini."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.services.ai.gemini import GeminiRoadmapGenerator
+    from app.services.github import RepositoryMetadata
+    from app.services.rag import CommitChunk
+
+    generator = GeminiRoadmapGenerator(api_key="test-key", model="test-model")
+
+    repo = RepositoryMetadata(
+        id=123,
+        name="widgets",
+        full_name="acme/widgets",
+        description="A simple web app",
+        default_branch="main",
+        stars=50,
+        language="Python",
+        html_url="https://github.com/acme/widgets",
+        owner_avatar_url=None,
+        languages={"Python": 10000},
+        topics=["web", "flask"],
+        fork_count=5,
+        contributor_count=3,
+    )
+
+    chunks = [
+        CommitChunk(
+            repo_full_name="acme/widgets",
+            commit_sha="abc123",
+            chunk_type="initial-full",
+            content="Initial commit with simple setup",
+            authored_at=datetime.now(timezone.utc),
+        )
+    ]
+
+    # Mock Gemini API response
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "candidates": [{"content": {"parts": [{"text": "easy"}]}}]
+    }
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client_instance = AsyncMock()
+        mock_client.return_value.__aenter__.return_value = mock_client_instance
+        mock_client_instance.post.return_value = mock_response
+
+        difficulty = await generator.classify_difficulty(repo, chunks)
+
+    assert difficulty == "easy"
+
+
+@pytest.mark.asyncio
+async def test_difficulty_classification_defaults_on_error(db_session):
+    """Test that difficulty classification defaults to 'medium' on error."""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.ai.gemini import GeminiRoadmapGenerator
+    from app.services.github import RepositoryMetadata
+    from app.services.rag import CommitChunk
+
+    generator = GeminiRoadmapGenerator(api_key="test-key", model="test-model")
+
+    repo = RepositoryMetadata(
+        id=123,
+        name="widgets",
+        full_name="acme/widgets",
+        description="Test repo",
+        default_branch="main",
+        stars=0,
+        language=None,
+        html_url=None,
+        owner_avatar_url=None,
+    )
+
+    chunks = [
+        CommitChunk(
+            repo_full_name="acme/widgets",
+            commit_sha="abc123",
+            chunk_type="initial-full",
+            content="Test",
+            authored_at=datetime.now(timezone.utc),
+        )
+    ]
+
+    # Mock Gemini API to raise an error
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client_instance = AsyncMock()
+        mock_client.return_value.__aenter__.return_value = mock_client_instance
+        mock_client_instance.post.side_effect = Exception("API Error")
+
+        difficulty = await generator.classify_difficulty(repo, chunks)
+
+    assert difficulty == "medium"
+
+
+@pytest.mark.asyncio
+async def test_difficulty_classification_validates_response(db_session):
+    """Test that difficulty classification validates and normalizes response."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.services.ai.gemini import GeminiRoadmapGenerator
+    from app.services.github import RepositoryMetadata
+    from app.services.rag import CommitChunk
+
+    generator = GeminiRoadmapGenerator(api_key="test-key", model="test-model")
+
+    repo = RepositoryMetadata(
+        id=123,
+        name="widgets",
+        full_name="acme/widgets",
+        description="Test repo",
+        default_branch="main",
+        stars=0,
+        language=None,
+        html_url=None,
+        owner_avatar_url=None,
+    )
+
+    chunks = [
+        CommitChunk(
+            repo_full_name="acme/widgets",
+            commit_sha="abc123",
+            chunk_type="initial-full",
+            content="Test",
+            authored_at=datetime.now(timezone.utc),
+        )
+    ]
+
+    # Test with invalid response that contains valid word
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "candidates": [{"content": {"parts": [{"text": "The difficulty is hard"}]}}]
+    }
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client_instance = AsyncMock()
+        mock_client.return_value.__aenter__.return_value = mock_client_instance
+        mock_client_instance.post.return_value = mock_response
+
+        difficulty = await generator.classify_difficulty(repo, chunks)
+
+    assert difficulty == "hard"

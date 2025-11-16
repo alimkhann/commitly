@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 import re
@@ -48,6 +49,12 @@ class RepositoryMetadata:
     language: Optional[str]
     html_url: Optional[str]
     owner_avatar_url: Optional[str]
+    languages: Optional[dict[str, int]] = None  # language -> bytes mapping
+    topics: Optional[List[str]] = None
+    fork_count: int = 0
+    last_pushed_at: Optional[datetime] = None
+    license: Optional[str] = None
+    contributor_count: int = 0
 
 
 @dataclass(slots=True)
@@ -115,6 +122,39 @@ class GitHubService:
         response = await self._request("GET", f"/repos/{identity.full_name}")
         payload = response.json()
         owner = payload.get("owner") or {}
+
+        # Parse last_pushed_at
+        last_pushed_at = None
+        if payload.get("pushed_at"):
+            try:
+                last_pushed_at = datetime.fromisoformat(
+                    payload["pushed_at"].replace("Z", "+00:00")
+                )
+            except (ValueError, AttributeError):
+                pass
+
+        # Parse license
+        license_name = None
+        if payload.get("license") and isinstance(payload["license"], dict):
+            license_name = payload["license"].get("name")
+
+        # Fetch additional metadata in parallel
+        languages_task = self._fetch_languages(identity)
+        topics_task = self._fetch_topics(identity)
+        contributor_count_task = self._fetch_contributor_count(identity)
+
+        languages, topics, contributor_count = await asyncio.gather(
+            languages_task, topics_task, contributor_count_task, return_exceptions=True
+        )
+
+        # Handle exceptions gracefully
+        if isinstance(languages, Exception):
+            languages = None
+        if isinstance(topics, Exception):
+            topics = None
+        if isinstance(contributor_count, Exception):
+            contributor_count = 0
+
         return RepositoryMetadata(
             id=payload["id"],
             name=payload["name"],
@@ -125,7 +165,74 @@ class GitHubService:
             language=payload.get("language"),
             html_url=payload.get("html_url"),
             owner_avatar_url=owner.get("avatar_url"),
+            languages=languages,
+            topics=topics,
+            fork_count=payload.get("forks_count", 0),
+            last_pushed_at=last_pushed_at,
+            license=license_name,
+            contributor_count=contributor_count or 0,
         )
+
+    async def _fetch_languages(
+        self, identity: RepositoryIdentity
+    ) -> Optional[dict[str, int]]:
+        """Fetch repository languages from GitHub API."""
+        try:
+            response = await self._request(
+                "GET", f"/repos/{identity.full_name}/languages"
+            )
+            return response.json()
+        except GitHubServiceError:
+            return None
+
+    async def _fetch_topics(self, identity: RepositoryIdentity) -> Optional[List[str]]:
+        """Fetch repository topics from GitHub API."""
+        try:
+            # Use the topics endpoint which requires special Accept header
+            headers = {
+                **self._headers,
+                "Accept": "application/vnd.github.mercy-preview+json",
+            }
+            url = f"{self._base_url}/repos/{identity.full_name}/topics"
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.request("GET", url, headers=headers)
+            if response.status_code == 200:
+                payload = response.json()
+                return payload.get("names", [])
+            return None
+        except Exception:
+            return None
+
+    async def _fetch_contributor_count(self, identity: RepositoryIdentity) -> int:
+        """Fetch contributor count from GitHub API."""
+        try:
+            # Use pagination to count contributors efficiently
+            # GitHub API returns contributors with pagination
+            count = 0
+            page = 1
+            per_page = 100
+
+            while True:
+                response = await self._request(
+                    "GET",
+                    f"/repos/{identity.full_name}/contributors",
+                    params={"page": page, "per_page": per_page, "anon": "true"},
+                )
+                contributors = response.json()
+                if not contributors:
+                    break
+                count += len(contributors)
+                # Check if there are more pages
+                link_header = response.headers.get("Link", "")
+                if 'rel="next"' not in link_header:
+                    break
+                page += 1
+                # Limit to reasonable number to avoid excessive API calls
+                if page > 10:  # Max 1000 contributors
+                    break
+            return count
+        except GitHubServiceError:
+            return 0
 
     async def fetch_commits(
         self,

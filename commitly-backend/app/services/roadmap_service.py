@@ -123,8 +123,16 @@ class RoadmapService:
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=str(exc),
             )
+
+        # Classify difficulty using AI
+        try:
+            difficulty = await self._generator.classify_difficulty(repo, chunks)
+        except Exception:
+            # If difficulty classification fails, default to medium
+            difficulty = "medium"
+
         response = RoadmapResponse(
-            repo=self._to_summary(repo),
+            repo=self._to_summary(repo, difficulty),
             timeline=timeline,
             cached=False,
             generated_at=datetime.now(timezone.utc),
@@ -323,7 +331,22 @@ class RoadmapService:
             )
         return chunks
 
-    def _to_summary(self, repo: RepositoryMetadata) -> RoadmapRepoSummary:
+    def _to_summary(
+        self, repo: RepositoryMetadata, difficulty: str = "medium"
+    ) -> RoadmapRepoSummary:
+        # Extract primary language and all languages
+        primary_language = repo.language
+        languages_list = None
+        if repo.languages:
+            # Sort languages by bytes (descending) and get list of language names
+            sorted_languages = sorted(
+                repo.languages.items(), key=lambda x: x[1], reverse=True
+            )
+            languages_list = [lang for lang, _ in sorted_languages]
+            # If no primary language but we have languages, use the top one
+            if not primary_language and languages_list:
+                primary_language = languages_list[0]
+
         return RoadmapRepoSummary(
             full_name=repo.full_name,
             description=repo.description,
@@ -332,6 +355,15 @@ class RoadmapService:
             default_branch=repo.default_branch,
             html_url=repo.html_url,
             owner_avatar_url=repo.owner_avatar_url,
+            primary_language=primary_language,
+            languages=languages_list,
+            topics=repo.topics,
+            difficulty=difficulty,
+            star_count=repo.stars,
+            fork_count=repo.fork_count,
+            last_pushed_at=repo.last_pushed_at,
+            license=repo.license,
+            contributor_count=repo.contributor_count,
         )
 
 

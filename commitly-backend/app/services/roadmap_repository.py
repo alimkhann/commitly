@@ -85,9 +85,53 @@ class RoadmapResultStore:
                     record.sync_count = 0
                 if record.view_count is None:
                     record.view_count = 0
-                if record.star_count is None:
+                # Update metadata fields from summary
+                if summary.get("star_count") is not None:
                     record.star_count = summary.get("star_count", 0)
+                if summary.get("fork_count") is not None:
+                    record.fork_count = summary.get("fork_count", 0)
+                if summary.get("contributor_count") is not None:
+                    record.contributor_count = summary.get("contributor_count", 0)
+                if summary.get("primary_language"):
+                    record.primary_language = summary.get("primary_language")
+                if summary.get("languages"):
+                    record.languages = summary.get("languages")
+                if summary.get("topics"):
+                    record.topics = summary.get("topics")
+                if summary.get("difficulty"):
+                    record.difficulty = summary.get("difficulty")
+                if summary.get("last_pushed_at"):
+                    from datetime import datetime
+
+                    last_pushed = summary.get("last_pushed_at")
+                    if isinstance(last_pushed, str):
+                        try:
+                            record.last_pushed_at = datetime.fromisoformat(
+                                last_pushed.replace("Z", "+00:00")
+                            )
+                        except (ValueError, AttributeError):
+                            pass
+                    elif isinstance(last_pushed, datetime):
+                        record.last_pushed_at = last_pushed
+                if summary.get("license"):
+                    record.license = summary.get("license")
             else:
+                # Parse last_pushed_at if present
+                last_pushed_at = None
+                if summary.get("last_pushed_at"):
+                    from datetime import datetime
+
+                    last_pushed = summary.get("last_pushed_at")
+                    if isinstance(last_pushed, str):
+                        try:
+                            last_pushed_at = datetime.fromisoformat(
+                                last_pushed.replace("Z", "+00:00")
+                            )
+                        except (ValueError, AttributeError):
+                            pass
+                    elif isinstance(last_pushed, datetime):
+                        last_pushed_at = last_pushed
+
                 record = GeneratedRoadmap(
                     repo_full_name=summary["full_name"],
                     repo_summary=summary,
@@ -99,15 +143,13 @@ class RoadmapResultStore:
                     star_count=summary.get("star_count", 0) or 0,
                     fork_count=summary.get("fork_count", 0) or 0,
                     contributor_count=summary.get("contributor_count", 0) or 0,
+                    primary_language=summary.get("primary_language"),
+                    languages=summary.get("languages"),
+                    topics=summary.get("topics"),
+                    difficulty=summary.get("difficulty"),
+                    last_pushed_at=last_pushed_at,
+                    license=summary.get("license"),
                 )
-                if record.primary_language is None and summary.get("primary_language"):
-                    record.primary_language = summary.get("primary_language")
-                if record.languages is None and summary.get("languages"):
-                    record.languages = summary.get("languages")
-                if record.topics is None and summary.get("topics"):
-                    record.topics = summary.get("topics")
-                if record.difficulty is None and summary.get("difficulty"):
-                    record.difficulty = summary.get("difficulty")
                 self._session.add(record)
             try:
                 self._session.commit()
