@@ -159,6 +159,14 @@ class RoadmapResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RoadmapCatalogPage(BaseModel):
+    items: List[RoadmapResponse]
+    page: int
+    page_size: int
+    total_count: int
+    total_pages: int
+
+
 class UserRepoStateResponse(BaseModel):
     repo_full_name: str
     status: str

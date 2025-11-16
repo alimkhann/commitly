@@ -66,7 +66,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       const response = await repoService.listCatalog()
       if (cancelled) return
       if (response.ok && response.data) {
-        setSynced(response.data.map(toSyncedRecord))
+        setSynced(response.data.items.map(toSyncedRecord))
         setError(null)
       } else {
         setError(response.error ?? "Unable to load roadmap catalog.")
@@ -88,7 +88,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     const response = await repoService.listCatalog()
     if (response.ok && response.data) {
-      setSynced(response.data.map(toSyncedRecord))
+      setSynced(response.data.items.map(toSyncedRecord))
       setError(null)
     } else {
       setError(response.error ?? "Unable to load roadmap catalog.")

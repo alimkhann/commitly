@@ -52,6 +52,14 @@ export type RoadmapResponseBody = {
   generated_at: string
 }
 
+export type RoadmapCatalogPage = {
+  items: RoadmapResponseBody[]
+  page: number
+  page_size: number
+  total_count: number
+  total_pages: number
+}
+
 export type RepoImportResult = ApiClientResponse<RoadmapResponseBody> & {
   skipped?: boolean
 }
@@ -179,12 +187,12 @@ export const repoService = {
     })
   },
 
-  async listCatalog(): Promise<ApiClientResponse<RoadmapResponseBody[]>> {
+  async listCatalog(page = 1, pageSize = 50): Promise<ApiClientResponse<RoadmapCatalogPage>> {
     if (!env.apiBaseUrl) {
       return { ok: false, status: 0, error: "API base URL missing" }
     }
-    return apiClient<RoadmapResponseBody[]>(env.apiBaseUrl, {
-      path: API_ROUTES.catalog,
+    return apiClient<RoadmapCatalogPage>(env.apiBaseUrl, {
+      path: `${API_ROUTES.catalog}?page=${page}&page_size=${pageSize}`,
       cache: "no-store",
     })
   },

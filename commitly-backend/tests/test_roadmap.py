@@ -63,6 +63,15 @@ def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse
         async def list_synced(self):
             return [roadmap_payload]
 
+        async def list_catalog(self, page: int, page_size: int):
+            return {
+                "items": [roadmap_payload],
+                "page": page,
+                "page_size": page_size,
+                "total_count": 1,
+                "total_pages": 1,
+            }
+
         async def list_user_pins(self, user_id: str):
             assert user_id == "user_123"
             return [roadmap_payload]
@@ -106,7 +115,10 @@ def test_get_cached_roadmap(
 def test_catalog_endpoint(client: TestClient, stubbed_roadmap_service):
     response = client.get("/api/v1/roadmap/catalog")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    data = response.json()
+    assert data["total_count"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["repo"]["full_name"] == "acme/widgets"
 
 
 def test_list_user_pins(
