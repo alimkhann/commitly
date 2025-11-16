@@ -39,68 +39,67 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
+    import asyncio
+    
     # Startup: Test database connection
     logger.info("Testing database connection...")
     try:
-        with SessionLocal() as session:
-            session.execute(text("SELECT 1"))
-            session.commit()
-        logger.info("Database connection successful")
+        def test_connection():
+            with SessionLocal() as session:
+                session.execute(text("SELECT 1"))
+                session.commit()
+        
+        # Run in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        await asyncio.wait_for(
+            loop.run_in_executor(None, test_connection),
+            timeout=5.0
+        )
+        logger.info("✅ Database connection successful")
+    except asyncio.TimeoutError:
+        logger.error("❌ Database connection timeout after 5 seconds")
     except Exception as e:
-        logger.error(f"Database connection failed: {e}", exc_info=True)
-        # Don't fail startup, but log the error
-
-    # Run database migrations
-    logger.info("Running database migrations...")
-    try:
-        from pathlib import Path
-        from alembic.config import Config
-        from alembic import command
-
-        project_root = Path(__file__).parent.parent
-        alembic_ini = project_root / "alembic.ini"
-
-        if not alembic_ini.exists():
-            logger.error(f"alembic.ini not found at {alembic_ini}")
-        else:
-            logger.info(f"Found alembic.ini at {alembic_ini}")
-            alembic_cfg = Config(str(alembic_ini))
-
-            # Run migrations
-            command.upgrade(alembic_cfg, "head")
-            logger.info("Database migrations completed successfully")
-    except Exception as e:
-        logger.error(f"Database migration failed: {e}", exc_info=True)
-        # Don't fail startup, but log the error
+        logger.error(f"❌ Database connection failed: {e}", exc_info=True)
 
     # Verify schema: Check if required columns exist
+    # Note: Migrations are run in pre-deploy script, not here
     logger.info("Verifying database schema...")
     try:
-        with SessionLocal() as session:
-            # Check if primary_language column exists
-            result = session.execute(
-                text(
-                    """
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name = 'generated_roadmaps'
-                    AND column_name = 'primary_language'
-                    """
+        def verify_schema():
+            with SessionLocal() as session:
+                # Check if primary_language column exists
+                result = session.execute(
+                    text(
+                        """
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'generated_roadmaps'
+                        AND column_name = 'primary_language'
+                        """
+                    )
                 )
+                return result.fetchone() is not None
+        
+        # Run in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        column_exists = await asyncio.wait_for(
+            loop.run_in_executor(None, verify_schema),
+            timeout=5.0
+        )
+
+        if column_exists:
+            logger.info("✅ Database schema verified - all required columns exist")
+        else:
+            logger.warning(
+                "⚠️ Required columns missing. Pre-deploy script should have fixed this. "
+                "If this persists, check pre-deploy command execution."
             )
-            column_exists = result.fetchone() is not None
-
-            if column_exists:
-                logger.info("Database schema verified successfully - all required columns exist")
-            else:
-                logger.error(
-                    "Required columns still missing after migration attempt. "
-                    "Please check migration files and database connection."
-                )
+    except asyncio.TimeoutError:
+        logger.error("❌ Schema verification timeout after 5 seconds")
     except Exception as e:
-        logger.error(f"Schema verification failed: {e}", exc_info=True)
-        # Don't fail startup, but log the error
+        logger.error(f"❌ Schema verification failed: {e}", exc_info=True)
 
+    logger.info("🚀 Application startup complete")
     yield
     # Shutdown
     logger.info("Application shutting down")
