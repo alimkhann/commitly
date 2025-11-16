@@ -1,15 +1,20 @@
+from contextlib import asynccontextmanager
 import logging
 import sys
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import auth, donate, github, roadmap, waitlist
 from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
 from app.core.config import settings
+from app.core.database import SessionLocal
 
 
 def _configure_logging() -> None:
@@ -28,6 +33,26 @@ def _configure_logging() -> None:
 
 
 _configure_logging()
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown."""
+    # Startup: Test database connection
+    logger.info("Testing database connection...")
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+            session.commit()
+        logger.info("Database connection successful")
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}", exc_info=True)
+        # Don't fail startup, but log the error
+    yield
+    # Shutdown
+    logger.info("Application shutting down")
+
 
 app = FastAPI(
     title=settings.project_name,
@@ -36,6 +61,7 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -62,6 +88,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(ClerkAuthMiddleware)
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Log all incoming requests for debugging."""
+
+    async def dispatch(self, request: Request, call_next):
+        logger.info(
+            f"Request: {request.method} {request.url.path} "
+            f"from {request.client.host if request.client else 'unknown'}"
+        )
+        try:
+            response = await call_next(request)
+            logger.info(
+                f"Response: {request.method} {request.url.path} "
+                f"-> {response.status_code}"
+            )
+            return response
+        except Exception as e:
+            logger.error(
+                f"Error processing {request.method} {request.url.path}: {e}",
+                exc_info=True,
+            )
+            raise
+
+
+app.add_middleware(RequestLoggingMiddleware)
 
 # Include routers
 protected = [Depends(require_clerk_auth)]
@@ -117,3 +169,32 @@ async def openapi_json(_: ClerkClaims = Depends(require_clerk_auth)):
         routes=app.routes,
     )
     return JSONResponse(schema)
+
+
+# Global exception handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and log them."""
+    logger.error(
+        f"Unhandled exception: {request.method} {request.url.path}",
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "path": str(request.url.path),
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle request validation errors."""
+    logger.warning(
+        f"Validation error: {request.method} {request.url.path} - {exc.errors()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
