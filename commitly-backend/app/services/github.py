@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import re
 from typing import List, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -48,6 +48,12 @@ class RepositoryMetadata:
     language: Optional[str]
     html_url: Optional[str]
     owner_avatar_url: Optional[str]
+    topics: List[str]
+    languages: List[str]
+    forks: int
+    license: Optional[str]
+    last_pushed_at: Optional[datetime]
+    contributor_count: int
 
 
 @dataclass(slots=True)
@@ -115,6 +121,11 @@ class GitHubService:
         response = await self._request("GET", f"/repos/{identity.full_name}")
         payload = response.json()
         owner = payload.get("owner") or {}
+        languages = await self._fetch_languages(identity)
+        contributors = await self._estimate_contributors(identity)
+        license_info = payload.get("license") or {}
+        license_name = license_info.get("spdx_id") or license_info.get("name")
+        pushed_at = self._parse_datetime(payload.get("pushed_at"))
         return RepositoryMetadata(
             id=payload["id"],
             name=payload["name"],
@@ -125,6 +136,12 @@ class GitHubService:
             language=payload.get("language"),
             html_url=payload.get("html_url"),
             owner_avatar_url=owner.get("avatar_url"),
+            topics=payload.get("topics", []),
+            languages=languages,
+            forks=payload.get("forks_count", 0),
+            license=license_name,
+            last_pushed_at=pushed_at,
+            contributor_count=contributors,
         )
 
     async def fetch_commits(
@@ -196,3 +213,57 @@ def parse_github_url(url: str) -> RepositoryIdentity:
         )
 
     raise GitHubServiceError("Only GitHub repositories are supported")
+
+    async def _fetch_languages(self, identity: RepositoryIdentity) -> List[str]:
+        response = await self._request(
+            "GET", f"/repos/{identity.full_name}/languages"
+        )
+        payload = response.json()
+        if isinstance(payload, dict):
+            return [key for key, value in payload.items() if value]
+        return []
+
+    async def _estimate_contributors(self, identity: RepositoryIdentity) -> int:
+        response = await self._request(
+            "GET",
+            f"/repos/{identity.full_name}/contributors",
+            params={"per_page": 1, "anon": "true"},
+        )
+        link_header = response.headers.get("Link")
+        if link_header:
+            last_page = self._extract_last_page(link_header)
+            if last_page is not None:
+                return last_page
+        data = response.json()
+        if isinstance(data, list):
+            return len(data)
+        return 0
+
+    @staticmethod
+    def _extract_last_page(link_header: str) -> Optional[int]:
+        for part in link_header.split(","):
+            section = part.strip()
+            if 'rel="last"' not in section:
+                continue
+            start = section.find("<") + 1
+            end = section.find(">", start)
+            if start <= 0 or end <= start:
+                continue
+            try:
+                parsed = urlparse(section[start:end])
+                params = parse_qs(parsed.query)
+                page_values = params.get("page")
+                if page_values:
+                    return int(page_values[0])
+            except (ValueError, TypeError):
+                continue
+        return None
+
+    @staticmethod
+    def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None

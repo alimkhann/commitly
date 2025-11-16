@@ -211,6 +211,16 @@ def require_clerk_auth(request: Request) -> ClerkClaims:
     return claims
 
 
+def optional_clerk_auth(request: Request) -> ClerkClaims | None:
+    cached: Optional[ClerkClaims] = getattr(request.state, "clerk_claims", None)
+    if cached:
+        return cached
+    try:
+        return require_clerk_auth(request)
+    except HTTPException:
+        return None
+
+
 class ClerkAuthMiddleware(BaseHTTPMiddleware):
     """Pre-decodes Clerk tokens so downstream dependencies can reuse them."""
 

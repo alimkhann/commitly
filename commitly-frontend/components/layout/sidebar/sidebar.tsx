@@ -7,18 +7,20 @@ import { useMemo, useState } from "react"
 import { ChevronLeft, Hammer, Search } from "lucide-react"
 import { useAuth } from "@clerk/nextjs"
 
-import { cn } from "@/lib/utils"
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils"
 
 import AccountSection from "./account-section"
-import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
+
+const slugFromFullName = (fullName: string) => fullName.replace("/", "-")
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { isSignedIn } = useAuth()
-  const { synced, pending, loading } = useRoadmapCatalog()
+  const { yourRepos, pending, userReposLoading } = useRoadmapCatalog()
   const [collapsed, setCollapsed] = useState(false)
   const toggleCollapse = () => setCollapsed((prev) => !prev)
 
@@ -27,6 +29,17 @@ export default function Sidebar() {
     const segments = pathname.split("/")
     return segments[1] === "repo" ? segments[2] ?? null : null
   }, [pathname])
+
+  const combinedList = useMemo(() => {
+    const mapped = yourRepos.map((repo) => ({
+      fullName: repo.repo.repo.full_name,
+      slug: slugFromFullName(repo.repo.repo.full_name),
+      description: repo.repo.repo.description,
+      language: repo.repo.repo.language,
+      status: repo.status,
+    }))
+    return [...pending, ...mapped]
+  }, [pending, yourRepos])
 
   return (
     <div
@@ -114,13 +127,13 @@ export default function Sidebar() {
           </Button>
         </div>
 
-        {!collapsed && isSignedIn && (
+        {!collapsed && isSignedIn && (userReposLoading || combinedList.length > 0) && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Synced repos
+                Your repositories
               </p>
-              {loading && (
+              {userReposLoading && (
                 <Badge variant="outline" className="font-normal text-[11px]">
                   Loading…
                 </Badge>
@@ -128,61 +141,42 @@ export default function Sidebar() {
             </div>
             <ScrollArea className="h-full max-h-[45vh]">
               <div className="flex flex-col gap-2 pr-3">
-                {pending.length + synced.length === 0 && !loading ? (
-                  <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-sm text-muted-foreground">
-                    Generate a roadmap to pin it here.
-                  </div>
-                ) : (
-                  [...pending, ...synced].map((repo) => {
-                    const slug = repo.slug
-                    const isActive = activeRepoId === slug
-                    const href = `/repo/${slug}/timeline`
-                    const isPending = Boolean((repo as { pending?: boolean }).pending)
-                    const isSyncedRepo = "timeline" in repo
-                    const language = isSyncedRepo ? repo.repo.language : null
-                    const description = isSyncedRepo ? repo.repo.description : null
-                    const generatedAt = isSyncedRepo ? repo.generated_at : null
-                    const stageCount = isSyncedRepo ? repo.timeline.length : 0
-                    return (
-                      <Link
-                        key={slug}
-                        href={href}
-                        className={cn(
-                          "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 transition-colors backdrop-blur-sm",
-                          isActive
-                            ? "border-primary/70 bg-primary/15"
-                            : "hover:border-white/10 hover:bg-card/25"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-medium leading-tight">
-                              {"repo" in repo ? repo.repo.full_name : repo.fullName}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {isPending
-                                ? "Generating timeline…"
-                                : [language, generatedAt && new Date(generatedAt).toLocaleDateString()]
-                                    .filter(Boolean)
-                                    .join(" • ")}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={isActive ? "accent" : "secondary"}
-                            className="text-[11px] capitalize"
-                          >
-                            {isPending ? "Syncing" : `${stageCount} stages`}
-                          </Badge>
-                        </div>
-                        {!isPending && description && (
-                          <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
-                            {description}
+                {combinedList.map((entry) => {
+                  const slug = entry.slug
+                  const isActive = activeRepoId === slug
+                  const href = `/repo/${slug}/timeline`
+                  const isPending = "pending" in entry
+                  const status = !isPending && "status" in entry ? entry.status : "pending"
+                  return (
+                    <Link
+                      key={slug}
+                      href={href}
+                      className={cn(
+                        "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 transition-colors backdrop-blur-sm",
+                        isActive
+                          ? "border-primary/70 bg-primary/15"
+                          : "hover:border-white/10 hover:bg-card/25"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium leading-tight">
+                            {entry.fullName}
                           </p>
-                        )}
-                      </Link>
-                    )
-                  })
-                )}
+                          <p className="text-xs text-muted-foreground">
+                            {isPending ? "Generating timeline…" : status === "synced" ? "Synced" : "Explore"}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={isActive ? "accent" : "secondary"}
+                          className="text-[11px] capitalize"
+                        >
+                          {isPending ? "Syncing" : status === "synced" ? "Synced" : "Unsynced"}
+                        </Badge>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             </ScrollArea>
           </div>

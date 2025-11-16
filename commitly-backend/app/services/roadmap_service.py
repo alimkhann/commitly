@@ -8,7 +8,15 @@ from fastapi import HTTPException, status
 
 from app.core.cache import RedisJSONCache, redis_cache
 from app.core.config import settings
-from app.models.roadmap import RoadmapRepoSummary, RoadmapResponse
+from app.models.roadmap import (
+    PaginatedRoadmapList,
+    PublicRoadmapRecord,
+    RatingResponse,
+    RoadmapRepoSummary,
+    RoadmapResponse,
+    TimelineStage,
+    UserRepoStatePayload,
+)
 from app.services.ai.gemini import (
     GeminiConfigurationError,
     GeminiGenerationError,
@@ -26,7 +34,13 @@ from app.services.github import (
 )
 from app.services.github_tokens import GitHubTokenStore
 from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
-from app.services.roadmap_repository import RoadmapResultStore, UserSyncedRepoStore
+from app.services.roadmap_repository import (
+    CatalogQuery,
+    GeneratedRoadmapMetadata,
+    RoadmapRatingStore,
+    RoadmapResultStore,
+    UserRepoStateStore,
+)
 
 
 class RoadmapService:
@@ -34,7 +48,8 @@ class RoadmapService:
         self,
         chunk_store: CommitChunkStore,
         result_store: RoadmapResultStore,
-        pin_store: UserSyncedRepoStore,
+        user_repo_store: UserRepoStateStore,
+        rating_store: RoadmapRatingStore,
         generator: GeminiRoadmapGenerator,
         token_store: GitHubTokenStore,
         cache: RedisJSONCache | None = None,
@@ -51,7 +66,8 @@ class RoadmapService:
         self._timeline_fraction = timeline_fraction
         self._default_token = settings.github_token
         self._result_store = result_store
-        self._pin_store = pin_store
+        self._user_repo_store = user_repo_store
+        self._rating_store = rating_store
 
     async def generate(
         self,
@@ -64,9 +80,10 @@ class RoadmapService:
         if not force_refresh and self._cache:
             cached = await self._cache.get(cache_key)
             if cached:
+                response = RoadmapResponse.model_validate(cached)
                 if actor_id:
-                    self._pin_store.pin(actor_id, identity.full_name)
-                return RoadmapResponse.model_validate(cached)
+                    self._user_repo_store.touch_unsynced(actor_id, identity.full_name)
+                return response
         token = None
         if actor_id:
             record = self._token_store.get_token(actor_id)
@@ -124,31 +141,161 @@ class RoadmapService:
             cached=False,
             generated_at=datetime.now(timezone.utc),
         )
+        metadata = self._build_metadata(repo, timeline)
         if self._cache:
             await self._cache.set(
                 cache_key, response.model_dump(mode="json"), self._cache_ttl
             )
-        self._result_store.upsert(response)
-        self._pin_store.pin(actor_id, repo.full_name)
+        self._result_store.upsert(response, metadata)
+        if actor_id:
+            self._user_repo_store.touch_unsynced(actor_id, repo.full_name)
         return response
 
-    async def get_cached(self, repo_full_name: str) -> RoadmapResponse:
+    async def get_cached(
+        self, repo_full_name: str, viewer_id: str | None = None
+    ) -> RoadmapResponse:
         result = self._result_store.get(repo_full_name)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Timeline has not been generated for this repository.",
             )
+        self._user_repo_store.record_view(viewer_id, repo_full_name)
+        if viewer_id:
+            self._user_repo_store.touch_unsynced(viewer_id, repo_full_name)
         return result
 
-    async def list_synced(self) -> list[RoadmapResponse]:
-        return self._result_store.list()
+    async def list_public_catalog(self, query: CatalogQuery) -> PaginatedRoadmapList:
+        clamped = self._normalize_catalog_query(query)
+        items, total = self._result_store.paginate_catalog(clamped)
+        total_pages = max(1, math.ceil(total / clamped.page_size))
+        return PaginatedRoadmapList(
+            items=items,
+            page=clamped.page,
+            page_size=clamped.page_size,
+            total_count=total,
+            total_pages=total_pages,
+        )
 
-    async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
-        return self._pin_store.list(user_id)
+    async def list_user_repos(
+        self, user_id: str, include_archived: bool = False
+    ) -> list[UserRepoStatePayload]:
+        records = self._user_repo_store.list_states(user_id, include_archived)
+        payloads: list[UserRepoStatePayload] = []
+        for state, record in records:
+            if not include_archived and state.is_archived:
+                continue
+            public_record = self._result_store.build_public_record(record)
+            payloads.append(self._to_user_payload(state, public_record))
+        return payloads
 
-    async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
-        self._pin_store.unpin(user_id, repo_full_name)
+    async def list_archived_repos(self, user_id: str) -> list[UserRepoStatePayload]:
+        states = self._user_repo_store.list_states(user_id, include_archived=True)
+        payloads: list[UserRepoStatePayload] = []
+        for state, record in states:
+            if not state.is_archived:
+                continue
+            public_record = self._result_store.build_public_record(record)
+            payloads.append(self._to_user_payload(state, public_record))
+        return payloads
+
+    async def sync_repo(
+        self, user_id: str, repo_full_name: str
+    ) -> UserRepoStatePayload:
+        public_record = self._result_store.get_public_record(repo_full_name)
+        if not public_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Timeline has not been generated for this repository.",
+            )
+        state_tuple = self._user_repo_store.mark_synced(user_id, repo_full_name)
+        if state_tuple[0] is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create repo state",
+            )
+        state, transitioned = state_tuple
+        if transitioned:
+            self._result_store.adjust_sync_count(repo_full_name, 1)
+        return self._to_user_payload(state, public_record)
+
+    async def desync_repo(
+        self, user_id: str, repo_full_name: str
+    ) -> UserRepoStatePayload:
+        public_record = self._result_store.get_public_record(repo_full_name)
+        if not public_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Timeline has not been generated for this repository.",
+            )
+        state, transitioned = self._user_repo_store.mark_unsynced(user_id, repo_full_name)
+        if state is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="You have no saved state for this repository.",
+            )
+        if transitioned:
+            self._result_store.adjust_sync_count(repo_full_name, -1)
+        return self._to_user_payload(state, public_record)
+
+    async def archive_repo(
+        self, user_id: str, repo_full_name: str
+    ) -> UserRepoStatePayload:
+        public_record = self._get_public_record_or_404(repo_full_name)
+        state = self._user_repo_store.archive(user_id, repo_full_name)
+        if not state:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="You have no saved state for this repository.",
+            )
+        return self._to_user_payload(state, public_record)
+
+    async def unarchive_repo(
+        self, user_id: str, repo_full_name: str
+    ) -> UserRepoStatePayload:
+        public_record = self._get_public_record_or_404(repo_full_name)
+        state = self._user_repo_store.unarchive(user_id, repo_full_name)
+        if not state:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="You have no saved state for this repository.",
+            )
+        return self._to_user_payload(state, public_record)
+
+    async def set_rating(
+        self, user_id: str, repo_full_name: str, rating: int
+    ) -> RatingResponse:
+        if rating < 1 or rating > 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rating must be between 1 and 5",
+            )
+        state = self._user_repo_store.list_states(user_id, include_archived=True)
+        state_map = {item[0].repo_full_name: item[0] for item in state}
+        current_state = state_map.get(repo_full_name)
+        if not current_state or current_state.status != "synced":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sync the repository before leaving a rating",
+            )
+        self._rating_store.upsert(user_id, repo_full_name, rating)
+        public_record = self._get_public_record_or_404(repo_full_name)
+        return RatingResponse(
+            rating=rating,
+            average_rating=public_record.stats.average_rating,
+            rating_count=public_record.stats.rating_count,
+        )
+
+    async def get_rating(
+        self, user_id: str, repo_full_name: str
+    ) -> RatingResponse:
+        public_record = self._get_public_record_or_404(repo_full_name)
+        record = self._rating_store.get(user_id, repo_full_name)
+        return RatingResponse(
+            rating=record.rating if record else None,
+            average_rating=public_record.stats.average_rating,
+            rating_count=public_record.stats.rating_count,
+        )
 
     def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
         try:
@@ -207,6 +354,80 @@ class RoadmapService:
             owner_avatar_url=repo.owner_avatar_url,
         )
 
+    def _build_metadata(
+        self, repo: RepositoryMetadata, timeline: Sequence[TimelineStage]
+    ) -> GeneratedRoadmapMetadata:
+        difficulty = self._derive_difficulty(repo, timeline)
+        return GeneratedRoadmapMetadata(
+            primary_language=repo.language,
+            languages=repo.languages,
+            topics=repo.topics,
+            difficulty=difficulty,
+            star_count=repo.stars,
+            fork_count=repo.forks,
+            contributor_count=repo.contributor_count,
+            last_pushed_at=repo.last_pushed_at,
+            license=repo.license,
+        )
+
+    def _derive_difficulty(
+        self, repo: RepositoryMetadata, timeline: Sequence[TimelineStage]
+    ) -> str:
+        contributor_score = repo.contributor_count or 0
+        star_score = repo.stars
+        fork_score = repo.forks
+        stage_score = len(timeline)
+        composite = star_score + fork_score * 2 + contributor_score * 10 + stage_score * 25
+        if composite < 500:
+            return "intro"
+        if composite < 2000:
+            return "easy"
+        if composite < 5000:
+            return "medium"
+        return "hard"
+
+    def _normalize_catalog_query(self, query: CatalogQuery) -> CatalogQuery:
+        page = max(1, query.page)
+        page_size = max(1, min(50, query.page_size or 12))
+        languages = [value for value in (query.languages or []) if value]
+        topics = [value for value in (query.topics or []) if value]
+        sort = query.sort or "trending"
+        return CatalogQuery(
+            page=page,
+            page_size=page_size,
+            languages=languages,
+            topics=topics,
+            difficulty=query.difficulty,
+            min_rating=query.min_rating,
+            min_views=query.min_views,
+            min_syncs=query.min_syncs,
+            sort=sort,
+            search=query.search,
+        )
+
+    def _to_user_payload(
+        self, state, record: PublicRoadmapRecord
+    ) -> UserRepoStatePayload:
+        return UserRepoStatePayload(
+            repo=record,
+            status=state.status,
+            progress_percent=state.progress_percent,
+            is_archived=state.is_archived,
+            synced_at=state.synced_at,
+            last_viewed_at=state.last_viewed_at,
+            created_at=state.created_at,
+            updated_at=state.updated_at,
+        )
+
+    def _get_public_record_or_404(self, repo_full_name: str) -> PublicRoadmapRecord:
+        record = self._result_store.get_public_record(repo_full_name)
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Timeline has not been generated for this repository.",
+            )
+        return record
+
 
 def build_roadmap_service(
     session, cache: RedisJSONCache | None = redis_cache
@@ -221,12 +442,14 @@ def build_roadmap_service(
             detail=str(exc),
         )
     result_store = RoadmapResultStore(session)
-    pin_store = UserSyncedRepoStore(session, result_store)
+    user_repo_store = UserRepoStateStore(session, result_store)
+    rating_store = RoadmapRatingStore(session, result_store)
     return RoadmapService(
         chunk_store=CommitChunkStore(session),
         generator=generator,
         token_store=GitHubTokenStore(session),
         cache=cache,
         result_store=result_store,
-        pin_store=pin_store,
+        user_repo_store=user_repo_store,
+        rating_store=rating_store,
     )

@@ -18,6 +18,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
+UserRepoStatus = Literal["synced", "unsynced"]
+
 
 class RepoCommitChunk(Base):
     """Stores commit chunks that feed the roadmap RAG pipeline."""
@@ -53,6 +55,19 @@ class GeneratedRoadmap(Base):
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    primary_language: Mapped[Optional[str]] = mapped_column(String(128))
+    languages: Mapped[Optional[list]] = mapped_column(JSON)
+    topics: Mapped[Optional[list]] = mapped_column(JSON)
+    difficulty: Mapped[Optional[str]] = mapped_column(String(32))
+    star_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    fork_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    contributor_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_pushed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    license: Mapped[Optional[str]] = mapped_column(String(128))
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    sync_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rating_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -64,19 +79,51 @@ class GeneratedRoadmap(Base):
     )
 
 
-class UserSyncedRepo(Base):
-    """Tracks which repositories a user has pinned to the sidebar."""
+class UserRepoState(Base):
+    """Per-user repository implementation metadata."""
 
-    __tablename__ = "user_synced_repos"
+    __tablename__ = "user_repo_states"
     __table_args__ = (
-        UniqueConstraint("user_id", "repo_full_name", name="uq_user_synced_repo"),
+        UniqueConstraint("user_id", "repo_full_name", name="uq_user_repo_state"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    pinned_at: Mapped[datetime] = mapped_column(
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="unsynced")
+    progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_viewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class RoadmapRating(Base):
+    __tablename__ = "roadmap_ratings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "repo_full_name", name="uq_roadmap_rating_user_repo"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
 
@@ -117,5 +164,62 @@ class RoadmapResponse(BaseModel):
     timeline: List[TimelineStage]
     cached: bool
     generated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RoadmapStats(BaseModel):
+    primary_language: Optional[str]
+    languages: List[str] = Field(default_factory=list)
+    topics: List[str] = Field(default_factory=list)
+    difficulty: Optional[str]
+    star_count: int = 0
+    fork_count: int = 0
+    contributor_count: int = 0
+    last_pushed_at: Optional[datetime]
+    license: Optional[str]
+    view_count: int = 0
+    sync_count: int = 0
+    rating_count: int = 0
+    rating_sum: int = 0
+    average_rating: Optional[float]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublicRoadmapRecord(BaseModel):
+    repo: RoadmapRepoSummary
+    stats: RoadmapStats
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedRoadmapList(BaseModel):
+    items: List[PublicRoadmapRecord]
+    page: int
+    page_size: int
+    total_count: int
+    total_pages: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserRepoStatePayload(BaseModel):
+    repo: PublicRoadmapRecord
+    status: UserRepoStatus
+    progress_percent: int
+    is_archived: bool
+    synced_at: Optional[datetime]
+    last_viewed_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RatingResponse(BaseModel):
+    rating: Optional[int]
+    average_rating: Optional[float]
+    rating_count: int
 
     model_config = ConfigDict(from_attributes=True)

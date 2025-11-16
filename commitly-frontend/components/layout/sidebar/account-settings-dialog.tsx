@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { githubService } from "@/lib/services/github"
+import { repoService } from "@/lib/services/repos"
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 
 type AccountSettingsDialogProps = {
   open: boolean
@@ -44,6 +46,9 @@ export default function AccountSettingsDialog({
           </UserProfile.Page>
           <UserProfile.Page label="Connections" url="connections" labelIcon={<GitBranch className="h-3.5 w-3.5" />}>
             <GithubConnectionPreferences />
+          </UserProfile.Page>
+          <UserProfile.Page label="Repositories" url="repositories" labelIcon={<GitBranch className="h-3.5 w-3.5" />}>
+            <ArchivedRepositoriesPreferences />
           </UserProfile.Page>
         </UserProfile>
       </DialogContent>
@@ -244,6 +249,38 @@ function GithubConnectionPreferences() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ArchivedRepositoriesPreferences() {
+  const { archivedRepos, unarchiveRepo } = useRoadmapCatalog()
+  const { isSignedIn, getToken } = useAuth()
+
+  const handleUnarchive = async (fullName: string) => {
+    if (!isSignedIn) return
+    const identity = repoService.buildIdentityFromFullName(fullName)
+    const token = (await getToken?.()) ?? undefined
+    await unarchiveRepo(identity, token)
+  }
+
+  if (!archivedRepos.length) {
+    return <p className="py-6 text-sm text-muted-foreground">No archived repositories.</p>
+  }
+
+  return (
+    <div className="space-y-3 py-6">
+      {archivedRepos.map((repo) => (
+        <div key={repo.repo.repo.full_name} className="flex items-center justify-between rounded-2xl border border-border/40 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">{repo.repo.repo.full_name}</p>
+            <p className="text-xs text-muted-foreground">Archived {new Date(repo.updated_at).toLocaleDateString()}</p>
+          </div>
+          <Button size="sm" variant="secondary" onClick={() => void handleUnarchive(repo.repo.repo.full_name)}>
+            Unarchive
+          </Button>
+        </div>
+      ))}
     </div>
   )
 }

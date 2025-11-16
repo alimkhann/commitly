@@ -2,17 +2,14 @@
 
 import { JSX, useCallback, useEffect, useMemo, useState } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import {
-  CheckCircle2,
-  ChevronDown,
-  CircleDotDashed,
-  Clock3,
-  RefreshCcw,
-} from "lucide-react"
+import { Star } from "lucide-react"
 
-import { type RepoTimelineStage, type RepoRecord } from "@/data/repos"
-import { repoService, type RepoIdentity, type RoadmapResponseBody } from "@/lib/services/repos"
+import { repoService, type RepoIdentity, type RepoTimelineStage, type RoadmapResponseBody, type UserRepoState } from "@/lib/services/repos"
+import { githubService } from "@/lib/services/github"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@clerk/nextjs"
+
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,51 +25,109 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import TabSwitch from "@/components/navigation/tab-switch"
-import { useAuth } from "@clerk/nextjs"
-import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 
-type FetchState = "idle" | "loading" | "error"
+import { CheckCircle2, CircleDotDashed, Clock3, RefreshCcw } from "lucide-react"
 
 export default function RepoTimelinePage() {
-  const params = useParams()
+  const params = useParams<{ repoId: string }>()
   const searchParams = useSearchParams()
   const router = useRouter()
   const auth = useAuth()
   const isSignedIn = Boolean(auth.isSignedIn)
   const getToken = auth.getToken
-  const { getBySlug, upsertRoadmap } = useRoadmapCatalog()
-  const repoId = params.repoId as string
-  const cachedRecord = getBySlug(repoId)
-  const fallbackRecord = repoService.findById(repoId)
+  const {
+    getRepoBySlug,
+    markPending,
+    clearPending,
+    syncRepo,
+    desyncRepo,
+    archiveRepo,
+    refreshUserRepos,
+    refreshCatalog,
+  } = useRoadmapCatalog()
+  const repoId = params.repoId
+  const shouldGenerate = searchParams?.get("intent") === "generate"
+  const catalogRecord = !shouldGenerate ? getRepoBySlug(repoId) : undefined
   const fullNameParam = searchParams?.get("fullName") ?? null
   const repoUrlParam = searchParams?.get("repoUrl") ?? null
-  const identity: RepoIdentity | null = useMemo(() => {
-    if (cachedRecord && "owner" in cachedRecord) {
-      return {
-        owner: cachedRecord.owner,
-        repoName: cachedRecord.repoName,
-        fullName: cachedRecord.fullName,
-        slug: cachedRecord.slug,
-      }
-    }
-    return (
+  const queryIdentity = useMemo(
+    () =>
       repoService.parseRepoInput(fullNameParam ?? "") ??
-      repoService.parseRepoInput(repoUrlParam ?? "")
-    )
-  }, [cachedRecord, fullNameParam, repoUrlParam])
-  const [roadmap, setRoadmap] = useState<RoadmapResponseBody | null>(
-    cachedRecord && "repo" in cachedRecord ? (cachedRecord as RoadmapResponseBody) : null
+      repoService.parseRepoInput(repoUrlParam ?? ""),
+    [fullNameParam, repoUrlParam]
   )
-  const [fetchState, setFetchState] = useState<FetchState>(
-    roadmap || fallbackRecord ? "idle" : "loading"
+  const identity: RepoIdentity | null = useMemo(() => {
+    if (shouldGenerate && queryIdentity) {
+      return queryIdentity
+    }
+    if (catalogRecord && "repo" in catalogRecord) {
+      const state = catalogRecord as UserRepoState
+      return repoService.buildIdentityFromFullName(state.repo.repo.full_name)
+    }
+    return queryIdentity
+  }, [catalogRecord, queryIdentity, shouldGenerate])
+
+  const [roadmap, setRoadmap] = useState<RoadmapResponseBody | null>(null)
+  const [fetchState, setFetchState] = useState<"idle" | "loading" | "error">(
+    roadmap ? "idle" : "loading"
   )
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [githubConnected, setGithubConnected] = useState(false)
+  const [ratingState, setRatingState] = useState<{ rating: number | null; average: number | null; count: number }>({
+    rating: null,
+    average: null,
+    count: 0,
+  })
 
-  const shouldGenerate = searchParams?.get("intent") === "generate"
+  const repoState = useMemo<UserRepoState | null>(() => {
+    if (!catalogRecord || "pending" in catalogRecord) return null
+    return catalogRecord as UserRepoState
+  }, [catalogRecord])
+  const isPendingRecord = Boolean(catalogRecord && "pending" in catalogRecord)
+  const status: "synced" | "unsynced" | "pending" = useMemo(() => {
+    if (isPendingRecord) return "pending"
+    if (repoState) return repoState.status
+    return shouldGenerate ? "pending" : "unsynced"
+  }, [isPendingRecord, repoState, shouldGenerate])
+
+  const handlePendingCleanup = useCallback(() => {
+    if (identity) {
+      clearPending(identity.fullName)
+    }
+  }, [clearPending, identity])
 
   useEffect(() => {
-    if (!identity || roadmap || isGenerating) return
+    let cancelled = false
+    async function checkGithub() {
+      if (!isSignedIn) {
+        setGithubConnected(false)
+        return
+      }
+      try {
+        const token = (await getToken?.()) ?? undefined
+        const response = await githubService.status(token)
+        if (!cancelled) {
+          setGithubConnected(Boolean(response.data?.connected))
+        }
+      } catch {
+        if (!cancelled) setGithubConnected(false)
+      }
+    }
+    checkGithub()
+    return () => {
+      cancelled = true
+    }
+  }, [getToken, isSignedIn])
+
+  useEffect(() => {
+    if (shouldGenerate && identity) {
+      markPending(identity)
+    }
+  }, [identity, markPending, shouldGenerate])
+
+  useEffect(() => {
+    if (!identity || roadmap || isGenerating || shouldGenerate) return
     let cancelled = false
     const fetchCached = async () => {
       setFetchState("loading")
@@ -80,11 +135,9 @@ export default function RepoTimelinePage() {
       if (cancelled) return
       if (response.ok && response.data) {
         setRoadmap(response.data)
-        upsertRoadmap(response.data)
         setError(null)
         setFetchState("idle")
-      } else if (response.status === 404 && repoUrlParam) {
-        setFetchState("idle")
+        handlePendingCleanup()
       } else if (!response.ok) {
         setError(response.error ?? "Unable to load roadmap.")
         setFetchState("error")
@@ -94,7 +147,7 @@ export default function RepoTimelinePage() {
     return () => {
       cancelled = true
     }
-  }, [identity, roadmap, isGenerating, repoUrlParam, upsertRoadmap])
+  }, [handlePendingCleanup, identity, isGenerating, roadmap, shouldGenerate])
 
   const retryLoad = useCallback(async () => {
     if (!identity) return
@@ -102,16 +155,14 @@ export default function RepoTimelinePage() {
     const response = await repoService.getCachedRoadmap(identity.owner, identity.repoName)
     if (response.ok && response.data) {
       setRoadmap(response.data)
-      upsertRoadmap(response.data)
       setError(null)
       setFetchState("idle")
-    } else if (response.status === 404 && repoUrlParam) {
-      setFetchState("idle")
+      handlePendingCleanup()
     } else if (!response.ok) {
       setError(response.error ?? "Unable to load roadmap.")
       setFetchState("error")
     }
-  }, [identity, repoUrlParam, upsertRoadmap])
+  }, [handlePendingCleanup, identity])
 
   useEffect(() => {
     let cancelled = false
@@ -119,19 +170,22 @@ export default function RepoTimelinePage() {
       return
     }
 
-    const repoUrl = repoUrlParam!
+    const repoUrl = repoUrlParam
 
     async function runGeneration() {
       setIsGenerating(true)
       setError(null)
       const token = await getToken?.()
-      const response = await repoService.generateRoadmap(repoUrl, token ?? undefined)
+      const response = await repoService.generateRoadmap(repoUrl, token ?? undefined, {
+        forceRefresh: true,
+      })
       if (cancelled) return
       setIsGenerating(false)
       if (response.ok && response.data) {
         setRoadmap(response.data)
-        upsertRoadmap(response.data)
         setFetchState("idle")
+        handlePendingCleanup()
+        void refreshUserRepos()
         router.replace(`/repo/${repoId}/timeline`)
       } else {
         setError(response.error ?? "Unable to generate roadmap.")
@@ -144,14 +198,19 @@ export default function RepoTimelinePage() {
     return () => {
       cancelled = true
     }
-  }, [shouldGenerate, repoUrlParam, identity, isSignedIn, getToken, upsertRoadmap, repoId, router])
+  }, [
+    shouldGenerate,
+    repoUrlParam,
+    identity,
+    isSignedIn,
+    getToken,
+    handlePendingCleanup,
+    refreshUserRepos,
+    repoId,
+    router,
+  ])
 
-  const fallbackRoadmap = useMemo(
-    () => (fallbackRecord ? mapStaticRecordToRoadmap(fallbackRecord) : null),
-    [fallbackRecord]
-  )
-
-  const activeRoadmap = roadmap ?? fallbackRoadmap
+  const activeRoadmap = roadmap
 
   const timelineStages = useMemo(() => {
     if (!activeRoadmap) return []
@@ -171,9 +230,86 @@ export default function RepoTimelinePage() {
   )
 
   const headerTitle =
-    activeRoadmap?.repo.full_name ?? identity?.fullName ?? fallbackRecord?.name ?? "Repository timeline"
+    activeRoadmap?.repo.full_name ?? identity?.fullName ?? "Repository timeline"
 
-  const showLoadingState = (!activeRoadmap && fetchState === "loading") || isGenerating
+  const showLoadingState =
+    (shouldGenerate && (!roadmap || isGenerating)) ||
+    (!shouldGenerate && ((!activeRoadmap && fetchState === "loading") || isGenerating))
+
+  const isSynced = repoState?.status === "synced"
+  const canSync = isSignedIn && !isSynced && githubConnected && Boolean(activeRoadmap)
+  const canDesync = isSignedIn && repoState?.status === "synced"
+  const canArchive = isSignedIn && !!repoState
+  const progressPercent = isSynced ? repoState?.progress_percent ?? 0 : 0
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRating() {
+      if (!isSynced || !identity || !isSignedIn) {
+        setRatingState({ rating: null, average: null, count: 0 })
+        return
+      }
+      const token = (await getToken?.()) ?? undefined
+      const response = await repoService.getRating(identity.owner, identity.repoName, token)
+      if (cancelled) return
+      if (response.ok && response.data) {
+        setRatingState({
+          rating: response.data.rating,
+          average: response.data.average_rating,
+          count: response.data.rating_count,
+        })
+      }
+    }
+    loadRating()
+    return () => {
+      cancelled = true
+    }
+  }, [getToken, identity, isSignedIn, isSynced])
+
+  const handleSync = useCallback(async () => {
+    if (!identity || !isSignedIn) return
+    const token = (await getToken?.()) ?? undefined
+    await syncRepo(identity, token)
+    await refreshUserRepos()
+  }, [getToken, identity, isSignedIn, refreshUserRepos, syncRepo])
+
+  const handleDesync = useCallback(async () => {
+    if (!identity || !isSignedIn) return
+    const confirmed = window.confirm("Desyncing clears your personal implementation state. Continue?")
+    if (!confirmed) return
+    const token = (await getToken?.()) ?? undefined
+    await desyncRepo(identity, token)
+    await refreshUserRepos()
+  }, [desyncRepo, getToken, identity, isSignedIn, refreshUserRepos])
+
+  const handleArchive = useCallback(async () => {
+    if (!identity || !isSignedIn) return
+    const confirmed = window.confirm(
+      "Are you sure you want to archive this repo? It will disappear from Your Repositories until you unarchive it in Settings."
+    )
+    if (!confirmed) return
+    const token = (await getToken?.()) ?? undefined
+    await archiveRepo(identity, token)
+    await Promise.all([refreshUserRepos(), refreshCatalog()])
+    router.push("/search")
+  }, [archiveRepo, getToken, identity, isSignedIn, refreshCatalog, refreshUserRepos, router])
+
+  const handleRatingChange = useCallback(
+    async (value: number) => {
+      if (!identity || !isSignedIn) return
+      const token = (await getToken?.()) ?? undefined
+      const response = await repoService.setRating(identity.owner, identity.repoName, value, token)
+      if (response.ok && response.data) {
+        setRatingState({
+          rating: response.data.rating,
+          average: response.data.average_rating,
+          count: response.data.rating_count,
+        })
+        void refreshCatalog()
+      }
+    },
+    [getToken, identity, isSignedIn, refreshCatalog]
+  )
 
   return (
     <div className="flex flex-1 flex-col gap-10 px-6 py-10 lg:px-12">
@@ -218,9 +354,19 @@ export default function RepoTimelinePage() {
             <Badge variant="secondary" className="text-xs uppercase">
               {activeRoadmap.repo.stars} stars
             </Badge>
-            {activeRoadmap.cached && (
+            {status === "synced" && (
               <Badge variant="accent" className="text-xs uppercase">
-                Cached hit
+                Synced
+              </Badge>
+            )}
+            {status === "unsynced" && (
+              <Badge variant="outline" className="text-xs uppercase">
+                Unsynced
+              </Badge>
+            )}
+            {status === "pending" && (
+              <Badge variant="secondary" className="text-xs uppercase">
+                Syncing
               </Badge>
             )}
           </div>
@@ -229,9 +375,47 @@ export default function RepoTimelinePage() {
               {activeRoadmap.repo.description}
             </p>
           )}
-          <p className="mt-4 text-sm text-muted-foreground">
-            Generated {new Date(activeRoadmap.generated_at).toLocaleString()}
-          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            <p>Generated {new Date(activeRoadmap.generated_at).toLocaleString()}</p>
+            {ratingState.average !== null && (
+              <span>
+                {ratingState.average?.toFixed(1)} avg • {ratingState.count} ratings
+              </span>
+            )}
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            {canSync && (
+              <Button onClick={() => void handleSync()}>Implement</Button>
+            )}
+            {canDesync && (
+              <Button variant="destructive" onClick={() => void handleDesync()}>
+                Desync
+              </Button>
+            )}
+            {canArchive && (
+              <Button variant="outline" onClick={() => void handleArchive()}>
+                Archive
+              </Button>
+            )}
+            {isSynced && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Your rating:</span>
+                <RatingStars value={ratingState.rating} onChange={(value) => void handleRatingChange(value)} />
+              </div>
+            )}
+          </div>
+          {isSynced && (
+            <div className="mt-6">
+              <p className="text-xs uppercase text-muted-foreground">Implementation progress</p>
+              <div className="mt-2 h-2 w-full rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{progressPercent}% complete</p>
+            </div>
+          )}
         </section>
       )}
 
@@ -254,6 +438,30 @@ export default function RepoTimelinePage() {
           Signed-out view shows read-only tasks. Sign in to personalize progress and sync to the sidebar.
         </p>
       )}
+    </div>
+  )
+}
+
+function RatingStars({ value, onChange }: { value: number | null; onChange: (rating: number) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => {
+        const active = typeof value === "number" && value >= star
+        return (
+          <button
+            type="button"
+            key={star}
+            className={cn(
+              "p-1",
+              active ? "text-yellow-300" : "text-muted-foreground/60"
+            )}
+            onClick={() => onChange(star)}
+          >
+            <Star className={cn("h-4 w-4", active && "fill-current")}
+            />
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -285,10 +493,8 @@ function TimelineCanvas({
               >
                 <TimelineNodeCard
                   stage={stage}
-                  align={align}
                   statusIcon={statusIcon[stage.status]}
                   isCurrent={isCurrent}
-                  isSignedIn={isSignedIn}
                 />
               </div>
               <div className="relative hidden md:col-start-2 md:flex md:items-center md:justify-center">
@@ -303,119 +509,64 @@ function TimelineCanvas({
   )
 }
 
-function mapStaticRecordToRoadmap(record: RepoRecord): RoadmapResponseBody {
-  const numericStars = Number.parseInt(record.stars.replace(/[^0-9]/g, ""), 10)
-  return {
-    repo: {
-      full_name: record.name,
-      description: record.description,
-      language: record.language,
-      stars: Number.isNaN(numericStars) ? 0 : numericStars,
-      default_branch: "main",
-      html_url: undefined,
-      owner_avatar_url: undefined,
-    },
-    timeline: record.timeline,
-    cached: true,
-    generated_at: new Date().toISOString(),
-  }
-}
-
 function TimelineNodeCard({
   stage,
-  align,
   statusIcon,
   isCurrent,
-  isSignedIn,
 }: {
   stage: RepoTimelineStage
-  align: "left" | "right"
   statusIcon: JSX.Element
   isCurrent: boolean
-  isSignedIn: boolean
 }) {
   return (
-    <Collapsible className="group">
-      <div className="relative">
-        <span
-          className={cn(
-            "pointer-events-none absolute top-1/2 hidden h-px w-10 bg-border/50 md:block",
-            align === "left" ? "-right-10" : "-left-10"
-          )}
-        />
-        <Card
-          className={cn(
-            "border-border/60 bg-card/70 shadow-lg shadow-black/25",
-            isCurrent && "ring-1 ring-primary/40"
-          )}
-        >
-          <CardHeader className={cn("pb-2", align === "right" && "text-right")}>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">{stage.title}</CardTitle>
-              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                {statusIcon}
-                {(stage.status === "not-started" && !isSignedIn
-                  ? "not started"
-                  : stage.status.replace("-", " "))}
-              </Badge>
-            </div>
-            <CardDescription>{stage.summary}</CardDescription>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="space-y-4 pt-2">
-              <div className="rounded-lg border border-border/60 bg-background/60 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
-                </p>
-                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                  {stage.tasks.map((task) => (
-                    <li key={task} className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                      <span>{task}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              {stage.resources.length > 0 && (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Resources
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    {stage.resources.map((resource) => (
-                      <Button
-                        key={resource.label}
-                        variant="ghost"
-                        size="sm"
-                        className="border border-border/60"
-                        asChild
-                      >
-                        <a href={resource.href} target="_blank" rel="noreferrer">
-                          {resource.label}
-                        </a>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </CollapsibleContent>
-          <div className="flex items-center justify-between border-t border-border/60 px-6 py-3 text-xs text-muted-foreground">
-            <span>ETA: {stage.eta}</span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm">
-                Open guide
-              </Button>
-              <CollapsibleTrigger asChild>
-                <Button variant="secondary" size="sm" className="gap-1 rounded-xl">
-                  Details
-                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-          </div>
-        </Card>
-      </div>
-    </Collapsible>
+    <Card
+      className={cn(
+        "relative border border-border/60 bg-card/80 text-left shadow-lg",
+        isCurrent && "border-primary/60"
+      )}
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <span>{statusIcon}</span>
+          {stage.title}
+        </CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          {stage.summary}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">ETA {stage.eta}</div>
+        <ul className="space-y-2 text-sm">
+          {stage.tasks.map((task, index) => (
+            <li key={index} className="rounded-lg bg-white/5 px-3 py-2">
+              {task}
+            </li>
+          ))}
+        </ul>
+        {stage.resources.length > 0 && (
+          <Collapsible>
+            <CollapsibleTrigger className="text-sm text-primary">
+              Helpful resources
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                {stage.resources.map((resource) => (
+                  <li key={resource.href}>
+                    <a
+                      href={resource.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {resource.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </CardContent>
+    </Card>
   )
 }

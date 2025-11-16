@@ -41,11 +41,12 @@ async def test_generate_pins_user_when_returning_cached_response():
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    pin_store = MagicMock()
+    user_repo_store = MagicMock()
     service = RoadmapService(
         chunk_store=MagicMock(),
         result_store=MagicMock(),
-        pin_store=pin_store,
+        user_repo_store=user_repo_store,
+        rating_store=MagicMock(),
         generator=MagicMock(),
         token_store=MagicMock(),
         cache=_FakeCache(cached_payload),
@@ -56,4 +57,4 @@ async def test_generate_pins_user_when_returning_cached_response():
     )
 
     assert response.repo.full_name == "acme/widgets"
-    pin_store.pin.assert_called_once_with("user-1", "acme/widgets")
+    user_repo_store.touch_unsynced.assert_called_once_with("user-1", "acme/widgets")
