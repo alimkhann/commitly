@@ -39,7 +39,8 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-# Ensure allowed_origins is always a list (validator should handle this, but type-safe check)
+# Ensure allowed_origins is always a list
+# (validator should handle this, but type-safe check)
 if isinstance(settings.allowed_origins, str):
     cors_origins = [settings.allowed_origins] if settings.allowed_origins else ["*"]
 else:
