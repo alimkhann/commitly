@@ -302,6 +302,7 @@ class RoadmapResultStore:
 
         def action() -> tuple[list[RoadmapResponse], int]:
             import logging
+
             logger = logging.getLogger(__name__)
             try:
                 logger.info("list_catalog.action: Starting query construction")
@@ -381,7 +382,10 @@ class RoadmapResultStore:
                 logger.info("list_catalog.action: Query completed successfully")
                 return results, total
             except Exception as e:
-                logger.error(f"list_catalog.action: Error - {type(e).__name__}: {e}", exc_info=True)
+                logger.error(
+                    f"list_catalog.action: Error - {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
                 raise
 
         return self._with_table_guard(action)

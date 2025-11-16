@@ -107,7 +107,9 @@ async def list_roadmaps(
             )
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
-            logger.error(f"list_roadmaps: Database query timed out after {elapsed:.2f}s")
+            logger.error(
+                f"list_roadmaps: Database query timed out after {elapsed:.2f}s"
+            )
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                 detail="Database query timed out",
