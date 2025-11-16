@@ -28,6 +28,13 @@ import TabSwitch from "@/components/navigation/tab-switch"
 
 import { CheckCircle2, CircleDotDashed, Clock3, RefreshCcw } from "lucide-react"
 
+const identityFromSlug = (slug: string): RepoIdentity | null => {
+  const [owner, ...rest] = slug.split("-")
+  const repoName = rest.join("-")
+  if (!owner || !repoName) return null
+  return { owner, repoName, fullName: `${owner}/${repoName}`, slug }
+}
+
 export default function RepoTimelinePage() {
   const params = useParams<{ repoId: string }>()
   const searchParams = useSearchParams()
@@ -50,6 +57,7 @@ export default function RepoTimelinePage() {
   const catalogRecord = !shouldGenerate ? getRepoBySlug(repoId) : undefined
   const fullNameParam = searchParams?.get("fullName") ?? null
   const repoUrlParam = searchParams?.get("repoUrl") ?? null
+  const slugIdentity = useMemo(() => identityFromSlug(repoId), [repoId])
   const queryIdentity = useMemo(
     () =>
       repoService.parseRepoInput(fullNameParam ?? "") ??
@@ -64,8 +72,8 @@ export default function RepoTimelinePage() {
       const state = catalogRecord as UserRepoState
       return repoService.buildIdentityFromFullName(state.repo.repo.full_name)
     }
-    return queryIdentity
-  }, [catalogRecord, queryIdentity, shouldGenerate])
+    return queryIdentity ?? slugIdentity
+  }, [catalogRecord, queryIdentity, shouldGenerate, slugIdentity])
 
   const [roadmap, setRoadmap] = useState<RoadmapResponseBody | null>(null)
   const [fetchState, setFetchState] = useState<"idle" | "loading" | "error">(
@@ -220,8 +228,8 @@ export default function RepoTimelinePage() {
     }))
   }, [activeRoadmap, isSignedIn])
 
-  const statusIcon = useMemo<Record<RepoTimelineStage["status"], JSX.Element>>(
-    () => ({
+const statusIcon = useMemo<Record<RepoTimelineStage["status"], JSX.Element>>(
+  () => ({
       done: <CheckCircle2 className="h-4 w-4 text-primary" />,
       "in-progress": <Clock3 className="h-4 w-4 text-accent" />,
       "not-started": <CircleDotDashed className="h-4 w-4 text-muted-foreground" />,
