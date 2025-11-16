@@ -220,6 +220,8 @@ def verify_clerk_token(token: str) -> ClerkClaims:
 
 async def verify_clerk_token_async(token: str) -> ClerkClaims:
     """Async version of verify_clerk_token that doesn't block the event loop."""
+    import asyncio
+    
     try:
         header = jwt.get_unverified_header(token)
     except JWTError as exc:
@@ -231,18 +233,26 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
 
     # Use async version to avoid blocking
     jwk_data = await jwks_cache.get_key_async(kid)
-    public_key = jwk.construct(jwk_data)
+    
+    # Run CPU-intensive JWT operations in executor to avoid blocking
+    def verify_signature():
+        public_key = jwk.construct(jwk_data)
 
-    try:
-        message, encoded_signature = token.rsplit(".", 1)
-    except ValueError as exc:
-        raise InvalidClerkToken("Token structure is invalid") from exc
+        try:
+            message, encoded_signature = token.rsplit(".", 1)
+        except ValueError as exc:
+            raise InvalidClerkToken("Token structure is invalid") from exc
 
-    decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
-    if not public_key.verify(message.encode("utf-8"), decoded_signature):
-        raise InvalidClerkToken("Signature verification failed")
-
-    claims = jwt.get_unverified_claims(token)
+        decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
+        if not public_key.verify(message.encode("utf-8"), decoded_signature):
+            raise InvalidClerkToken("Signature verification failed")
+        
+        return jwt.get_unverified_claims(token)
+    
+    # Run signature verification in thread pool to avoid blocking event loop
+    loop = asyncio.get_event_loop()
+    claims = await loop.run_in_executor(None, verify_signature)
+    
     now = int(time.time())
 
     exp = claims.get("exp")
@@ -346,6 +356,8 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ):  # type: ignore[override]
+        import asyncio
+        
         token: Optional[str]
         try:
             token = _get_bearer_token(request)
@@ -358,7 +370,16 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
         if token:
             try:
                 # Use async version to avoid blocking the event loop
-                request.state.clerk_claims = await verify_clerk_token_async(token)
+                # Add timeout to prevent hanging
+                request.state.clerk_claims = await asyncio.wait_for(
+                    verify_clerk_token_async(token),
+                    timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error("Clerk token verification timed out after 10 seconds")
+                request.state.clerk_auth_error = InvalidClerkToken("Token verification timeout")
             except InvalidClerkToken as exc:
                 request.state.clerk_auth_error = exc
 
