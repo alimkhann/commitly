@@ -1,9 +1,9 @@
 export type ReleaseEntry = {
-  version: string
-  date: string
-  highlights: string[]
-  channel?: "beta" | "stable" | "preview"
-}
+  version: string;
+  date: string;
+  highlights: string[];
+  channel?: "beta" | "stable" | "preview";
+};
 
 export const releaseNotes: ReleaseEntry[] = [
   {
@@ -33,4 +33,4 @@ export const releaseNotes: ReleaseEntry[] = [
       "Added automated exports for completed guides",
     ],
   },
-]
+];

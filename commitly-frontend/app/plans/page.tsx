@@ -1,11 +1,9 @@
-"use client"
+"use client";
 
-import { useRouter } from "next/navigation"
-import { Check, X } from "lucide-react"
-
-import { plans } from "@/data/plans"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Check, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,28 +11,30 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
+import { plans } from "@/data/plans";
 
 export default function PlansPage() {
-  const router = useRouter()
+  const router = useRouter();
 
   return (
     <main className="min-h-screen w-full bg-gradient-to-b from-background via-background/80 to-background px-6 py-12 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-10">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
-            <p className="text-sm uppercase tracking-[0.3em] text-primary">
+            <p className="text-primary text-sm uppercase tracking-[0.3em]">
               Pricing
             </p>
-            <h1 className="text-4xl font-semibold leading-tight">
+            <h1 className="font-semibold text-4xl leading-tight">
               Upgrade your workspace when you&apos;re ready.
             </h1>
             <p className="text-base text-muted-foreground">
-              Pick a plan that matches how often you turn repos into guided build plans.
-              All tiers include the dark UI and shadcn component kit.
+              Pick a plan that matches how often you turn repos into guided
+              build plans. All tiers include the dark UI and shadcn component
+              kit.
             </p>
           </div>
-          <Button variant="ghost" onClick={() => router.back()}>
+          <Button onClick={() => router.back()} variant="ghost">
             Close
             <X className="ml-2 h-4 w-4" />
           </Button>
@@ -43,24 +43,24 @@ export default function PlansPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {plans.map((plan) => (
             <Card
-              key={plan.id}
               className={`flex flex-col border border-border/60 bg-card/80 shadow-2xl shadow-black/30 ${
                 plan.highlighted ? "ring-2 ring-primary" : ""
               }`}
+              key={plan.id}
             >
               <CardHeader className="space-y-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-2xl">{plan.name}</CardTitle>
                   {plan.highlighted && (
-                    <Badge variant="accent" className="text-xs uppercase">
+                    <Badge className="text-xs uppercase" variant="accent">
                       Popular
                     </Badge>
                   )}
                 </div>
                 <CardDescription>{plan.description}</CardDescription>
-                <div className="flex items-baseline gap-1 text-4xl font-semibold">
+                <div className="flex items-baseline gap-1 font-semibold text-4xl">
                   ${plan.price}
-                  <span className="text-base font-normal text-muted-foreground">
+                  <span className="font-normal text-base text-muted-foreground">
                     /month
                   </span>
                 </div>
@@ -72,16 +72,16 @@ export default function PlansPage() {
                 >
                   {plan.cta}
                 </Button>
-                <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
+                <ul className="mt-6 space-y-3 text-muted-foreground text-sm">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2">
+                    <li className="flex items-center gap-2" key={feature}>
                       <Check className="h-4 w-4 text-primary" />
                       {feature}
                     </li>
                   ))}
                 </ul>
               </CardContent>
-              <CardFooter className="text-xs text-muted-foreground">
+              <CardFooter className="text-muted-foreground text-xs">
                 {plan.id === "free"
                   ? "Includes unlimited mock timelines on public repos."
                   : "Cancel anytime. We prorate upgrades."}
@@ -91,5 +91,5 @@ export default function PlansPage() {
         </div>
       </div>
     </main>
-  )
+  );
 }

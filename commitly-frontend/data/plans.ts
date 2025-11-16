@@ -1,12 +1,12 @@
 export type PlanTier = {
-  id: string
-  name: string
-  price: number
-  description: string
-  cta: string
-  highlighted?: boolean
-  features: string[]
-}
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  cta: string;
+  highlighted?: boolean;
+  features: string[];
+};
 
 export const plans: PlanTier[] = [
   {
@@ -39,7 +39,8 @@ export const plans: PlanTier[] = [
     id: "ultra",
     name: "Ultra",
     price: 50,
-    description: "All the power of Pro with priority models and roadmap coaching.",
+    description:
+      "All the power of Pro with priority models and roadmap coaching.",
     cta: "Get Ultra",
     features: [
       "All Pro features",
@@ -48,4 +49,4 @@ export const plans: PlanTier[] = [
       "API & webhooks",
     ],
   },
-]
+];

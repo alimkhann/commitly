@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   turbopack: {
-    root: __dirname,
+    root: import.meta.dirname,
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;

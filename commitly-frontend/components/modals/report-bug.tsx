@@ -1,30 +1,29 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { AlertTriangle, Paperclip } from "lucide-react"
-
+import { AlertTriangle, Paperclip } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 type ReportBugProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
 
 export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
-  const [includeScreenshot, setIncludeScreenshot] = useState(true)
+  const [includeScreenshot, setIncludeScreenshot] = useState(true);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="max-w-2xl space-y-6">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -32,14 +31,14 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
             <DialogTitle>Report an issue</DialogTitle>
           </div>
           <DialogDescription>
-            Share what went wrong so we can reproduce and fix it quickly. Attaching
-            screenshots or logs helps shorten the cycle.
+            Share what went wrong so we can reproduce and fix it quickly.
+            Attaching screenshots or logs helps shorten the cycle.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="bug-title" className="text-sm font-medium">
+            <label className="font-medium text-sm" htmlFor="bug-title">
               Title
             </label>
             <Input
@@ -49,53 +48,53 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="bug-description" className="text-sm font-medium">
+            <label className="font-medium text-sm" htmlFor="bug-description">
               What happened?
             </label>
             <Textarea
               id="bug-description"
-              rows={6}
               placeholder="Steps to reproduce, expected result, actual outcome..."
+              rows={6}
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border border-dashed border-muted px-3 py-3 text-sm text-muted-foreground">
+          <div className="flex items-center justify-between rounded-lg border border-muted border-dashed px-3 py-3 text-muted-foreground text-sm">
             <div className="flex items-center gap-2">
               <Paperclip className="h-4 w-4" />
               <div>
                 <p className="font-medium text-foreground">Attachment</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   Drop screenshots or logs (optional)
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm">
+            <Button size="sm" variant="outline">
               Browse files
             </Button>
           </div>
 
           <div className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3">
             <div>
-              <p className="text-sm font-medium">Include last screenshot</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="font-medium text-sm">Include last screenshot</p>
+              <p className="text-muted-foreground text-xs">
                 We&rsquo;ll only capture the active commitly tab.
               </p>
             </div>
             <Switch
+              aria-label="Include screenshot"
               checked={includeScreenshot}
               onCheckedChange={setIncludeScreenshot}
-              aria-label="Include screenshot"
             />
           </div>
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button onClick={() => onOpenChange(false)} variant="ghost">
             Cancel
           </Button>
           <Button>Send report</Button>
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

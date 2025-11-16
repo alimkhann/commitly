@@ -1,8 +1,8 @@
 type PolicyLink = {
-  href: string
-  label: string
-  summary: string
-}
+  href: string;
+  label: string;
+  summary: string;
+};
 
 export const policyLinks: PolicyLink[] = [
   {
@@ -25,9 +25,9 @@ export const policyLinks: PolicyLink[] = [
     label: "Security",
     summary: "Controls we use to safeguard infrastructure and customer data.",
   },
-]
+];
 
 export const policyMeta = {
   updated: "2024-09-30",
   contact: "security@commitly.dev",
-}
+};
