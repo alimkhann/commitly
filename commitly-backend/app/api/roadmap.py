@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -15,7 +15,6 @@ from app.models.roadmap import (
     RoadmapResponse,
     UserRepoStateResponse,
 )
-from app.services.roadmap_repository import SortOption
 from app.services.roadmap_service import RoadmapService, build_roadmap_service
 
 router = APIRouter()

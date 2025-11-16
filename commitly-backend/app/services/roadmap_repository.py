@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 from typing import Iterable, Literal
 
-from sqlalchemy import Integer, case
+from sqlalchemy import case
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -371,6 +371,7 @@ class RoadmapResultStore:
             return [self._to_response(record) for record in records], total
 
         return self._with_table_guard(action)
+
     def _to_response(self, record: GeneratedRoadmap) -> RoadmapResponse:
         summary_payload = dict(record.repo_summary)
         # Ensure counters stored as columns are surfaced even if repo_summary lacks them

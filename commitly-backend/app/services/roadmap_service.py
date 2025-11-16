@@ -10,7 +10,6 @@ from app.core.cache import RedisJSONCache, redis_cache
 from app.core.config import settings
 from app.models.roadmap import (
     RatingResponse,
-    RoadmapCatalogPage,
     RoadmapRepoSummary,
     RoadmapResponse,
     UserRepoStateResponse,
@@ -35,7 +34,6 @@ from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
 from app.services.roadmap_rating_store import RoadmapRatingStore
 from app.services.roadmap_repository import (
     RoadmapResultStore,
-    SortOption,
     UserSyncedRepoStore,
 )
 from app.services.roadmap_view_tracker import RoadmapViewTrackerService
