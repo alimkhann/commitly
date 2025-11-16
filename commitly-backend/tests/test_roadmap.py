@@ -69,7 +69,7 @@ def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse
         async def list_synced(self):
             return [roadmap_payload]
 
-        async def list_catalog(self, page: int, page_size: int):
+        async def list_catalog(self, page: int, page_size: int, sort: str = "newest"):
             return {
                 "items": [roadmap_payload],
                 "page": page,

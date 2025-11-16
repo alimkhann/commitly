@@ -211,6 +211,29 @@ def require_clerk_auth(request: Request) -> ClerkClaims:
     return claims
 
 
+def optional_clerk_auth(request: Request) -> Optional[ClerkClaims]:
+    """
+    Optional Clerk authentication dependency.
+
+    Returns ClerkClaims if a valid token is present, otherwise None.
+    Does not raise exceptions for missing or invalid tokens.
+
+    This is useful for endpoints that should work for both authenticated
+    and unauthenticated users.
+    """
+    cached: Optional[ClerkClaims] = getattr(request.state, "clerk_claims", None)
+    if cached:
+        return cached
+
+    try:
+        token = _get_bearer_token(request)
+        claims = verify_clerk_token(token)
+        request.state.clerk_claims = claims
+        return claims
+    except (MissingBearerToken, InvalidClerkToken):
+        return None
+
+
 class ClerkAuthMiddleware(BaseHTTPMiddleware):
     """Pre-decodes Clerk tokens so downstream dependencies can reuse them."""
 

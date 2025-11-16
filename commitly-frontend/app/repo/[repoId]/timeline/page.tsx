@@ -122,6 +122,28 @@ export default function RepoTimelinePage() {
     };
   }, [identity, roadmap, isGenerating, repoUrlParam, upsertRoadmap]);
 
+  // Record view when timeline is loaded
+  useEffect(() => {
+    if (!(identity && roadmap)) {
+      return;
+    }
+    let cancelled = false;
+    const recordView = async () => {
+      const token = await getToken?.();
+      await repoService.recordRoadmapView(
+        identity.owner,
+        identity.repoName,
+        token ?? undefined
+      );
+    };
+    if (!cancelled) {
+      recordView();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, roadmap, getToken]);
+
   const retryLoad = useCallback(async () => {
     if (!identity) {
       return;

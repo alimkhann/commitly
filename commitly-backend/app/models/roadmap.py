@@ -130,6 +130,24 @@ class RoadmapRating(Base):
     )
 
 
+class RoadmapViewTracker(Base):
+    """Tracks views to prevent spam and implement anti-spam logic."""
+
+    __tablename__ = "roadmap_view_tracker"
+    __table_args__ = (
+        UniqueConstraint(
+            "repo_full_name", "user_id", name="uq_roadmap_view_tracker_repo_user"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    viewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class RoadmapRequest(BaseModel):
     repo_url: AnyHttpUrl = Field(description="GitHub repository URL")
     force_refresh: bool = Field(

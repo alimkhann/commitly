@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
-from typing import Iterable
+from typing import Iterable, Literal
 
+from sqlalchemy import case
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -16,6 +17,11 @@ from app.models.roadmap import (
     UserRepoStateResponse,
     UserSyncedRepo,
 )
+
+# Type alias for sort options
+SortOption = Literal[
+    "newest", "most_viewed", "most_synced", "highest_rated", "trending"
+]
 
 
 class RoadmapResultStore:
@@ -204,6 +210,30 @@ class RoadmapResultStore:
 
         self._with_table_guard(action)
 
+    def increment_view_count(self, full_name: str) -> None:
+        """Increment the view count for a roadmap."""
+
+        def action() -> None:
+            try:
+                record = (
+                    self._session.query(GeneratedRoadmap)
+                    .filter_by(repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if not record:
+                    return
+                record.view_count = (record.view_count or 0) + 1
+                summary = (record.repo_summary or {}).copy()
+                summary["view_count"] = record.view_count
+                record.repo_summary = summary
+                flag_modified(record, "repo_summary")
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
+
     def get(self, full_name: str) -> RoadmapResponse | None:
         def action() -> RoadmapResponse | None:
             record = (
@@ -229,15 +259,69 @@ class RoadmapResultStore:
         return self._with_table_guard(action)
 
     def list_paginated(
-        self, page: int, page_size: int
+        self, page: int, page_size: int, sort: SortOption = "newest"
     ) -> tuple[list[RoadmapResponse], int]:
+        """
+        List roadmaps with pagination and sorting.
+
+        Sort options:
+        - newest: Order by updated_at DESC (default)
+        - most_viewed: Order by view_count DESC
+        - most_synced: Order by sync_count DESC
+        - highest_rated: Order by average rating DESC
+        - trending: Order by trending score DESC
+
+        Trending score formula:
+            (view_count * 0.4) + (sync_count * 0.3) + (avg_rating * 6 * 0.3)
+
+        Args:
+            page: Page number (1-indexed)
+            page_size: Number of items per page
+            sort: Sort option
+
+        Returns:
+            Tuple of (list of roadmaps, total count)
+        """
         page = max(1, page)
         page_size = max(1, min(100, page_size))
 
         def action() -> tuple[list[RoadmapResponse], int]:
-            query = self._session.query(GeneratedRoadmap).order_by(
-                GeneratedRoadmap.updated_at.desc()
-            )
+            query = self._session.query(GeneratedRoadmap)
+
+            # Apply sorting
+            if sort == "most_viewed":
+                query = query.order_by(GeneratedRoadmap.view_count.desc())
+            elif sort == "most_synced":
+                query = query.order_by(GeneratedRoadmap.sync_count.desc())
+            elif sort == "highest_rated":
+                # Calculate average rating: rating_sum / rating_count
+                # Use CASE to avoid division by zero
+                avg_rating = case(
+                    (
+                        GeneratedRoadmap.rating_count > 0,
+                        GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count,
+                    ),
+                    else_=0,
+                )
+                query = query.order_by(avg_rating.desc())
+            elif sort == "trending":
+                # Trending: 40% views + 30% syncs + 30% rating*6
+                avg_rating = case(
+                    (
+                        GeneratedRoadmap.rating_count > 0,
+                        GeneratedRoadmap.rating_sum / GeneratedRoadmap.rating_count,
+                    ),
+                    else_=0,
+                )
+                trending_score = (
+                    (GeneratedRoadmap.view_count * 0.4)
+                    + (GeneratedRoadmap.sync_count * 0.3)
+                    + (avg_rating * 6 * 0.3)
+                )
+                query = query.order_by(trending_score.desc())
+            else:  # newest (default)
+                query = query.order_by(GeneratedRoadmap.updated_at.desc())
+
             total = query.count()
             records = query.offset((page - 1) * page_size).limit(page_size).all()
             return [self._to_response(record) for record in records], total
