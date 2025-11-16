@@ -188,7 +188,7 @@ class RoadmapService:
             for state in self._pin_store.list_states(user_id)
         )
 
-        created = self._pin_store.upsert_state(
+        _ = self._pin_store.upsert_state(
             user_id,
             full_name,
             status="synced",
