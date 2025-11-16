@@ -47,6 +47,19 @@ class GeneratedRoadmap(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    primary_language: Mapped[Optional[str]] = mapped_column(String(64))
+    languages: Mapped[Optional[list]] = mapped_column(JSON)
+    topics: Mapped[Optional[list]] = mapped_column(JSON)
+    difficulty: Mapped[Optional[str]] = mapped_column(String(32))
+    star_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fork_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_pushed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    license: Mapped[Optional[str]] = mapped_column(String(128))
+    contributor_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sync_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rating_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     repo_summary: Mapped[dict] = mapped_column(JSON, nullable=False)
     timeline: Mapped[list] = mapped_column(JSON, nullable=False)
     cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -75,8 +88,17 @@ class UserSyncedRepo(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="synced")
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     pinned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
@@ -110,6 +132,19 @@ class RoadmapRepoSummary(BaseModel):
     default_branch: str
     html_url: Optional[AnyHttpUrl]
     owner_avatar_url: Optional[AnyHttpUrl]
+    primary_language: Optional[str] = None
+    languages: Optional[list[str]] = None
+    topics: Optional[list[str]] = None
+    difficulty: Optional[str] = None
+    star_count: Optional[int] = None
+    fork_count: Optional[int] = None
+    last_pushed_at: Optional[datetime] = None
+    license: Optional[str] = None
+    contributor_count: Optional[int] = None
+    view_count: Optional[int] = None
+    sync_count: Optional[int] = None
+    rating_count: Optional[int] = None
+    rating_sum: Optional[int] = None
 
 
 class RoadmapResponse(BaseModel):
