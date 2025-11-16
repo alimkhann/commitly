@@ -16,6 +16,12 @@ Date: 2025-11-16
 - Sidebar section renamed to “Your repositories”; now shows status badges and includes unsynced entries (non-archived), falling back to old synced list if no user data.
 - Search page “Your repositories” section uses the new user-repo list and keeps stage counts via cached synced map.
 
+## Public Repositories Catalog (Prompt 3)
+- Backend `/api/v1/roadmap/catalog` now paginated (`items`, `page`, `page_size`, `total_count`, `total_pages`) backed by `GeneratedRoadmap` with new metadata included.
+- Roadmap service exposes `list_catalog`; repository store supports paginated listing.
+- Frontend `repoService.listCatalog(page, pageSize)` returns catalog page; `RoadmapCatalogProvider` consumes `.items` to populate synced list.
+- Search page renders a separate “Public repositories” section using the new endpoint (with static fallback when API is unconfigured). Displays stage count, language, and links to timelines.
+
 ## Migrations
 - Added Alembic revision `20241116_upgrade_roadmaps_and_user_repo_state.py` (down_revision `20241115_add_user_synced_repos`).
 - New columns have safe defaults (`0`, `false`, or nullable) to allow migration on existing data.

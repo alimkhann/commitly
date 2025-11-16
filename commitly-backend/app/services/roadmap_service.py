@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from app.core.cache import RedisJSONCache, redis_cache
 from app.core.config import settings
 from app.models.roadmap import (
+    RoadmapCatalogPage,
     RoadmapRepoSummary,
     RoadmapResponse,
     UserRepoStateResponse,
@@ -147,6 +148,17 @@ class RoadmapService:
 
     async def list_synced(self) -> list[RoadmapResponse]:
         return self._result_store.list()
+
+    async def list_catalog(self, page: int, page_size: int) -> RoadmapCatalogPage:
+        items, total = self._result_store.list_paginated(page, page_size)
+        total_pages = max(1, math.ceil(total / page_size)) if total else 1
+        return RoadmapCatalogPage(
+            items=items,
+            page=page,
+            page_size=page_size,
+            total_count=total,
+            total_pages=total_pages,
+        )
 
     async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
         return self._pin_store.list(user_id)

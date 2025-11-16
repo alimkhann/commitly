@@ -120,6 +120,22 @@ class RoadmapResultStore:
 
         return self._with_table_guard(action)
 
+    def list_paginated(
+        self, page: int, page_size: int
+    ) -> tuple[list[RoadmapResponse], int]:
+        page = max(1, page)
+        page_size = max(1, min(100, page_size))
+
+        def action() -> tuple[list[RoadmapResponse], int]:
+            query = self._session.query(GeneratedRoadmap).order_by(
+                GeneratedRoadmap.updated_at.desc()
+            )
+            total = query.count()
+            records = query.offset((page - 1) * page_size).limit(page_size).all()
+            return [self._to_response(record) for record in records], total
+
+        return self._with_table_guard(action)
+
     def _to_response(self, record: GeneratedRoadmap) -> RoadmapResponse:
         summary = RoadmapRepoSummary(**record.repo_summary)
         timeline = [TimelineStage(**stage) for stage in record.timeline]

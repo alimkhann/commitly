@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import { Filter, GitBranch, Search } from "lucide-react"
 
-import { repoService } from "@/lib/services/repos"
+import { repoService, type RoadmapResponseBody } from "@/lib/services/repos"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,11 +17,61 @@ import {
 import { Input } from "@/components/ui/input"
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
 
+const mapStaticRecordToRoadmap = (record: RepoRecord): RoadmapResponseBody => {
+  const numericStars = Number.parseInt(record.stars.replace(/[^0-9]/g, ""), 10)
+  return {
+    repo: {
+      full_name: record.name,
+      description: record.description,
+      language: record.language,
+      stars: Number.isNaN(numericStars) ? 0 : numericStars,
+      default_branch: "main",
+      html_url: undefined,
+      owner_avatar_url: undefined,
+    },
+    timeline: record.timeline,
+    cached: true,
+    generated_at: new Date().toISOString(),
+  }
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState("")
   const [difficulty, setDifficulty] = useState<"all" | "beginner" | "intermediate" | "advanced">("all")
   const repoList = useMemo(() => repoService.list(), [])
   const { synced, yourRepos, loading } = useRoadmapCatalog()
+  const [publicRepos, setPublicRepos] = useState<RoadmapResponseBody[]>([])
+  const [publicMeta, setPublicMeta] = useState<{ total_count: number; page: number; total_pages: number } | null>(null)
+  const [publicLoading, setPublicLoading] = useState(false)
+  const [publicError, setPublicError] = useState<string | null>(null)
+
+  const backendConfigured = repoService.isBackendConfigured()
+
+  useEffect(() => {
+    if (!backendConfigured) return
+    let cancelled = false
+    const load = async () => {
+      setPublicLoading(true)
+      const response = await repoService.listCatalog(1, 50)
+      if (cancelled) return
+      if (response.ok && response.data) {
+        setPublicRepos(response.data.items)
+        setPublicMeta({
+          total_count: response.data.total_count,
+          page: response.data.page,
+          total_pages: response.data.total_pages,
+        })
+        setPublicError(null)
+      } else {
+        setPublicError(response.error ?? "Unable to load public catalog.")
+      }
+      setPublicLoading(false)
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [backendConfigured])
 
   const syncedMap = useMemo(() => new Map(synced.map((repo) => [repo.repo.full_name, repo])), [synced])
 
@@ -60,6 +110,13 @@ export default function SearchPage() {
       return matchesQuery && matchesDifficulty
     })
   }, [query, difficulty, repoList])
+
+  const publicRepoList = useMemo(() => {
+    if (!backendConfigured) {
+      return filteredRepos.map(mapStaticRecordToRoadmap)
+    }
+    return publicRepos
+  }, [backendConfigured, filteredRepos, publicRepos])
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">
@@ -148,45 +205,50 @@ export default function SearchPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Public repositories</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Public repositories</h2>
+          {publicLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {publicMeta && (
+            <p className="text-xs text-muted-foreground">
+              Page {publicMeta.page} of {publicMeta.total_pages} • {publicMeta.total_count} total
+            </p>
+          )}
+        </div>
+        {publicError && (
+          <p className="text-sm text-destructive">{publicError}</p>
+        )}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredRepos.map((repo) => (
-            <Card
-              key={repo.id}
-              className="flex flex-col border-border/60 bg-card/70 shadow-lg shadow-black/20"
-            >
-              <CardHeader className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-xl">{repo.name}</CardTitle>
-                  <Badge variant="outline" className="text-xs uppercase tracking-wide">
-                    {repo.difficulty}
-                  </Badge>
-                </div>
-                <CardDescription>{repo.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="mt-auto space-y-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <GitBranch className="h-4 w-4" />
-                  <span>
-                    {repo.language} • {repo.updatedAt}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {repo.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full bg-muted/40 px-3 py-1 text-muted-foreground"
-                    >
-                      {tag}
+          {publicRepoList.map((repo) => {
+            const identity = repoService.buildIdentityFromFullName(repo.repo.full_name)
+            return (
+              <Card
+                key={identity.slug}
+                className="flex flex-col border-border/60 bg-card/70 shadow-lg shadow-black/20"
+              >
+                <CardHeader className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-xl">{repo.repo.full_name}</CardTitle>
+                    <Badge variant="outline" className="text-xs uppercase tracking-wide">
+                      {repo.timeline.length} stages
+                    </Badge>
+                  </div>
+                  <CardDescription>{repo.repo.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="mt-auto space-y-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    <span>
+                      {repo.repo.language ?? repo.repo.primary_language ?? "Unknown"}
+                      {repo.repo.star_count ? ` • ${repo.repo.star_count}★` : ""}
                     </span>
-                  ))}
-                </div>
-                <Button className="w-full" variant="secondary" asChild>
-                  <Link href={`/repo/${repo.id}/timeline`}>Open timeline</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  </div>
+                  <Button className="w-full" variant="secondary" asChild>
+                    <Link href={`/repo/${identity.slug}/timeline`}>Open timeline</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       </section>
     </div>

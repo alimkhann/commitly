@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import ClerkClaims, require_clerk_auth
 from app.core.database import get_db
 from app.models.roadmap import (
+    RoadmapCatalogPage,
     RoadmapRequest,
     RoadmapResponse,
     UserRepoStateResponse,
@@ -19,11 +20,13 @@ def get_roadmap_service(session: Session = Depends(get_db)) -> RoadmapService:
     return build_roadmap_service(session)
 
 
-@router.get("/catalog", response_model=list[RoadmapResponse])
+@router.get("/catalog", response_model=RoadmapCatalogPage)
 async def list_roadmaps(
+    page: int = 1,
+    page_size: int = 20,
     service: RoadmapService = Depends(get_roadmap_service),
-) -> list[RoadmapResponse]:
-    return await service.list_synced()
+) -> RoadmapCatalogPage:
+    return await service.list_catalog(page, page_size)
 
 
 @router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)
