@@ -169,16 +169,28 @@ class RoadmapService:
         return self._result_store.list()
 
     async def list_catalog(
-        self, page: int, page_size: int, sort: SortOption = "newest"
-    ) -> RoadmapCatalogPage:
-        items, total = self._result_store.list_paginated(page, page_size, sort)
-        total_pages = max(1, math.ceil(total / page_size)) if total else 1
-        return RoadmapCatalogPage(
-            items=items,
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        language: str | None = None,
+        tag: str | None = None,
+        difficulty: str | None = None,
+        min_rating: float | None = None,
+        min_views: int | None = None,
+        min_syncs: int | None = None,
+        sort: str = "newest",
+    ) -> tuple[list[RoadmapResponse], int]:
+        """List catalog with filters and pagination."""
+        return self._result_store.list_catalog(
             page=page,
             page_size=page_size,
-            total_count=total,
-            total_pages=total_pages,
+            language=language,
+            tag=tag,
+            difficulty=difficulty,
+            min_rating=min_rating,
+            min_views=min_views,
+            min_syncs=min_syncs,
+            sort=sort,
         )
 
     async def record_roadmap_view(

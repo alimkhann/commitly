@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import ClerkClaims, optional_clerk_auth, require_clerk_auth
 from app.core.database import get_db
 from app.models.roadmap import (
+    CatalogPage,
     RatingRequest,
     RatingResponse,
-    RoadmapCatalogPage,
     RoadmapRequest,
     RoadmapResponse,
     UserRepoStateResponse,
@@ -36,27 +36,51 @@ def get_user_id(claims: ClerkClaims) -> str:
     return user_id
 
 
-@router.get("/catalog", response_model=RoadmapCatalogPage)
+@router.get("/catalog", response_model=CatalogPage)
 async def list_roadmaps(
-    page: int = 1,
-    page_size: int = 20,
-    sort: Annotated[
-        SortOption,
-        "Sort option: newest, most_viewed, most_synced, highest_rated, trending",
-    ] = "newest",
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    language: str | None = Query(None, description="Filter by programming language"),
+    tag: str | None = Query(None, description="Filter by topic/tag"),
+    difficulty: str | None = Query(None, description="Filter by difficulty"),
+    min_rating: float | None = Query(
+        None, ge=1.0, le=5.0, description="Minimum average rating"
+    ),
+    min_views: int | None = Query(None, ge=0, description="Minimum view count"),
+    min_syncs: int | None = Query(None, ge=0, description="Minimum sync count"),
+    sort: str = Query(
+        "newest",
+        description=(
+            "Sort order: newest, most_viewed, most_synced, "
+            "highest_rated, trending"
+        ),
+    ),
     service: RoadmapService = Depends(get_roadmap_service),
-) -> RoadmapCatalogPage:
-    """
-    List roadmaps with pagination and sorting.
+) -> CatalogPage:
+    """List catalog with filters, sorting, and pagination."""
+    import math
 
-    Sort options:
-    - newest: Order by updated_at DESC (default)
-    - most_viewed: Order by view_count DESC
-    - most_synced: Order by sync_count DESC
-    - highest_rated: Order by average rating DESC
-    - trending: Order by trending score (combines views, syncs, and ratings)
-    """
-    return await service.list_catalog(page, page_size, sort)
+    items, total_count = await service.list_catalog(
+        page=page,
+        page_size=page_size,
+        language=language,
+        tag=tag,
+        difficulty=difficulty,
+        min_rating=min_rating,
+        min_views=min_views,
+        min_syncs=min_syncs,
+        sort=sort,
+    )
+
+    total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
+
+    return CatalogPage(
+        items=items,
+        page=page,
+        page_size=page_size,
+        total_count=total_count,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)

@@ -150,3 +150,30 @@ def app_with_overrides(db_session: Session):
 @pytest.fixture()
 def client(app_with_overrides) -> TestClient:
     return TestClient(app_with_overrides)
+
+
+@pytest.fixture()
+def roadmap_service(db_session: Session):
+    """Provide a RoadmapService instance for testing."""
+    from unittest.mock import Mock
+
+    from app.services.roadmap_service import RoadmapService
+    from app.services.roadmap_repository import RoadmapResultStore
+
+    # Create a real result store for testing filters
+    result_store = RoadmapResultStore(db_session)
+
+    # Mock the other dependencies since we're only testing list_catalog
+    chunk_store = Mock()
+    pin_store = Mock()
+    generator = Mock()
+    token_store = Mock()
+
+    return RoadmapService(
+        chunk_store=chunk_store,
+        result_store=result_store,
+        pin_store=pin_store,
+        generator=generator,
+        token_store=token_store,
+        cache=None,
+    )
