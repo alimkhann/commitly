@@ -51,8 +51,7 @@ async def list_roadmaps(
     sort: str = Query(
         "newest",
         description=(
-            "Sort order: newest, most_viewed, most_synced, "
-            "highest_rated, trending"
+            "Sort order: newest, most_viewed, most_synced, " "highest_rated, trending"
         ),
     ),
     service: RoadmapService = Depends(get_roadmap_service),

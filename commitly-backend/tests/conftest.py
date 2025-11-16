@@ -157,8 +157,8 @@ def roadmap_service(db_session: Session):
     """Provide a RoadmapService instance for testing."""
     from unittest.mock import Mock
 
-    from app.services.roadmap_service import RoadmapService
     from app.services.roadmap_repository import RoadmapResultStore
+    from app.services.roadmap_service import RoadmapService
 
     # Create a real result store for testing filters
     result_store = RoadmapResultStore(db_session)
