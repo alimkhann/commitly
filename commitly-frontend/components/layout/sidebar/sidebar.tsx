@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 import AccountSection from "./account-section"
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
-import { repoService } from "@/lib/services/repos"
+import { repoService, type RoadmapResponseBody, type RoadmapSummary, type UserRepoState } from "@/lib/services/repos"
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -126,27 +126,24 @@ export default function Sidebar() {
         </div>
 
         {!collapsed && isSignedIn && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Your repositories
-              </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Your repositories
+                </p>
               {loading && (
                 <Badge variant="outline" className="font-normal text-[11px]">
                   Loading…
                 </Badge>
               )}
-            </div>
-            <ScrollArea className="h-full max-h-[45vh]">
-              <div className="flex flex-col gap-2 pr-3">
-                const userReposToRender = yourRepos.filter((repo) => !repo.is_archived)
-                const rows = userReposToRender.length > 0 ? userReposToRender : synced
-
-                {pending.length + sidebarRows.length === 0 && !loading ? (
-                  <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-sm text-muted-foreground">
-                    Generate a roadmap to pin it here.
-                  </div>
-                ) : (
+              </div>
+              <ScrollArea className="h-full max-h-[45vh]">
+                <div className="flex flex-col gap-2 pr-3">
+                  {pending.length + sidebarRows.length === 0 && !loading ? (
+                    <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-sm text-muted-foreground">
+                      Generate a roadmap to pin it here.
+                    </div>
+                  ) : (
                   [...pending, ...sidebarRows].map((repo) => {
                     const identity = "repo_full_name" in repo
                       ? repoService.buildIdentityFromFullName(repo.repo_full_name)
@@ -157,10 +154,12 @@ export default function Sidebar() {
                     const isPending = (repo as { pending?: boolean }).pending === true
                     const status = (repo as { status?: string }).status ?? "synced"
                     const syncedMatch = synced.find((item) => item.fullName === identity.fullName)
-                    const summary = "repo" in repo ? (repo as any).repo : syncedMatch?.repo
-                    const language = summary?.language ?? summary?.primary_language ?? syncedMatch?.repo.language ?? null
+                    const summary: RoadmapResponseBody["repo"] | undefined =
+                      "repo" in repo ? (repo as UserRepoState & { repo: RoadmapSummary }).repo : syncedMatch?.repo
+                    // 'primary_language' does not exist on type 'RoadmapSummary', so use only available fields.
+                    const language = summary?.language ?? syncedMatch?.repo.language ?? null
                     const description = summary?.description ?? syncedMatch?.repo.description ?? null
-                    const generatedAt = (syncedMatch as any)?.generated_at
+                    const generatedAt = syncedMatch?.generated_at ?? null
                     const stageCount = syncedMatch ? syncedMatch.timeline.length : 0
                     return (
                       <Link

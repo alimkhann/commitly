@@ -110,6 +110,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!backendConfigured || !isSignedIn) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshUserRepos()
   }, [backendConfigured, isSignedIn, refreshUserRepos])
 

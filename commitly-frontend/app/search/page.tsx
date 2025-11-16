@@ -25,6 +25,8 @@ export default function SearchPage() {
 
   const syncedMap = useMemo(() => new Map(synced.map((repo) => [repo.repo.full_name, repo])), [synced])
 
+  const nowIso = useMemo(() => new Date().toISOString(), [])
+
   const userRepoList = useMemo(
     () =>
       yourRepos
@@ -131,7 +133,7 @@ export default function SearchPage() {
                       {repo.repo.language ?? "Unknown"} •
                       {" "}
                       {new Date(
-                        syncedMap.get(repo.repo_full_name)?.generated_at ?? Date.now()
+                        syncedMap.get(repo.repo_full_name)?.generated_at ?? nowIso
                       ).toLocaleDateString()}
                     </span>
                   </div>
