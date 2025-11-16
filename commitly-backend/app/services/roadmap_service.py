@@ -219,6 +219,64 @@ class RoadmapService:
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
         self._pin_store.unpin(user_id, repo_full_name)
 
+    async def archive_repo(
+        self, owner: str, repo: str, user_id: str
+    ) -> UserRepoStateResponse:
+        """Archive a repository for a user."""
+        full_name = f"{owner}/{repo}"
+        states = self._pin_store.list_states(user_id)
+        existing_state = next(
+            (state for state in states if state.repo_full_name == full_name), None
+        )
+        if not existing_state:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repository is not synced for this user.",
+            )
+        self._pin_store.archive(user_id, full_name)
+        updated_states = self._pin_store.list_states(user_id)
+        updated_state = next(
+            (state for state in updated_states if state.repo_full_name == full_name),
+            None,
+        )
+        if not updated_state:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to archive repository.",
+            )
+        return updated_state
+
+    async def unarchive_repo(
+        self, owner: str, repo: str, user_id: str
+    ) -> UserRepoStateResponse:
+        """Unarchive a repository for a user."""
+        full_name = f"{owner}/{repo}"
+        archived = self._pin_store.list_archived(user_id)
+        existing_archived = next(
+            (state for state in archived if state.repo_full_name == full_name), None
+        )
+        if not existing_archived:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Repository is not archived for this user.",
+            )
+        self._pin_store.unarchive(user_id, full_name)
+        updated_states = self._pin_store.list_states(user_id)
+        updated_state = next(
+            (state for state in updated_states if state.repo_full_name == full_name),
+            None,
+        )
+        if not updated_state:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to unarchive repository.",
+            )
+        return updated_state
+
+    async def list_archived_repos(self, user_id: str) -> list[UserRepoStateResponse]:
+        """List archived repositories for a user."""
+        return self._pin_store.list_archived(user_id)
+
     def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
         try:
             return parse_github_url(repo_url)

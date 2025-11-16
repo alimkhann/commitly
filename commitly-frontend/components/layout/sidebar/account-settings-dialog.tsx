@@ -2,13 +2,15 @@
 
 import { UserProfile, useAuth } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
-import { Bell, GitBranch, SlidersHorizontal } from "lucide-react";
+import { Archive, Bell, GitBranch, SlidersHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { githubService } from "@/lib/services/github";
+import { repoService } from "@/lib/services/repos";
 
 type AccountSettingsDialogProps = {
   open: boolean;
@@ -54,6 +56,13 @@ export default function AccountSettingsDialog({
             url="connections"
           >
             <GithubConnectionPreferences />
+          </UserProfile.Page>
+          <UserProfile.Page
+            label="Archived Repositories"
+            labelIcon={<Archive className="h-3.5 w-3.5" />}
+            url="archived"
+          >
+            <ArchivedRepositoriesPreferences />
           </UserProfile.Page>
         </UserProfile>
       </DialogContent>
@@ -278,6 +287,84 @@ function GithubConnectionPreferences() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ArchivedRepositoriesPreferences() {
+  const { archivedRepos, unarchive, refreshArchivedRepos } =
+    useRoadmapCatalog();
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    refreshArchivedRepos().catch(() => {
+      // Error handling is done in the function
+    });
+  }, [refreshArchivedRepos]);
+
+  const handleUnarchive = async (fullName: string) => {
+    setLoading((prev) => ({ ...prev, [fullName]: true }));
+    try {
+      const success = await unarchive(fullName);
+      if (success) {
+        await refreshArchivedRepos();
+      }
+    } finally {
+      setLoading((prev) => ({ ...prev, [fullName]: false }));
+    }
+  };
+
+  return (
+    <div className="space-y-4 py-6 text-foreground text-sm">
+      {archivedRepos.length === 0 ? (
+        <div className="rounded-3xl border border-border/60 bg-background/60 p-6 text-center">
+          <Archive className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="font-medium text-base text-white">
+            No archived repositories
+          </p>
+          <p className="mt-1 text-white/60 text-xs">
+            Repositories you archive will appear here. You can unarchive them
+            anytime.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {archivedRepos.map((repo) => {
+            const isLoading = loading[repo.repo_full_name] ?? false;
+            return (
+              <div
+                className="rounded-3xl border border-border/60 bg-background/60 p-4"
+                key={repo.repo_full_name}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate font-medium text-base text-white">
+                      {repo.repo_full_name}
+                    </p>
+                    {repo.repo?.description && (
+                      <p className="line-clamp-2 text-white/60 text-xs">
+                        {repo.repo.description}
+                      </p>
+                    )}
+                    <p className="text-white/40 text-xs">
+                      Archived repositories are read-only
+                    </p>
+                  </div>
+                  <Button
+                    disabled={isLoading}
+                    onClick={() => handleUnarchive(repo.repo_full_name)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    {isLoading ? "Unarchiving..." : "Unarchive"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -25,14 +25,18 @@ type CatalogContextValue = {
   synced: SyncedRepoRecord[];
   pending: PendingRepoRecord[];
   yourRepos: UserRepoState[];
+  archivedRepos: UserRepoState[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   refreshUserRepos: () => Promise<void>;
+  refreshArchivedRepos: () => Promise<void>;
   upsertRoadmap: (roadmap: RoadmapResponseBody) => void;
   markPending: (identity: RepoIdentity) => void;
   getBySlug: (slug: string) => SyncedRepoRecord | PendingRepoRecord | undefined;
   desync: (fullName: string) => Promise<boolean>;
+  archive: (fullName: string) => Promise<boolean>;
+  unarchive: (fullName: string) => Promise<boolean>;
 };
 
 const RoadmapCatalogContext = createContext<CatalogContextValue | undefined>(
@@ -54,6 +58,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
   const [synced, setSynced] = useState<SyncedRepoRecord[]>([]);
   const [pending, setPending] = useState<PendingRepoRecord[]>([]);
   const [yourRepos, setYourRepos] = useState<UserRepoState[]>([]);
+  const [archivedRepos, setArchivedRepos] = useState<UserRepoState[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +118,18 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
     }
   }, [backendConfigured, getToken, isSignedIn]);
 
+  const refreshArchivedRepos = useCallback(async () => {
+    if (!(backendConfigured && isSignedIn)) {
+      setArchivedRepos([]);
+      return;
+    }
+    const token = await getToken?.();
+    const response = await repoService.listArchivedRepos(token ?? undefined);
+    if (response.ok && response.data) {
+      setArchivedRepos(response.data);
+    }
+  }, [backendConfigured, getToken, isSignedIn]);
+
   const desync = useCallback(
     async (fullName: string) => {
       if (!(backendConfigured && isSignedIn)) {
@@ -139,11 +156,97 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
     [backendConfigured, getToken, isSignedIn]
   );
 
+  const archive = useCallback(
+    async (fullName: string) => {
+      if (!(backendConfigured && isSignedIn)) {
+        return false;
+      }
+      const identity = repoService.buildIdentityFromFullName(fullName);
+      const token = await getToken?.();
+      const response = await repoService.archiveRepo(
+        identity.owner,
+        identity.repoName,
+        token ?? undefined
+      );
+      if (response.ok && response.data) {
+        setYourRepos((prev) =>
+          prev.map((item) =>
+            item.repo_full_name === fullName
+              ? { ...item, is_archived: true }
+              : item
+          )
+        );
+        if (response.data) {
+          const updatedRepo = response.data;
+          setArchivedRepos((prev) => {
+            const exists = prev.some(
+              (item) => item.repo_full_name === fullName
+            );
+            if (exists) {
+              return prev.map((item) =>
+                item.repo_full_name === fullName ? updatedRepo : item
+              );
+            }
+            return [updatedRepo, ...prev];
+          });
+        }
+        return true;
+      }
+      return false;
+    },
+    [backendConfigured, getToken, isSignedIn]
+  );
+
+  const unarchive = useCallback(
+    async (fullName: string) => {
+      if (!(backendConfigured && isSignedIn)) {
+        return false;
+      }
+      const identity = repoService.buildIdentityFromFullName(fullName);
+      const token = await getToken?.();
+      const response = await repoService.unarchiveRepo(
+        identity.owner,
+        identity.repoName,
+        token ?? undefined
+      );
+      if (response.ok && response.data) {
+        setArchivedRepos((prev) =>
+          prev.filter((item) => item.repo_full_name !== fullName)
+        );
+        if (response.data) {
+          const updatedRepo = response.data;
+          setYourRepos((prev) => {
+            const exists = prev.some(
+              (item) => item.repo_full_name === fullName
+            );
+            if (exists) {
+              return prev.map((item) =>
+                item.repo_full_name === fullName ? updatedRepo : item
+              );
+            }
+            return [updatedRepo, ...prev];
+          });
+        }
+        return true;
+      }
+      return false;
+    },
+    [backendConfigured, getToken, isSignedIn]
+  );
+
   useEffect(() => {
-    if (!(backendConfigured && isSignedIn)) return;
+    if (!(backendConfigured && isSignedIn)) {
+      return;
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refreshUserRepos();
-  }, [backendConfigured, isSignedIn, refreshUserRepos]);
+    refreshUserRepos().catch(() => {
+      // Error handling is done in the function
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshArchivedRepos().catch(() => {
+      // Error handling is done in the function
+    });
+  }, [backendConfigured, isSignedIn, refreshUserRepos, refreshArchivedRepos]);
 
   const upsertRoadmap = useCallback(
     (roadmap: RoadmapResponseBody) => {
@@ -213,27 +316,35 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       synced,
       pending,
       yourRepos,
+      archivedRepos,
       loading,
       error,
       refresh,
       refreshUserRepos,
+      refreshArchivedRepos,
       upsertRoadmap,
       markPending,
       getBySlug,
       desync,
+      archive,
+      unarchive,
     }),
     [
       synced,
       pending,
       yourRepos,
+      archivedRepos,
       loading,
       error,
       refresh,
       refreshUserRepos,
+      refreshArchivedRepos,
       upsertRoadmap,
       markPending,
       getBySlug,
       desync,
+      archive,
+      unarchive,
     ]
   );
 
