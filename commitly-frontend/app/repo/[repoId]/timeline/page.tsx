@@ -36,6 +36,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { StarRating } from "@/components/ui/star-rating";
 import type { RepoRecord, RepoTimelineStage } from "@/data/repos";
 import {
   type RepoIdentity,
@@ -84,6 +85,8 @@ export default function RepoTimelinePage() {
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [isRatingLoading, setIsRatingLoading] = useState(false);
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
@@ -217,6 +220,83 @@ export default function RepoTimelinePage() {
     }
   }, [desync, syncedState]);
 
+  // Fetch user rating when identity and auth are available
+  useEffect(() => {
+    if (!identity || !isSignedIn) {
+      setUserRating(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchRating = async () => {
+      setIsRatingLoading(true);
+      const token = await getToken?.();
+      const response = await repoService.getUserRating(
+        identity.owner,
+        identity.repoName,
+        token ?? undefined
+      );
+      if (cancelled) {
+        return;
+      }
+      if (response.ok && response.data) {
+        setUserRating(response.data.rating);
+      } else {
+        setUserRating(null);
+      }
+      setIsRatingLoading(false);
+    };
+    fetchRating();
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, isSignedIn, getToken]);
+
+  const handleRatingChange = useCallback(
+    async (newRating: number) => {
+      if (!identity || !isSignedIn) {
+        return;
+      }
+      setIsRatingLoading(true);
+      const token = await getToken?.();
+      const response = await repoService.setRating(
+        identity.owner,
+        identity.repoName,
+        newRating,
+        token ?? undefined
+      );
+      if (response.ok && response.data) {
+        setUserRating(response.data.rating);
+        // Refresh roadmap to get updated rating stats
+        if (roadmap) {
+          const cachedResponse = await repoService.getCachedRoadmap(
+            identity.owner,
+            identity.repoName
+          );
+          if (cachedResponse.ok && cachedResponse.data) {
+            setRoadmap(cachedResponse.data);
+            upsertRoadmap(cachedResponse.data);
+          }
+        }
+      }
+      setIsRatingLoading(false);
+    },
+    [identity, isSignedIn, getToken, roadmap, upsertRoadmap]
+  );
+
+  // Calculate average rating
+  const averageRating = useMemo(() => {
+    if (
+      !activeRoadmap?.repo.rating_count ||
+      activeRoadmap.repo.rating_count === 0 ||
+      !activeRoadmap.repo.rating_sum
+    ) {
+      return null;
+    }
+    return (
+      activeRoadmap.repo.rating_sum / activeRoadmap.repo.rating_count
+    );
+  }, [activeRoadmap]);
+
   const timelineStages = useMemo(() => {
     if (!activeRoadmap) {
       return [];
@@ -340,6 +420,40 @@ export default function RepoTimelinePage() {
           <p className="mt-4 text-muted-foreground text-sm">
             Generated {new Date(activeRoadmap.generated_at).toLocaleString()}
           </p>
+          
+          {/* Rating Section */}
+          {syncedState && isSignedIn && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">Your rating:</span>
+                  <StarRating
+                    value={userRating ?? 0}
+                    onValueChange={handleRatingChange}
+                    readonly={isRatingLoading}
+                    size="sm"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Average Rating Display */}
+          {averageRating !== null && (
+            <div className="mt-3 flex items-center gap-2">
+              <StarRating
+                value={averageRating}
+                readonly
+                size="sm"
+                showValue
+              />
+              <span className="text-muted-foreground text-xs">
+                ({activeRoadmap.repo.rating_count}{" "}
+                {activeRoadmap.repo.rating_count === 1 ? "rating" : "ratings"})
+              </span>
+            </div>
+          )}
+
           {syncedState && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between text-muted-foreground text-xs">

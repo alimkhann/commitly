@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.auth import ClerkClaims, require_clerk_auth
 from app.core.database import get_db
 from app.models.roadmap import (
+    RatingRequest,
+    RatingResponse,
     RoadmapCatalogPage,
     RoadmapRequest,
     RoadmapResponse,
@@ -126,3 +128,24 @@ async def list_archived_repositories(
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> list[UserRepoStateResponse]:
     return await service.list_archived_repos(current_user["sub"])
+
+
+@router.post("/{owner}/{repo}/rating", response_model=RatingResponse)
+async def set_repository_rating(
+    owner: str,
+    repo: str,
+    payload: RatingRequest,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> RatingResponse:
+    return service.set_rating(current_user["sub"], owner, repo, payload.rating)
+
+
+@router.get("/{owner}/{repo}/rating", response_model=RatingResponse | None)
+async def get_repository_rating(
+    owner: str,
+    repo: str,
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> RatingResponse | None:
+    return service.get_user_rating(current_user["sub"], owner, repo)
