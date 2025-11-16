@@ -37,5 +37,9 @@ def get_db() -> Generator:
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        logger.error(f"Database error in get_db: {e}", exc_info=True)
+        db.rollback()
+        raise
     finally:
         db.close()

@@ -94,20 +94,25 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Log all incoming requests for debugging."""
 
     async def dispatch(self, request: Request, call_next):
+        import time
+        start_time = time.time()
         logger.info(
             f"Request: {request.method} {request.url.path} "
             f"from {request.client.host if request.client else 'unknown'}"
         )
         try:
             response = await call_next(request)
+            elapsed = time.time() - start_time
             logger.info(
                 f"Response: {request.method} {request.url.path} "
-                f"-> {response.status_code}"
+                f"-> {response.status_code} ({elapsed:.3f}s)"
             )
             return response
         except Exception as e:
+            elapsed = time.time() - start_time
             logger.error(
-                f"Error processing {request.method} {request.url.path}: {e}",
+                f"Error processing {request.method} {request.url.path} "
+                f"after {elapsed:.3f}s: {type(e).__name__}: {e}",
                 exc_info=True,
             )
             raise

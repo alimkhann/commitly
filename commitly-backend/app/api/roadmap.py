@@ -56,29 +56,37 @@ async def list_roadmaps(
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> CatalogPage:
     """List catalog with filters, sorting, and pagination."""
+    import logging
     import math
 
-    items, total_count = await service.list_catalog(
-        page=page,
-        page_size=page_size,
-        language=language,
-        tag=tag,
-        difficulty=difficulty,
-        min_rating=min_rating,
-        min_views=min_views,
-        min_syncs=min_syncs,
-        sort=sort,
-    )
+    logger = logging.getLogger(__name__)
+    try:
+        logger.info(f"list_roadmaps: Starting with page={page}, page_size={page_size}")
+        items, total_count = await service.list_catalog(
+            page=page,
+            page_size=page_size,
+            language=language,
+            tag=tag,
+            difficulty=difficulty,
+            min_rating=min_rating,
+            min_views=min_views,
+            min_syncs=min_syncs,
+            sort=sort,
+        )
+        logger.info(f"list_roadmaps: Retrieved {len(items)} items, total={total_count}")
 
-    total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
+        total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
 
-    return CatalogPage(
-        items=items,
-        page=page,
-        page_size=page_size,
-        total_count=total_count,
-        total_pages=total_pages,
-    )
+        return CatalogPage(
+            items=items,
+            page=page,
+            page_size=page_size,
+            total_count=total_count,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        logger.error(f"list_roadmaps: Error - {type(e).__name__}: {e}", exc_info=True)
+        raise
 
 
 @router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)
