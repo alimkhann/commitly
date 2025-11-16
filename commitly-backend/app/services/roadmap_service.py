@@ -208,6 +208,14 @@ class RoadmapService:
             repo=(record_after.repo if record_after else roadmap.repo),
         )
 
+    async def desync_repo(self, owner: str, repo: str, user_id: str) -> None:
+        full_name = f"{owner}/{repo}"
+        states = self._pin_store.list_states(user_id)
+        had_state = any(state.repo_full_name == full_name for state in states)
+        self._pin_store.unpin(user_id, full_name)
+        if had_state:
+            self._result_store.decrement_sync_count(full_name)
+
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
         self._pin_store.unpin(user_id, repo_full_name)
 

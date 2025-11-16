@@ -188,7 +188,7 @@ export const repoService = {
     });
   },
 
-  listCatalog(
+  async listCatalog(
     page = 1,
     pageSize = 50
   ): Promise<ApiClientResponse<RoadmapCatalogPage>> {
@@ -201,7 +201,7 @@ export const repoService = {
     });
   },
 
-  getCachedRoadmap(
+  async getCachedRoadmap(
     owner: string,
     repo: string
   ): Promise<ApiClientResponse<RoadmapResponseBody>> {
@@ -214,7 +214,7 @@ export const repoService = {
     });
   },
 
-  listUserRepos(
+  async listUserRepos(
     authToken?: string
   ): Promise<ApiClientResponse<UserRepoState[]>> {
     if (!env.apiBaseUrl) {
@@ -227,7 +227,7 @@ export const repoService = {
     });
   },
 
-  syncRepo(
+  async syncRepo(
     owner: string,
     repo: string,
     authToken?: string
@@ -238,6 +238,21 @@ export const repoService = {
     return apiClient<UserRepoState>(env.apiBaseUrl, {
       path: API_ROUTES.sync(owner, repo),
       method: "POST",
+      authToken,
+    });
+  },
+
+  async desyncRepo(
+    owner: string,
+    repo: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<null>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<null>(env.apiBaseUrl, {
+      path: API_ROUTES.sync(owner, repo),
+      method: "DELETE",
       authToken,
     });
   },

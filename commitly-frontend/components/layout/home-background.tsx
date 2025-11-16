@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 
-const Dither = dynamic(() => import("@/components/Dither"), {
+const Dither = dynamic(() => import("@/components/dither"), {
   ssr: false,
   loading: () => null,
 });

@@ -139,6 +139,29 @@ class RoadmapResultStore:
 
         self._with_table_guard(action)
 
+    def decrement_sync_count(self, full_name: str) -> None:
+        def action() -> None:
+            try:
+                record = (
+                    self._session.query(GeneratedRoadmap)
+                    .filter_by(repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if not record:
+                    return
+                if record.sync_count and record.sync_count > 0:
+                    record.sync_count -= 1
+                    summary = (record.repo_summary or {}).copy()
+                    summary["sync_count"] = record.sync_count
+                    record.repo_summary = summary
+                    flag_modified(record, "repo_summary")
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
+
     def get(self, full_name: str) -> RoadmapResponse | None:
         def action() -> RoadmapResponse | None:
             record = (

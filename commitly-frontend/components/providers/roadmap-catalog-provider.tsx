@@ -28,10 +28,11 @@ type CatalogContextValue = {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  refreshUserRepos: () => Promise<void>;
   upsertRoadmap: (roadmap: RoadmapResponseBody) => void;
   markPending: (identity: RepoIdentity) => void;
   getBySlug: (slug: string) => SyncedRepoRecord | PendingRepoRecord | undefined;
-  refreshUserRepos: () => Promise<void>;
+  desync: (fullName: string) => Promise<boolean>;
 };
 
 const RoadmapCatalogContext = createContext<CatalogContextValue | undefined>(
@@ -111,6 +112,32 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       setYourRepos(response.data);
     }
   }, [backendConfigured, getToken, isSignedIn]);
+
+  const desync = useCallback(
+    async (fullName: string) => {
+      if (!(backendConfigured && isSignedIn)) {
+        return false;
+      }
+      const identity = repoService.buildIdentityFromFullName(fullName);
+      const token = await getToken?.();
+      const response = await repoService.desyncRepo(
+        identity.owner,
+        identity.repoName,
+        token ?? undefined
+      );
+      if (response.ok) {
+        setYourRepos((prev) =>
+          prev.filter((item) => item.repo_full_name !== fullName)
+        );
+        setSynced((prev) =>
+          prev.filter((item) => item.repo.full_name !== fullName)
+        );
+        return true;
+      }
+      return false;
+    },
+    [backendConfigured, getToken, isSignedIn]
+  );
 
   useEffect(() => {
     if (!(backendConfigured && isSignedIn)) return;
@@ -193,6 +220,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       upsertRoadmap,
       markPending,
       getBySlug,
+      desync,
     }),
     [
       synced,
@@ -205,6 +233,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       upsertRoadmap,
       markPending,
       getBySlug,
+      desync,
     ]
   );
 

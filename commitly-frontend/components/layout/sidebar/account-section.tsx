@@ -46,7 +46,9 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const [reportBugOpen, setReportBugOpen] = useState(false);
 
   const displayName = useMemo(() => {
-    if (!user) return "Workspace";
+    if (!user) {
+      return "Workspace";
+    }
     return (
       user.fullName ||
       user.username ||
@@ -56,11 +58,13 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   }, [user]);
 
   const planLabel = useMemo(() => {
-    if (!user) return "Sign in to manage plan";
+    if (!user) {
+      return "Sign in to manage plan";
+    }
     const publicMeta = user.publicMetadata as
       | Record<string, unknown>
       | undefined;
-    const planName = publicMeta?.["planName"];
+    const planName = (publicMeta?.planName as string | undefined) ?? undefined;
     if (typeof planName === "string" && planName.trim().length > 0) {
       return planName;
     }
