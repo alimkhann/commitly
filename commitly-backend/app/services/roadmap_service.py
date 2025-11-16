@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from app.core.cache import RedisJSONCache, redis_cache
 from app.core.config import settings
 from app.models.roadmap import (
+    RatingResponse,
     RoadmapCatalogPage,
     RoadmapRepoSummary,
     RoadmapResponse,
@@ -31,6 +32,7 @@ from app.services.github import (
 )
 from app.services.github_tokens import GitHubTokenStore
 from app.services.rag import ChunkStorageError, CommitChunk, CommitChunkStore
+from app.services.roadmap_rating_store import RoadmapRatingStore
 from app.services.roadmap_repository import RoadmapResultStore, UserSyncedRepoStore
 
 
@@ -42,6 +44,7 @@ class RoadmapService:
         pin_store: UserSyncedRepoStore,
         generator: GeminiRoadmapGenerator,
         token_store: GitHubTokenStore,
+        rating_store: RoadmapRatingStore | None = None,
         cache: RedisJSONCache | None = None,
         cache_ttl: int = settings.roadmap_cache_ttl_seconds,
         commit_limit: int = settings.github_commit_limit,
@@ -57,6 +60,7 @@ class RoadmapService:
         self._default_token = settings.github_token
         self._result_store = result_store
         self._pin_store = pin_store
+        self._rating_store = rating_store
 
     async def generate(
         self,
@@ -285,6 +289,43 @@ class RoadmapService:
         """List archived repositories for a user."""
         return self._pin_store.list_archived(user_id)
 
+    def set_rating(
+        self, user_id: str, owner: str, repo: str, rating: int
+    ) -> RatingResponse:
+        """Set or update a user's rating for a repository."""
+        if not self._rating_store:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Rating service is not available",
+            )
+        full_name = f"{owner}/{repo}"
+        record = self._rating_store.upsert_rating(user_id, full_name, rating)
+        return RatingResponse(
+            rating=record.rating,
+            repo_full_name=record.repo_full_name,
+            user_id=record.user_id,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    def get_user_rating(
+        self, user_id: str, owner: str, repo: str
+    ) -> RatingResponse | None:
+        """Get a user's rating for a repository."""
+        if not self._rating_store:
+            return None
+        full_name = f"{owner}/{repo}"
+        record = self._rating_store.get_user_rating(user_id, full_name)
+        if not record:
+            return None
+        return RatingResponse(
+            rating=record.rating,
+            repo_full_name=record.repo_full_name,
+            user_id=record.user_id,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
     def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
         try:
             return parse_github_url(repo_url)
@@ -381,6 +422,7 @@ def build_roadmap_service(
         )
     result_store = RoadmapResultStore(session)
     pin_store = UserSyncedRepoStore(session, result_store)
+    rating_store = RoadmapRatingStore(session, result_store)
     return RoadmapService(
         chunk_store=CommitChunkStore(session),
         generator=generator,
@@ -388,4 +430,5 @@ def build_roadmap_service(
         cache=cache,
         result_store=result_store,
         pin_store=pin_store,
+        rating_store=rating_store,
     )

@@ -21,6 +21,8 @@ const API_ROUTES = {
   unarchive: (owner: string, repo: string) =>
     `/api/v1/roadmap/unarchive/${owner}/${repo}`,
   archived: "/api/v1/roadmap/archived",
+  rating: (owner: string, repo: string) =>
+    `/api/v1/roadmap/${owner}/${repo}/rating`,
 };
 
 export type RepoIdentity = {
@@ -300,6 +302,66 @@ export const repoService = {
     }
     return apiClient<UserRepoState[]>(env.apiBaseUrl, {
       path: API_ROUTES.archived,
+      cache: "no-store",
+      authToken,
+    });
+  },
+
+  async setRating(
+    owner: string,
+    repo: string,
+    rating: number,
+    authToken?: string
+  ): Promise<
+    ApiClientResponse<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>
+  > {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    }>(env.apiBaseUrl, {
+      path: API_ROUTES.rating(owner, repo),
+      method: "POST",
+      body: { rating },
+      authToken,
+    });
+  },
+
+  async getUserRating(
+    owner: string,
+    repo: string,
+    authToken?: string
+  ): Promise<
+    ApiClientResponse<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    } | null>
+  > {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" };
+    }
+    return apiClient<{
+      rating: number;
+      repo_full_name: string;
+      user_id: string;
+      created_at: string;
+      updated_at: string;
+    } | null>(env.apiBaseUrl, {
+      path: API_ROUTES.rating(owner, repo),
       cache: "no-store",
       authToken,
     });

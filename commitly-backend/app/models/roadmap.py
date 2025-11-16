@@ -105,6 +105,31 @@ class UserSyncedRepo(Base):
     )
 
 
+class RoadmapRating(Base):
+    """Stores user ratings (1-5 stars) for repositories."""
+
+    __tablename__ = "roadmap_ratings"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "repo_full_name", name="uq_roadmap_rating_user_repo"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class RoadmapRequest(BaseModel):
     repo_url: AnyHttpUrl = Field(description="GitHub repository URL")
     force_refresh: bool = Field(
@@ -174,5 +199,19 @@ class UserRepoStateResponse(BaseModel):
     progress_percent: int
     pinned_at: Optional[datetime] = None
     repo: Optional[RoadmapRepoSummary] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RatingRequest(BaseModel):
+    rating: int = Field(ge=1, le=5, description="Rating from 1 to 5 stars")
+
+
+class RatingResponse(BaseModel):
+    rating: int
+    repo_full_name: str
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
