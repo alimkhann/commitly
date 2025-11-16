@@ -21,19 +21,32 @@ export default function SearchPage() {
   const [query, setQuery] = useState("")
   const [difficulty, setDifficulty] = useState<"all" | "beginner" | "intermediate" | "advanced">("all")
   const repoList = useMemo(() => repoService.list(), [])
-  const { synced, loading } = useRoadmapCatalog()
+  const { synced, yourRepos, loading } = useRoadmapCatalog()
+
+  const syncedMap = useMemo(() => new Map(synced.map((repo) => [repo.repo.full_name, repo])), [synced])
+
+  const userRepoList = useMemo(
+    () =>
+      yourRepos
+        .filter((repo) => !repo.is_archived && repo.repo)
+        .map((repo) => {
+          const identity = repoService.buildIdentityFromFullName(repo.repo_full_name)
+          return { ...repo, repo: repo.repo!, slug: identity.slug }
+        }),
+    [yourRepos]
+  )
 
   const syncedMatches = useMemo(() => {
-    if (!query.trim()) return synced
+    if (!query.trim()) return userRepoList
     const lower = query.toLowerCase()
-    return synced.filter((repo) => {
+    return userRepoList.filter((repo) => {
       const summary = repo.repo.description?.toLowerCase() ?? ""
       return (
         repo.repo.full_name.toLowerCase().includes(lower) ||
         summary.includes(lower)
       )
     })
-  }, [synced, query])
+  }, [userRepoList, query])
 
   const filteredRepos = useMemo(() => {
     return repoList.filter((repo) => {
@@ -93,7 +106,7 @@ export default function SearchPage() {
       {!!syncedMatches.length && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Your synced repositories</h2>
+            <h2 className="text-lg font-semibold">Your repositories</h2>
             {loading && <p className="text-xs text-muted-foreground">Refreshing…</p>}
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -106,7 +119,7 @@ export default function SearchPage() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-xl">{repo.repo.full_name}</CardTitle>
                     <Badge variant="outline" className="text-xs uppercase tracking-wide">
-                      {repo.timeline.length} stages
+                      {(syncedMap.get(repo.repo_full_name)?.timeline.length ?? 0)} stages
                     </Badge>
                   </div>
                   <CardDescription>{repo.repo.description}</CardDescription>
@@ -117,7 +130,9 @@ export default function SearchPage() {
                     <span>
                       {repo.repo.language ?? "Unknown"} •
                       {" "}
-                      {new Date(repo.generated_at).toLocaleDateString()}
+                      {new Date(
+                        syncedMap.get(repo.repo_full_name)?.generated_at ?? Date.now()
+                      ).toLocaleDateString()}
                     </span>
                   </div>
                   <Button className="w-full" variant="secondary" asChild>

@@ -12,6 +12,7 @@ from app.models.roadmap import (
     RoadmapRepoSummary,
     RoadmapResponse,
     TimelineStage,
+    UserRepoStateResponse,
     UserSyncedRepo,
 )
 
@@ -225,5 +226,78 @@ class UserSyncedRepoStore:
                 .all()
             )
             return [self._result_store._to_response(record) for record in records]
+
+        return self._with_table_guard(action)
+
+    def upsert_state(
+        self,
+        user_id: str,
+        full_name: str,
+        *,
+        status: str = "synced",
+        is_archived: bool = False,
+        progress_percent: int = 0,
+    ) -> None:
+        def action() -> None:
+            try:
+                record = (
+                    self._session.query(UserSyncedRepo)
+                    .filter_by(user_id=user_id, repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if record:
+                    record.status = status
+                    record.is_archived = is_archived
+                    record.progress_percent = progress_percent
+                    record.pinned_at = datetime.now(timezone.utc)
+                else:
+                    self._session.add(
+                        UserSyncedRepo(
+                            user_id=user_id,
+                            repo_full_name=full_name,
+                            status=status,
+                            is_archived=is_archived,
+                            progress_percent=progress_percent,
+                        )
+                    )
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._with_table_guard(action)
+
+    def list_states(self, user_id: str | None) -> list[UserRepoStateResponse]:
+        if not user_id:
+            return []
+
+        def action() -> list[UserRepoStateResponse]:
+            results = (
+                self._session.query(UserSyncedRepo, GeneratedRoadmap)
+                .outerjoin(
+                    GeneratedRoadmap,
+                    GeneratedRoadmap.repo_full_name == UserSyncedRepo.repo_full_name,
+                )
+                .filter(UserSyncedRepo.user_id == user_id)
+                .order_by(UserSyncedRepo.pinned_at.desc())
+                .all()
+            )
+
+            responses: list[UserRepoStateResponse] = []
+            for user_record, roadmap_record in results:
+                summary = None
+                if roadmap_record and roadmap_record.repo_summary:
+                    summary = RoadmapRepoSummary(**roadmap_record.repo_summary)
+                responses.append(
+                    UserRepoStateResponse(
+                        repo_full_name=user_record.repo_full_name,
+                        status=user_record.status,
+                        is_archived=user_record.is_archived,
+                        progress_percent=user_record.progress_percent,
+                        pinned_at=user_record.pinned_at,
+                        repo=summary,
+                    )
+                )
+            return responses
 
         return self._with_table_guard(action)
