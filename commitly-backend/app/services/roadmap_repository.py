@@ -6,6 +6,7 @@ from typing import Iterable
 
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.roadmap import (
     GeneratedRoadmap,
@@ -76,9 +77,16 @@ class RoadmapResultStore:
             )
             if record:
                 record.repo_summary = summary
+                flag_modified(record, "repo_summary")
                 record.timeline = timeline_payload
                 record.cached = response.cached
                 record.generated_at = response.generated_at
+                if record.sync_count is None:
+                    record.sync_count = 0
+                if record.view_count is None:
+                    record.view_count = 0
+                if record.star_count is None:
+                    record.star_count = summary.get("star_count", 0)
             else:
                 record = GeneratedRoadmap(
                     repo_full_name=summary["full_name"],
@@ -86,7 +94,20 @@ class RoadmapResultStore:
                     timeline=timeline_payload,
                     cached=response.cached,
                     generated_at=response.generated_at,
+                    view_count=summary.get("view_count", 0) or 0,
+                    sync_count=summary.get("sync_count", 0) or 0,
+                    star_count=summary.get("star_count", 0) or 0,
+                    fork_count=summary.get("fork_count", 0) or 0,
+                    contributor_count=summary.get("contributor_count", 0) or 0,
                 )
+                if record.primary_language is None and summary.get("primary_language"):
+                    record.primary_language = summary.get("primary_language")
+                if record.languages is None and summary.get("languages"):
+                    record.languages = summary.get("languages")
+                if record.topics is None and summary.get("topics"):
+                    record.topics = summary.get("topics")
+                if record.difficulty is None and summary.get("difficulty"):
+                    record.difficulty = summary.get("difficulty")
                 self._session.add(record)
             try:
                 self._session.commit()
@@ -107,6 +128,10 @@ class RoadmapResultStore:
                 if not record:
                     return
                 record.sync_count = (record.sync_count or 0) + 1
+                summary = (record.repo_summary or {}).copy()
+                summary["sync_count"] = record.sync_count
+                record.repo_summary = summary
+                flag_modified(record, "repo_summary")
                 self._session.commit()
             except SQLAlchemyError:
                 self._session.rollback()
@@ -283,7 +308,7 @@ class UserSyncedRepoStore:
         is_archived: bool = False,
         progress_percent: int = 0,
     ) -> bool:
-        def action() -> None:
+        def action() -> bool:
             try:
                 record = (
                     self._session.query(UserSyncedRepo)

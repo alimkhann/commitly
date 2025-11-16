@@ -183,6 +183,11 @@ class RoadmapService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Roadmap could not be generated for this repository.",
             )
+        was_synced = any(
+            state.repo_full_name == full_name
+            for state in self._pin_store.list_states(user_id)
+        )
+
         created = self._pin_store.upsert_state(
             user_id,
             full_name,
@@ -190,15 +195,17 @@ class RoadmapService:
             is_archived=False,
             progress_percent=0,
         )
-        if created:
+        record_after = self._result_store.get(full_name)
+        if not was_synced:
             self._result_store.increment_sync_count(full_name)
+            record_after = self._result_store.get(full_name)
         return UserRepoStateResponse(
             repo_full_name=full_name,
             status="synced",
             is_archived=False,
             progress_percent=0,
             pinned_at=datetime.now(timezone.utc),
-            repo=roadmap.repo,
+            repo=(record_after.repo if record_after else roadmap.repo),
         )
 
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
