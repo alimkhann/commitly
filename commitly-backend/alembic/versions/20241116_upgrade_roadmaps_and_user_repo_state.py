@@ -24,19 +24,22 @@ def upgrade() -> None:
     op.add_column(
         "generated_roadmaps", sa.Column("languages", sa.JSON(), nullable=True)
     )
+    op.add_column("generated_roadmaps", sa.Column("topics", sa.JSON(), nullable=True))
     op.add_column(
-        "generated_roadmaps", sa.Column("topics", sa.JSON(), nullable=True)
-    )
-    op.add_column(
-        "generated_roadmaps", sa.Column("difficulty", sa.String(length=32), nullable=True)
+        "generated_roadmaps",
+        sa.Column("difficulty", sa.String(length=32), nullable=True),
     )
     op.add_column(
         "generated_roadmaps",
-        sa.Column("star_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "star_count", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
     )
     op.add_column(
         "generated_roadmaps",
-        sa.Column("fork_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "fork_count", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
     )
     op.add_column(
         "generated_roadmaps",
@@ -49,16 +52,23 @@ def upgrade() -> None:
     op.add_column(
         "generated_roadmaps",
         sa.Column(
-            "contributor_count", sa.Integer(), nullable=False, server_default=sa.text("0")
+            "contributor_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
         ),
     )
     op.add_column(
         "generated_roadmaps",
-        sa.Column("view_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "view_count", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
     )
     op.add_column(
         "generated_roadmaps",
-        sa.Column("sync_count", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "sync_count", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
     )
     op.add_column(
         "generated_roadmaps",
@@ -68,22 +78,31 @@ def upgrade() -> None:
     )
     op.add_column(
         "generated_roadmaps",
-        sa.Column("rating_sum", sa.Integer(), nullable=False, server_default=sa.text("0")),
+        sa.Column(
+            "rating_sum", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
     )
 
     # User repo state enhancements
     op.add_column(
         "user_synced_repos",
-        sa.Column("status", sa.String(length=32), nullable=False, server_default="synced"),
-    )
-    op.add_column(
-        "user_synced_repos",
-        sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "status", sa.String(length=32), nullable=False, server_default="synced"
+        ),
     )
     op.add_column(
         "user_synced_repos",
         sa.Column(
-            "progress_percent", sa.Integer(), nullable=False, server_default=sa.text("0")
+            "is_archived", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
+    )
+    op.add_column(
+        "user_synced_repos",
+        sa.Column(
+            "progress_percent",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
         ),
     )
     op.add_column(

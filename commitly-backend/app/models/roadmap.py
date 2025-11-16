@@ -98,7 +98,10 @@ class UserSyncedRepo(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
     )
 
 
@@ -152,5 +155,16 @@ class RoadmapResponse(BaseModel):
     timeline: List[TimelineStage]
     cached: bool
     generated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserRepoStateResponse(BaseModel):
+    repo_full_name: str
+    status: str
+    is_archived: bool
+    progress_percent: int
+    pinned_at: Optional[datetime] = None
+    repo: Optional[RoadmapRepoSummary] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -14,11 +14,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 import AccountSection from "./account-section"
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider"
+import { repoService, type RoadmapResponseBody, type RoadmapSummary, type UserRepoState } from "@/lib/services/repos"
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { isSignedIn } = useAuth()
-  const { synced, pending, loading } = useRoadmapCatalog()
+  const { synced, pending, yourRepos, loading } = useRoadmapCatalog()
   const [collapsed, setCollapsed] = useState(false)
   const toggleCollapse = () => setCollapsed((prev) => !prev)
 
@@ -27,6 +28,16 @@ export default function Sidebar() {
     const segments = pathname.split("/")
     return segments[1] === "repo" ? segments[2] ?? null : null
   }, [pathname])
+
+  const userReposToRender = useMemo(
+    () => yourRepos.filter((repo) => !repo.is_archived),
+    [yourRepos]
+  )
+
+  const sidebarRows = useMemo(
+    () => (userReposToRender.length > 0 ? userReposToRender : synced),
+    [synced, userReposToRender]
+  )
 
   return (
     <div
@@ -115,34 +126,40 @@ export default function Sidebar() {
         </div>
 
         {!collapsed && isSignedIn && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Synced repos
-              </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Your repositories
+                </p>
               {loading && (
                 <Badge variant="outline" className="font-normal text-[11px]">
                   Loading…
                 </Badge>
               )}
-            </div>
-            <ScrollArea className="h-full max-h-[45vh]">
-              <div className="flex flex-col gap-2 pr-3">
-                {pending.length + synced.length === 0 && !loading ? (
-                  <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-sm text-muted-foreground">
-                    Generate a roadmap to pin it here.
-                  </div>
-                ) : (
-                  [...pending, ...synced].map((repo) => {
-                    const slug = repo.slug
+              </div>
+              <ScrollArea className="h-full max-h-[45vh]">
+                <div className="flex flex-col gap-2 pr-3">
+                  {pending.length + sidebarRows.length === 0 && !loading ? (
+                    <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-sm text-muted-foreground">
+                      Generate a roadmap to pin it here.
+                    </div>
+                  ) : (
+                  [...pending, ...sidebarRows].map((repo) => {
+                    const identity = "repo_full_name" in repo
+                      ? repoService.buildIdentityFromFullName(repo.repo_full_name)
+                      : (repo as { slug: string; fullName: string })
+                    const slug = identity.slug
                     const isActive = activeRepoId === slug
                     const href = `/repo/${slug}/timeline`
-                    const isPending = Boolean((repo as { pending?: boolean }).pending)
-                    const isSyncedRepo = "timeline" in repo
-                    const language = isSyncedRepo ? repo.repo.language : null
-                    const description = isSyncedRepo ? repo.repo.description : null
-                    const generatedAt = isSyncedRepo ? repo.generated_at : null
-                    const stageCount = isSyncedRepo ? repo.timeline.length : 0
+                    const isPending = (repo as { pending?: boolean }).pending === true
+                    const status = (repo as { status?: string }).status ?? "synced"
+                    const syncedMatch = synced.find((item) => item.fullName === identity.fullName)
+                    const summary: RoadmapResponseBody["repo"] | undefined =
+                      "repo" in repo ? (repo as UserRepoState & { repo: RoadmapSummary }).repo : syncedMatch?.repo
+                    const language = summary?.language ?? summary?.primary_language ?? syncedMatch?.repo.language ?? null
+                    const description = summary?.description ?? syncedMatch?.repo.description ?? null
+                    const generatedAt = syncedMatch?.generated_at ?? null
+                    const stageCount = syncedMatch ? syncedMatch.timeline.length : 0
                     return (
                       <Link
                         key={slug}
@@ -157,7 +174,7 @@ export default function Sidebar() {
                         <div className="flex items-center justify-between gap-2">
                           <div>
                             <p className="text-sm font-medium leading-tight">
-                              {"repo" in repo ? repo.repo.full_name : repo.fullName}
+                              {identity.fullName}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {isPending
@@ -167,12 +184,22 @@ export default function Sidebar() {
                                     .join(" • ")}
                             </p>
                           </div>
-                          <Badge
-                            variant={isActive ? "accent" : "secondary"}
-                            className="text-[11px] capitalize"
-                          >
-                            {isPending ? "Syncing" : `${stageCount} stages`}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={status === "synced" ? "accent" : "secondary"}
+                              className="text-[11px] capitalize"
+                            >
+                              {status}
+                            </Badge>
+                            {!isPending && (
+                              <Badge
+                                variant={isActive ? "accent" : "outline"}
+                                className="text-[11px] capitalize"
+                              >
+                                {stageCount} stages
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         {!isPending && description && (
                           <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">

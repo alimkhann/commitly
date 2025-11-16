@@ -14,7 +14,9 @@ import {
   repoService,
   type RepoIdentity,
   type RoadmapResponseBody,
+  type UserRepoState,
 } from "@/lib/services/repos"
+import { useAuth } from "@clerk/nextjs"
 
 type SyncedRepoRecord = RoadmapResponseBody & RepoIdentity & { pending?: false }
 type PendingRepoRecord = RepoIdentity & { pending: true }
@@ -22,12 +24,14 @@ type PendingRepoRecord = RepoIdentity & { pending: true }
 type CatalogContextValue = {
   synced: SyncedRepoRecord[]
   pending: PendingRepoRecord[]
+  yourRepos: UserRepoState[]
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
   upsertRoadmap: (roadmap: RoadmapResponseBody) => void
   markPending: (identity: RepoIdentity) => void
   getBySlug: (slug: string) => SyncedRepoRecord | PendingRepoRecord | undefined
+  refreshUserRepos: () => Promise<void>
 }
 
 const RoadmapCatalogContext = createContext<CatalogContextValue | undefined>(undefined)
@@ -44,8 +48,11 @@ const toSyncedRecord = (roadmap: RoadmapResponseBody): SyncedRepoRecord => {
 export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
   const [synced, setSynced] = useState<SyncedRepoRecord[]>([])
   const [pending, setPending] = useState<PendingRepoRecord[]>([])
+  const [yourRepos, setYourRepos] = useState<UserRepoState[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const { isSignedIn, getToken } = useAuth()
 
   const backendConfigured = repoService.isBackendConfigured()
 
@@ -89,6 +96,24 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }, [backendConfigured])
 
+  const refreshUserRepos = useCallback(async () => {
+    if (!backendConfigured || !isSignedIn) {
+      setYourRepos([])
+      return
+    }
+    const token = await getToken?.()
+    const response = await repoService.listUserRepos(token ?? undefined)
+    if (response.ok && response.data) {
+      setYourRepos(response.data)
+    }
+  }, [backendConfigured, getToken, isSignedIn])
+
+  useEffect(() => {
+    if (!backendConfigured || !isSignedIn) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshUserRepos()
+  }, [backendConfigured, isSignedIn, refreshUserRepos])
+
   const upsertRoadmap = useCallback((roadmap: RoadmapResponseBody) => {
     setSynced((previous) => {
       const nextRecord = toSyncedRecord(roadmap)
@@ -101,7 +126,25 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
       return [nextRecord, ...previous]
     })
     setPending((previous) => previous.filter((item) => item.fullName !== roadmap.repo.full_name))
-  }, [])
+    setYourRepos((previous) => {
+      if (!isSignedIn) return previous
+      const next: UserRepoState = {
+        repo_full_name: roadmap.repo.full_name,
+        status: "synced",
+        is_archived: false,
+        progress_percent: 0,
+        pinned_at: new Date().toISOString(),
+        repo: roadmap.repo,
+      }
+      const idx = previous.findIndex((item) => item.repo_full_name === roadmap.repo.full_name)
+      if (idx >= 0) {
+        const clone = [...previous]
+        clone[idx] = next
+        return clone
+      }
+      return [next, ...previous]
+    })
+  }, [isSignedIn])
 
   const markPending = useCallback((identity: RepoIdentity) => {
     setPending((previous) => {
@@ -122,8 +165,8 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo<CatalogContextValue>(
-    () => ({ synced, pending, loading, error, refresh, upsertRoadmap, markPending, getBySlug }),
-    [synced, pending, loading, error, refresh, upsertRoadmap, markPending, getBySlug]
+    () => ({ synced, pending, yourRepos, loading, error, refresh, refreshUserRepos, upsertRoadmap, markPending, getBySlug }),
+    [synced, pending, yourRepos, loading, error, refresh, refreshUserRepos, upsertRoadmap, markPending, getBySlug]
   )
 
   return (

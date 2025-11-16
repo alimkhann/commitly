@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import ClerkClaims, require_clerk_auth
 from app.core.database import get_db
-from app.models.roadmap import RoadmapRequest, RoadmapResponse
+from app.models.roadmap import (
+    RoadmapRequest,
+    RoadmapResponse,
+    UserRepoStateResponse,
+)
 from app.services.roadmap_service import RoadmapService, build_roadmap_service
 
 router = APIRouter()
@@ -62,3 +66,11 @@ async def unpin_roadmap(
 ) -> Response:
     await service.unpin_repo(current_user["sub"], f"{owner}/{repo}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/user-repos", response_model=list[UserRepoStateResponse])
+async def list_user_repositories(
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+    service: RoadmapService = Depends(get_roadmap_service),
+) -> list[UserRepoStateResponse]:
+    return await service.list_user_repos(current_user["sub"])

@@ -8,7 +8,11 @@ from fastapi import HTTPException, status
 
 from app.core.cache import RedisJSONCache, redis_cache
 from app.core.config import settings
-from app.models.roadmap import RoadmapRepoSummary, RoadmapResponse
+from app.models.roadmap import (
+    RoadmapRepoSummary,
+    RoadmapResponse,
+    UserRepoStateResponse,
+)
 from app.services.ai.gemini import (
     GeminiConfigurationError,
     GeminiGenerationError,
@@ -146,6 +150,9 @@ class RoadmapService:
 
     async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
         return self._pin_store.list(user_id)
+
+    async def list_user_repos(self, user_id: str) -> list[UserRepoStateResponse]:
+        return self._pin_store.list_states(user_id)
 
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
         self._pin_store.unpin(user_id, repo_full_name)

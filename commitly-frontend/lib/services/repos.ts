@@ -12,6 +12,7 @@ const API_ROUTES = {
   generateRoadmap: "/api/v1/roadmap/generate",
   catalog: "/api/v1/roadmap/catalog",
   cached: (owner: string, repo: string) => `/api/v1/roadmap/cached/${owner}/${repo}`,
+  userRepos: "/api/v1/roadmap/user-repos",
 }
 
 export type RepoIdentity = {
@@ -25,10 +26,23 @@ export type RoadmapSummary = {
   full_name: string
   description?: string | null
   language?: string | null
+  primary_language?: string | null
+  languages?: string[] | null
   stars: number
   default_branch: string
   html_url?: string | null
   owner_avatar_url?: string | null
+  topics?: string[] | null
+  difficulty?: string | null
+  star_count?: number | null
+  fork_count?: number | null
+  last_pushed_at?: string | null
+  license?: string | null
+  contributor_count?: number | null
+  view_count?: number | null
+  sync_count?: number | null
+  rating_count?: number | null
+  rating_sum?: number | null
 }
 
 export type RoadmapResponseBody = {
@@ -40,6 +54,15 @@ export type RoadmapResponseBody = {
 
 export type RepoImportResult = ApiClientResponse<RoadmapResponseBody> & {
   skipped?: boolean
+}
+
+export type UserRepoState = {
+  repo_full_name: string
+  status: "synced" | "unsynced" | string
+  is_archived: boolean
+  progress_percent: number
+  pinned_at?: string
+  repo?: RoadmapSummary | null
 }
 
 const sanitizeSegment = (value: string) =>
@@ -176,6 +199,19 @@ export const repoService = {
     return apiClient<RoadmapResponseBody>(env.apiBaseUrl, {
       path: API_ROUTES.cached(owner, repo),
       cache: "no-store",
+    })
+  },
+
+  async listUserRepos(
+    authToken?: string
+  ): Promise<ApiClientResponse<UserRepoState[]>> {
+    if (!env.apiBaseUrl) {
+      return { ok: false, status: 0, error: "API base URL missing" }
+    }
+    return apiClient<UserRepoState[]>(env.apiBaseUrl, {
+      path: API_ROUTES.userRepos,
+      cache: "no-store",
+      authToken,
     })
   },
 }
