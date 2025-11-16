@@ -156,8 +156,7 @@ export default function Sidebar() {
                     const syncedMatch = synced.find((item) => item.fullName === identity.fullName)
                     const summary: RoadmapResponseBody["repo"] | undefined =
                       "repo" in repo ? (repo as UserRepoState & { repo: RoadmapSummary }).repo : syncedMatch?.repo
-                    // 'primary_language' does not exist on type 'RoadmapSummary', so use only available fields.
-                    const language = summary?.language ?? syncedMatch?.repo.language ?? null
+                    const language = summary?.language ?? summary?.primary_language ?? syncedMatch?.repo.language ?? null
                     const description = summary?.description ?? syncedMatch?.repo.description ?? null
                     const generatedAt = syncedMatch?.generated_at ?? null
                     const stageCount = syncedMatch ? syncedMatch.timeline.length : 0
