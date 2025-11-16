@@ -59,20 +59,20 @@ async def lifespan(app: FastAPI):
 
         project_root = Path(__file__).parent.parent
         alembic_ini = project_root / "alembic.ini"
-        
+
         if not alembic_ini.exists():
             logger.error(f"alembic.ini not found at {alembic_ini}")
         else:
             logger.info(f"Found alembic.ini at {alembic_ini}")
             alembic_cfg = Config(str(alembic_ini))
-            
+
             # Run migrations
             command.upgrade(alembic_cfg, "head")
             logger.info("Database migrations completed successfully")
     except Exception as e:
         logger.error(f"Database migration failed: {e}", exc_info=True)
         # Don't fail startup, but log the error
-    
+
     # Verify schema: Check if required columns exist
     logger.info("Verifying database schema...")
     try:
