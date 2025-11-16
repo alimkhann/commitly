@@ -62,17 +62,35 @@ async def list_roadmaps(
     logger = logging.getLogger(__name__)
     try:
         logger.info(f"list_roadmaps: Starting with page={page}, page_size={page_size}")
-        items, total_count = await service.list_catalog(
-            page=page,
-            page_size=page_size,
-            language=language,
-            tag=tag,
-            difficulty=difficulty,
-            min_rating=min_rating,
-            min_views=min_views,
-            min_syncs=min_syncs,
-            sort=sort,
-        )
+
+        # Call service method - wrap sync database call in executor to prevent blocking
+        import asyncio
+
+        # Create a synchronous wrapper function
+        def call_list_catalog():
+            try:
+                logger.info("list_roadmaps: Calling result_store.list_catalog")
+                return service._result_store.list_catalog(
+                    page=page,
+                    page_size=page_size,
+                    language=language,
+                    tag=tag,
+                    difficulty=difficulty,
+                    min_rating=min_rating,
+                    min_views=min_views,
+                    min_syncs=min_syncs,
+                    sort=sort,
+                )
+            except Exception as e:
+                logger.error(
+                    f"list_roadmaps: Error in result_store.list_catalog: {e}",
+                    exc_info=True,
+                )
+                raise
+
+        loop = asyncio.get_event_loop()
+        items, total_count = await loop.run_in_executor(None, call_list_catalog)
+
         logger.info(f"list_roadmaps: Retrieved {len(items)} items, total={total_count}")
 
         total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
@@ -85,8 +103,14 @@ async def list_roadmaps(
             total_pages=total_pages,
         )
     except Exception as e:
-        logger.error(f"list_roadmaps: Error - {type(e).__name__}: {e}", exc_info=True)
-        raise
+        logger.error(
+            f"list_roadmaps: Error - {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve catalog: {str(e)}",
+        ) from e
 
 
 @router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)
