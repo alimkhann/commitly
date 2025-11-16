@@ -9,6 +9,9 @@ venv
 
 tmp-backups
 
+NOTES.md
+NOTES_PROMPT1.md
+
 # Dependencies
 node_modules/
 npm-debug.log*
