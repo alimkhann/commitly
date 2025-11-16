@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
@@ -10,7 +11,12 @@ from app.models.roadmap import (
     RoadmapResponse,
     TimelineResource,
     TimelineStage,
+    UserRepoStateResponse,
 )
+from app.services.github_tokens import GitHubTokenStore
+from app.services.rag import CommitChunkStore
+from app.services.roadmap_repository import RoadmapResultStore, UserSyncedRepoStore
+from app.services.roadmap_service import RoadmapService
 
 
 @pytest.fixture()
@@ -75,6 +81,16 @@ def stubbed_roadmap_service(client: TestClient, roadmap_payload: RoadmapResponse
         async def list_user_pins(self, user_id: str):
             assert user_id == "user_123"
             return [roadmap_payload]
+
+        async def sync_repo(self, owner: str, repo: str, user_id: str):
+            return UserRepoStateResponse(
+                repo_full_name=f"{owner}/{repo}",
+                status="synced",
+                is_archived=False,
+                progress_percent=0,
+                pinned_at=datetime.now(timezone.utc),
+                repo=roadmap_payload.repo,
+            )
 
         async def unpin_repo(self, user_id: str, repo_full_name: str):
             self.unpin_called = (user_id, repo_full_name)
@@ -157,3 +173,51 @@ def test_pins_endpoint_recovers_when_tables_missing(client: TestClient, auth_hea
 
     # Restore declarative metadata state for subsequent tests.
     Base.metadata.create_all(bind=engine, checkfirst=True)
+
+
+def test_sync_endpoint(client: TestClient, auth_headers, stubbed_roadmap_service):
+    response = client.post("/api/v1/roadmap/sync/acme/widgets", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "synced"
+    assert data["progress_percent"] == 0
+    assert data["repo"]["full_name"] == "acme/widgets"
+
+
+def test_sync_repo_idempotent(db_session):
+    result_store = RoadmapResultStore(db_session)
+    pin_store = UserSyncedRepoStore(db_session, result_store)
+    service = RoadmapService(
+        chunk_store=CommitChunkStore(db_session),
+        result_store=result_store,
+        pin_store=pin_store,
+        generator=None,  # not needed since we seed the roadmap
+        token_store=GitHubTokenStore(db_session),
+    )
+
+    roadmap = RoadmapResponse(
+        repo=RoadmapRepoSummary(
+            full_name="acme/widgets",
+            description="Test repo",
+            language="Python",
+            stars=10,
+            default_branch="main",
+            html_url=None,
+            owner_avatar_url=None,
+        ),
+        timeline=[],
+        cached=True,
+        generated_at=datetime.now(timezone.utc),
+    )
+    result_store.upsert(roadmap)
+
+    first = asyncio.run(service.sync_repo("acme", "widgets", "user_sync"))
+    second = asyncio.run(service.sync_repo("acme", "widgets", "user_sync"))
+
+    assert first.status == "synced"
+    assert second.status == "synced"
+
+    record = result_store.get("acme/widgets")
+    assert record.repo.full_name == "acme/widgets"
+    # sync_count should only increment on first sync for this user
+    assert record.repo.sync_count == 1

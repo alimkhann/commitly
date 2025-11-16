@@ -155,7 +155,18 @@ class RoadmapResultStore:
         return self._with_table_guard(action)
 
     def _to_response(self, record: GeneratedRoadmap) -> RoadmapResponse:
-        summary = RoadmapRepoSummary(**record.repo_summary)
+        summary_payload = dict(record.repo_summary)
+        # Ensure counters stored as columns are surfaced even if repo_summary lacks them
+        summary_payload.setdefault("sync_count", record.sync_count)
+        summary_payload.setdefault("view_count", record.view_count)
+        summary_payload.setdefault("star_count", record.star_count)
+        summary_payload.setdefault("fork_count", record.fork_count)
+        summary_payload.setdefault("contributor_count", record.contributor_count)
+        summary_payload.setdefault("primary_language", record.primary_language)
+        summary_payload.setdefault("languages", record.languages)
+        summary_payload.setdefault("topics", record.topics)
+        summary_payload.setdefault("difficulty", record.difficulty)
+        summary = RoadmapRepoSummary(**summary_payload)
         timeline = [TimelineStage(**stage) for stage in record.timeline]
         return RoadmapResponse(
             repo=summary,
