@@ -26,10 +26,23 @@ export type RoadmapSummary = {
   full_name: string
   description?: string | null
   language?: string | null
+  primary_language?: string | null
+  languages?: string[] | null
   stars: number
   default_branch: string
   html_url?: string | null
   owner_avatar_url?: string | null
+  topics?: string[] | null
+  difficulty?: string | null
+  star_count?: number | null
+  fork_count?: number | null
+  last_pushed_at?: string | null
+  license?: string | null
+  contributor_count?: number | null
+  view_count?: number | null
+  sync_count?: number | null
+  rating_count?: number | null
+  rating_sum?: number | null
 }
 
 export type RoadmapResponseBody = {
