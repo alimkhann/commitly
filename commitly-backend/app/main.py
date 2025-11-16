@@ -95,6 +95,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         import time
+
         start_time = time.time()
         logger.info(
             f"Request: {request.method} {request.url.path} "
