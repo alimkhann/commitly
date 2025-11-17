@@ -138,7 +138,9 @@ export default function SearchPage() {
     }
     const lower = query.toLowerCase();
     return userRepoList.filter((repo) => {
-      if (!repo.repo) return false;
+      if (!repo.repo) {
+        return false;
+      }
       const summary = repo.repo.description?.toLowerCase() ?? "";
       return (
         repo.repo.full_name.toLowerCase().includes(lower) ||

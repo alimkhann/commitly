@@ -14,10 +14,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
+
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +27,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   type RoadmapResponseBody,
   type RoadmapSummary,
@@ -36,6 +37,7 @@ import {
   type UserRepoState,
 } from "@/lib/services/repos";
 import { cn } from "@/lib/utils";
+
 import AccountSection from "./account-section";
 
 export default function Sidebar() {
@@ -60,64 +62,32 @@ export default function Sidebar() {
     [yourRepos]
   );
 
-  const sidebarRows = useMemo(
-    () => (userReposToRender.length > 0 ? userReposToRender : synced),
+  const sidebarRows = useMemo<SidebarSourceRow[]>(
+    () =>
+      (userReposToRender.length > 0
+        ? userReposToRender
+        : synced) as SidebarSourceRow[],
     [synced, userReposToRender]
   );
 
   const syncedMap = useMemo(
-    () => new Map(synced.map((item) => [item.fullName, item])),
+    () =>
+      new Map<string, SyncedCatalogRecord>(
+        synced.map((item) => [item.fullName, item])
+      ),
     [synced]
   );
 
   const aggregatedRows = useMemo<AggregatedSidebarRow[]>(() => {
-    const rows = [...pending, ...sidebarRows];
-    return rows.map((item) => {
-      if ("repo_full_name" in item) {
-        const identity = repoService.buildIdentityFromFullName(
-          item.repo_full_name
-        );
-        const syncedMatch = syncedMap.get(identity.fullName) ?? null;
-        const summary =
-          (item.repo as RoadmapSummary | null) ?? syncedMatch?.repo ?? null;
-        const pendingStatus = (item.status ?? "synced") === "pending";
-        return {
-          slug: identity.slug,
-          fullName: identity.fullName,
-          description:
-            summary?.description ?? syncedMatch?.repo.description ?? null,
-          language:
-            summary?.language ??
-            summary?.primary_language ??
-            syncedMatch?.repo.language ??
-            null,
-          generatedAt:
-            syncedMatch?.generated_at ??
-            ((item as UserRepoState).pinned_at ?? null),
-          stageCount: syncedMatch?.timeline.length ?? 0,
-          status: item.status ?? "synced",
-          pending: pendingStatus,
-          repoFullName: identity.fullName,
-        } satisfies AggregatedSidebarRow;
-      }
-      const identity = {
-        slug: item.slug,
-        fullName: item.fullName,
-      };
-      const syncedMatch = syncedMap.get(identity.fullName) ?? null;
-      const pendingFlag = Boolean((item as { pending?: boolean }).pending);
-      return {
-        slug: identity.slug,
-        fullName: identity.fullName,
-        description: syncedMatch?.repo.description ?? null,
-        language: syncedMatch?.repo.language ?? null,
-        generatedAt: syncedMatch?.generated_at ?? null,
-        stageCount: syncedMatch?.timeline.length ?? 0,
-        status: pendingFlag ? "pending" : "synced",
-        pending: pendingFlag,
-        repoFullName: identity.fullName,
-      } satisfies AggregatedSidebarRow;
-    });
+    const pendingRows = pending.map((record) =>
+      mapPendingRecordToRow(record, syncedMap)
+    );
+    const syncedRows = sidebarRows.map((record) =>
+      isUserRepoState(record)
+        ? mapUserRepoToRow(record, syncedMap)
+        : mapSyncedRecordToRow(record)
+    );
+    return [...pendingRows, ...syncedRows];
   }, [pending, sidebarRows, syncedMap]);
 
   const handleDesync = useCallback(
@@ -274,6 +244,87 @@ type AggregatedSidebarRow = {
   repoFullName: string;
 };
 
+type SyncedCatalogRecord = RoadmapResponseBody & {
+  fullName: string;
+  slug: string;
+  pending?: boolean;
+};
+
+type PendingSidebarRow = {
+  fullName: string;
+  slug: string;
+  pending?: boolean;
+};
+
+type SidebarSourceRow = UserRepoState | SyncedCatalogRecord;
+
+type SyncedMap = Map<string, SyncedCatalogRecord>;
+
+const resolveLanguage = (summary?: RoadmapSummary | null) =>
+  summary?.language ?? summary?.primary_language ?? null;
+
+function mapUserRepoToRow(
+  record: UserRepoState,
+  syncedMap: SyncedMap
+): AggregatedSidebarRow {
+  const identity = repoService.buildIdentityFromFullName(record.repo_full_name);
+  const syncedMatch = syncedMap.get(identity.fullName) ?? null;
+  const summary =
+    (record.repo as RoadmapSummary | null) ?? syncedMatch?.repo ?? null;
+  const status = record.status ?? "synced";
+  return {
+    slug: identity.slug,
+    fullName: identity.fullName,
+    description: summary?.description ?? null,
+    language: resolveLanguage(summary),
+    generatedAt: syncedMatch?.generated_at ?? record.pinned_at ?? null,
+    stageCount: syncedMatch?.timeline.length ?? 0,
+    status,
+    pending: status === "pending",
+    repoFullName: identity.fullName,
+  };
+}
+
+function mapSyncedRecordToRow(
+  record: SyncedCatalogRecord
+): AggregatedSidebarRow {
+  const summary = record.repo;
+  const status = record.pending ? "pending" : "synced";
+  return {
+    slug: record.slug,
+    fullName: record.fullName,
+    description: summary.description ?? null,
+    language: resolveLanguage(summary),
+    generatedAt: record.generated_at,
+    stageCount: record.timeline.length,
+    status,
+    pending: Boolean(record.pending),
+    repoFullName: summary.full_name,
+  };
+}
+
+function mapPendingRecordToRow(
+  record: PendingSidebarRow,
+  syncedMap: SyncedMap
+): AggregatedSidebarRow {
+  const syncedMatch = syncedMap.get(record.fullName) ?? null;
+  return {
+    slug: record.slug,
+    fullName: record.fullName,
+    description: syncedMatch?.repo.description ?? null,
+    language: resolveLanguage(syncedMatch?.repo ?? null),
+    generatedAt: syncedMatch?.generated_at ?? null,
+    stageCount: syncedMatch?.timeline.length ?? 0,
+    status: "pending",
+    pending: true,
+    repoFullName: record.fullName,
+  };
+}
+
+function isUserRepoState(value: SidebarSourceRow): value is UserRepoState {
+  return "repo_full_name" in value;
+}
+
 function SidebarRepoRow({
   row,
   isActive,
@@ -289,8 +340,17 @@ function SidebarRepoRow({
   desyncingRepo: string | null;
   isSignedIn: boolean;
 }) {
-  const { slug, fullName, description, language, generatedAt, stageCount, status, pending, repoFullName } =
-    row;
+  const {
+    slug,
+    fullName,
+    description,
+    language,
+    generatedAt,
+    stageCount,
+    status,
+    pending,
+    repoFullName,
+  } = row;
   const desyncDisabled = desyncingRepo === repoFullName;
 
   return (
@@ -312,8 +372,7 @@ function SidebarRepoRow({
               ? "Generating timeline…"
               : [
                   language,
-                  generatedAt &&
-                    new Date(generatedAt).toLocaleDateString(),
+                  generatedAt && new Date(generatedAt).toLocaleDateString(),
                 ]
                   .filter(Boolean)
                   .join(" • ")}

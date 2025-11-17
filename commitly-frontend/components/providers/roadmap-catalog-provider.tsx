@@ -74,7 +74,9 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       setLoading(true);
       const response = await repoService.listCatalog();
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       if (response.ok && response.data) {
         setSynced(response.data.items.map(toSyncedRecord));
         setError(null);
@@ -266,7 +268,9 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
         previous.filter((item) => item.fullName !== roadmap.repo.full_name)
       );
       setYourRepos((previous) => {
-        if (!isSignedIn) return previous;
+        if (!isSignedIn) {
+          return previous;
+        }
         const next: UserRepoState = {
           repo_full_name: roadmap.repo.full_name,
           status: "synced",

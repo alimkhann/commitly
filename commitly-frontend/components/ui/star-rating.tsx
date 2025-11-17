@@ -3,14 +3,14 @@
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export interface StarRatingProps {
+export type StarRatingProps = {
   value: number; // 0-5, can be fractional for average
   onValueChange?: (value: number) => void;
   readonly?: boolean;
   size?: "sm" | "md" | "lg";
   showValue?: boolean;
   className?: string;
-}
+};
 
 export function StarRating({
   value,
@@ -32,18 +32,18 @@ export function StarRating({
     }
   };
 
-  const handleMouseEnter = (hoverValue: number) => {
-    if (!readonly) {
-      // Optional: Add hover state if needed
-    }
-  };
-
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((starValue) => {
           const isFilled = value >= starValue;
           const isHalfFilled = value >= starValue - 0.5 && value < starValue;
+          let fillClass = "fill-none text-muted-foreground/30";
+          if (isFilled) {
+            fillClass = "fill-yellow-400 text-yellow-400";
+          } else if (isHalfFilled) {
+            fillClass = "fill-yellow-400/50 text-yellow-400/50";
+          }
 
           return (
             <button
@@ -55,19 +55,9 @@ export function StarRating({
               disabled={readonly}
               key={starValue}
               onClick={() => handleClick(starValue)}
-              onMouseEnter={() => handleMouseEnter(starValue)}
               type="button"
             >
-              <Star
-                className={cn(
-                  sizeClasses[size],
-                  isFilled
-                    ? "fill-yellow-400 text-yellow-400"
-                    : isHalfFilled
-                      ? "fill-yellow-400/50 text-yellow-400/50"
-                      : "fill-none text-muted-foreground/30"
-                )}
-              />
+              <Star className={cn(sizeClasses[size], fillClass)} />
             </button>
           );
         })}

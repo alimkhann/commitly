@@ -1,21 +1,27 @@
 "use client";
 
-/* biome-ignore lint/performance/noNamespaceImport: radix namespace ergonomics */
-import * as CollapsiblePrimitive from "@radix-ui/react-collapsible";
-/* biome-ignore lint/performance/noNamespaceImport: react namespace used across file */
-import * as React from "react";
+import {
+  CollapsibleContent as CollapsiblePrimitiveContent,
+  Root as CollapsiblePrimitiveRoot,
+  CollapsibleTrigger as CollapsiblePrimitiveTrigger,
+} from "@radix-ui/react-collapsible";
+import {
+  type ComponentPropsWithoutRef,
+  type ElementRef,
+  forwardRef,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
-const Collapsible = CollapsiblePrimitive.Root;
+const Collapsible = CollapsiblePrimitiveRoot;
 
-const CollapsibleTrigger = CollapsiblePrimitive.CollapsibleTrigger;
+const CollapsibleTrigger = CollapsiblePrimitiveTrigger;
 
-const CollapsibleContent = React.forwardRef<
-  React.ElementRef<typeof CollapsiblePrimitive.CollapsibleContent>,
-  React.ComponentPropsWithoutRef<typeof CollapsiblePrimitive.CollapsibleContent>
+const CollapsibleContent = forwardRef<
+  ElementRef<typeof CollapsiblePrimitiveContent>,
+  ComponentPropsWithoutRef<typeof CollapsiblePrimitiveContent>
 >(({ className, ...props }, ref) => (
-  <CollapsiblePrimitive.CollapsibleContent
+  <CollapsiblePrimitiveContent
     className={cn(
       "overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down",
       className
@@ -24,7 +30,6 @@ const CollapsibleContent = React.forwardRef<
     {...props}
   />
 ));
-CollapsibleContent.displayName =
-  CollapsiblePrimitive.CollapsibleContent.displayName;
+CollapsibleContent.displayName = CollapsiblePrimitiveContent.displayName;
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent };

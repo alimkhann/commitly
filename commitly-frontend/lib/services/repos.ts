@@ -110,8 +110,11 @@ export type UserRepoState = {
   repo?: RoadmapSummary | null;
 };
 
+const GIT_SUFFIX_REGEX = /\.git$/i;
+const INVALID_CHAR_REGEX = /[^A-Za-z0-9._-]/g;
+
 const sanitizeSegment = (value: string) =>
-  value.replace(/\.git$/i, "").replace(/[^A-Za-z0-9._-]/g, "-");
+  value.replace(GIT_SUFFIX_REGEX, "").replace(INVALID_CHAR_REGEX, "-");
 
 const toIdentity = (fullName: string): RepoIdentity => {
   const [owner, repoName] = fullName.split("/");
@@ -125,9 +128,13 @@ const toIdentity = (fullName: string): RepoIdentity => {
 
 const parsePath = (value: string): RepoIdentity | null => {
   const normalized = value.trim();
-  if (!normalized) return null;
+  if (!normalized) {
+    return null;
+  }
 
-  if (normalized.includes(" ")) return null;
+  if (normalized.includes(" ")) {
+    return null;
+  }
 
   let path = normalized;
   if (normalized.startsWith("http")) {
@@ -151,12 +158,16 @@ const parsePath = (value: string): RepoIdentity | null => {
     .map((segment) => segment.trim())
     .filter(Boolean);
 
-  if (segments.length < 2) return null;
+  if (segments.length < 2) {
+    return null;
+  }
 
   const owner = sanitizeSegment(segments[0]);
   const repoName = sanitizeSegment(segments[1]);
 
-  if (!(owner && repoName)) return null;
+  if (!(owner && repoName)) {
+    return null;
+  }
 
   return {
     owner,
@@ -196,23 +207,27 @@ export const repoService = {
     return Boolean(env.apiBaseUrl);
   },
 
-  async generateRoadmap(
+  generateRoadmap(
     repoUrl: string,
     authToken?: string,
     options?: { forceRefresh?: boolean }
   ): Promise<RepoImportResult> {
     if (!repoUrl.trim()) {
-      return { ok: false, status: 0, error: "Repository URL is required." };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "Repository URL is required.",
+      });
     }
 
     if (!env.apiBaseUrl) {
-      return {
+      return Promise.resolve({
         ok: true,
         status: 0,
         data: null,
         skipped: true,
         error: undefined,
-      };
+      });
     }
 
     return apiClient<RoadmapResponseBody>(env.apiBaseUrl, {
@@ -226,28 +241,54 @@ export const repoService = {
     });
   },
 
-  async listCatalog(
+  listCatalog(
     filters?: CatalogFilters
   ): Promise<ApiClientResponse<CatalogPage>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
 
     // Build query string from filters
     const params = new URLSearchParams();
-    if (filters?.page) params.set("page", filters.page.toString());
-    if (filters?.page_size)
+    if (filters?.page) {
+      params.set("page", filters.page.toString());
+    }
+
+    if (filters?.page_size) {
       params.set("page_size", filters.page_size.toString());
-    if (filters?.language) params.set("language", filters.language);
-    if (filters?.tag) params.set("tag", filters.tag);
-    if (filters?.difficulty) params.set("difficulty", filters.difficulty);
-    if (filters?.min_rating !== undefined)
+    }
+
+    if (filters?.language) {
+      params.set("language", filters.language);
+    }
+
+    if (filters?.tag) {
+      params.set("tag", filters.tag);
+    }
+
+    if (filters?.difficulty) {
+      params.set("difficulty", filters.difficulty);
+    }
+
+    if (filters?.min_rating !== undefined) {
       params.set("min_rating", filters.min_rating.toString());
-    if (filters?.min_views !== undefined)
+    }
+
+    if (filters?.min_views !== undefined) {
       params.set("min_views", filters.min_views.toString());
-    if (filters?.min_syncs !== undefined)
+    }
+
+    if (filters?.min_syncs !== undefined) {
       params.set("min_syncs", filters.min_syncs.toString());
-    if (filters?.sort) params.set("sort", filters.sort);
+    }
+
+    if (filters?.sort) {
+      params.set("sort", filters.sort);
+    }
 
     const queryString = params.toString();
     const path = queryString
@@ -260,12 +301,16 @@ export const repoService = {
     });
   },
 
-  async getCachedRoadmap(
+  getCachedRoadmap(
     owner: string,
     repo: string
   ): Promise<ApiClientResponse<RoadmapResponseBody>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<RoadmapResponseBody>(env.apiBaseUrl, {
       path: API_ROUTES.cached(owner, repo),
@@ -273,11 +318,15 @@ export const repoService = {
     });
   },
 
-  async listUserRepos(
+  listUserRepos(
     authToken?: string
   ): Promise<ApiClientResponse<UserRepoState[]>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<UserRepoState[]>(env.apiBaseUrl, {
       path: API_ROUTES.userRepos,
@@ -286,13 +335,17 @@ export const repoService = {
     });
   },
 
-  async syncRepo(
+  syncRepo(
     owner: string,
     repo: string,
     authToken?: string
   ): Promise<ApiClientResponse<UserRepoState>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<UserRepoState>(env.apiBaseUrl, {
       path: API_ROUTES.sync(owner, repo),
@@ -301,13 +354,17 @@ export const repoService = {
     });
   },
 
-  async desyncRepo(
+  desyncRepo(
     owner: string,
     repo: string,
     authToken?: string
   ): Promise<ApiClientResponse<null>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<null>(env.apiBaseUrl, {
       path: API_ROUTES.sync(owner, repo),
@@ -316,13 +373,17 @@ export const repoService = {
     });
   },
 
-  async archiveRepo(
+  archiveRepo(
     owner: string,
     repo: string,
     authToken?: string
   ): Promise<ApiClientResponse<UserRepoState>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<UserRepoState>(env.apiBaseUrl, {
       path: API_ROUTES.archive(owner, repo),
@@ -331,13 +392,17 @@ export const repoService = {
     });
   },
 
-  async unarchiveRepo(
+  unarchiveRepo(
     owner: string,
     repo: string,
     authToken?: string
   ): Promise<ApiClientResponse<UserRepoState>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<UserRepoState>(env.apiBaseUrl, {
       path: API_ROUTES.unarchive(owner, repo),
@@ -346,11 +411,15 @@ export const repoService = {
     });
   },
 
-  async listArchivedRepos(
+  listArchivedRepos(
     authToken?: string
   ): Promise<ApiClientResponse<UserRepoState[]>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<UserRepoState[]>(env.apiBaseUrl, {
       path: API_ROUTES.archived,
@@ -359,7 +428,7 @@ export const repoService = {
     });
   },
 
-  async setRating(
+  setRating(
     owner: string,
     repo: string,
     rating: number,
@@ -374,7 +443,11 @@ export const repoService = {
     }>
   > {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<{
       rating: number;
@@ -390,7 +463,7 @@ export const repoService = {
     });
   },
 
-  async getUserRating(
+  getUserRating(
     owner: string,
     repo: string,
     authToken?: string
@@ -404,7 +477,11 @@ export const repoService = {
     } | null>
   > {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<{
       rating: number;
@@ -419,13 +496,17 @@ export const repoService = {
     });
   },
 
-  async recordRoadmapView(
+  recordRoadmapView(
     owner: string,
     repo: string,
     authToken?: string
   ): Promise<ApiClientResponse<void>> {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
     }
     return apiClient<void>(env.apiBaseUrl, {
       path: API_ROUTES.recordView(owner, repo),
