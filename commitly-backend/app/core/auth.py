@@ -221,50 +221,74 @@ def verify_clerk_token(token: str) -> ClerkClaims:
 async def verify_clerk_token_async(token: str) -> ClerkClaims:
     """Async version of verify_clerk_token that doesn't block the event loop."""
     import asyncio
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("verify_clerk_token_async: Starting token verification")
 
     try:
         header = jwt.get_unverified_header(token)
+        logger.info("verify_clerk_token_async: Got unverified header")
     except JWTError as exc:
+        logger.error("verify_clerk_token_async: Malformed token header")
         raise InvalidClerkToken("Malformed token header") from exc
 
     kid = header.get("kid")
     if not isinstance(kid, str):
+        logger.error("verify_clerk_token_async: Missing key identifier")
         raise InvalidClerkToken("Missing key identifier")
+    
+    logger.info(f"verify_clerk_token_async: Fetching JWKS for kid={kid}")
 
     # Use async version to avoid blocking
     jwk_data = await jwks_cache.get_key_async(kid)
+    logger.info("verify_clerk_token_async: Got JWKS data, starting signature verification")
 
     # Run CPU-intensive JWT operations in executor to avoid blocking
     def verify_signature():
+        logger.info("verify_signature: Constructing public key")
         public_key = jwk.construct(jwk_data)
+        logger.info("verify_signature: Public key constructed")
 
         try:
             message, encoded_signature = token.rsplit(".", 1)
         except ValueError as exc:
+            logger.error("verify_signature: Invalid token structure")
             raise InvalidClerkToken("Token structure is invalid") from exc
 
+        logger.info("verify_signature: Decoding signature")
         decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
+        logger.info("verify_signature: Verifying signature with public key")
         if not public_key.verify(message.encode("utf-8"), decoded_signature):
+            logger.error("verify_signature: Signature verification failed")
             raise InvalidClerkToken("Signature verification failed")
-
-        return jwt.get_unverified_claims(token)
+        
+        logger.info("verify_signature: Signature verified, getting claims")
+        claims = jwt.get_unverified_claims(token)
+        logger.info("verify_signature: Claims retrieved")
+        return claims
 
     # Run signature verification in thread pool to avoid blocking event loop
+    logger.info("verify_clerk_token_async: Running signature verification in executor")
     loop = asyncio.get_event_loop()
     claims = await loop.run_in_executor(None, verify_signature)
+    logger.info("verify_clerk_token_async: Signature verification complete")
 
     now = int(time.time())
 
     exp = claims.get("exp")
     if exp is not None and int(exp) <= now:
+        logger.error("verify_clerk_token_async: Token expired")
         raise InvalidClerkToken("Token has expired")
 
     nbf = claims.get("nbf")
     if nbf is not None and now < int(nbf):
+        logger.error("verify_clerk_token_async: Token not yet valid")
         raise InvalidClerkToken("Token is not yet valid")
 
     issuer = claims.get("iss")
     if issuer != settings.clerk_issuer:
+        logger.error(f"verify_clerk_token_async: Invalid issuer {issuer}")
         raise InvalidClerkToken("Invalid issuer")
 
     audience_values = _select_audience(claims.get("aud"))
@@ -273,6 +297,7 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
     ]
     if audience_values:
         if not any(audience in audience_values for audience in allowed_audiences):
+            logger.error(f"verify_clerk_token_async: Invalid audience {audience_values}")
             raise InvalidClerkToken("Invalid audience")
 
     if settings.clerk_authorized_parties:
@@ -283,13 +308,17 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
                 _normalize_party(party) for party in settings.clerk_authorized_parties
             }
             if "*" not in allowed and normalized_azp not in allowed:
+                logger.error(f"verify_clerk_token_async: Unauthorized party {normalized_azp}")
                 raise InvalidClerkToken("Token not issued for this application")
         else:
+            logger.error("verify_clerk_token_async: Missing authorized party")
             raise InvalidClerkToken("Token missing authorized party")
 
     if "sub" not in claims:
+        logger.error("verify_clerk_token_async: Missing subject claim")
         raise InvalidClerkToken("Token is missing subject claim")
 
+    logger.info("verify_clerk_token_async: Token verification successful")
     return cast(ClerkClaims, claims)
 
 
