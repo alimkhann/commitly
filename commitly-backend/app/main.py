@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import logging
-import sys
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -9,30 +8,15 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import auth, donate, github, roadmap, waitlist
 from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.logging import configure_logging, StructuredLoggingMiddleware
 
 
-def _configure_logging() -> None:
-    root_logger = logging.getLogger()
-    if root_logger.handlers:
-        return
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(
-        logging.Formatter(
-            fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-    )
-    root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
-
-
-_configure_logging()
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -109,38 +93,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(ClerkAuthMiddleware)
-
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Log all incoming requests for debugging."""
-
-    async def dispatch(self, request: Request, call_next):
-        import time
-
-        start_time = time.time()
-        logger.info(
-            f"Request: {request.method} {request.url.path} "
-            f"from {request.client.host if request.client else 'unknown'}"
-        )
-        try:
-            response = await call_next(request)
-            elapsed = time.time() - start_time
-            logger.info(
-                f"Response: {request.method} {request.url.path} "
-                f"-> {response.status_code} ({elapsed:.3f}s)"
-            )
-            return response
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(
-                f"Error processing {request.method} {request.url.path} "
-                f"after {elapsed:.3f}s: {type(e).__name__}: {e}",
-                exc_info=True,
-            )
-            raise
-
-
-app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(StructuredLoggingMiddleware)
 
 # Include routers
 protected = [Depends(require_clerk_auth)]

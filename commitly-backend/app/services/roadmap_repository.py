@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
-from typing import Iterable, Literal
+from typing import Callable, Iterable, Literal, TypeVar
 
 from sqlalchemy import case
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -22,6 +22,8 @@ from app.models.roadmap import (
 SortOption = Literal[
     "newest", "most_viewed", "most_synced", "highest_rated", "trending"
 ]
+
+T = TypeVar("T")
 
 
 class RoadmapResultStore:
@@ -310,50 +312,83 @@ class UserSyncedRepoStore:
         self._session = session
         self._result_store = result_store
 
+    def _run_with_schema_guard(self, operation: Callable[[], T]) -> T:
+        try:
+            return operation()
+        except (OperationalError, ProgrammingError) as exc:
+            if not self._should_attempt_schema_heal(exc):
+                raise
+            self._session.rollback()
+            self._recreate_schema()
+            return operation()
+
+    def _should_attempt_schema_heal(self, exc: Exception) -> bool:
+        message = str(getattr(exc, "orig", exc)).lower()
+        return "no such table" in message or "does not exist" in message
+
+    def _recreate_schema(self) -> None:
+        bind = self._session.get_bind()
+        if bind is None:
+            return
+        UserSyncedRepo.__table__.create(bind=bind, checkfirst=True)  # type: ignore[attr-defined]
+        GeneratedRoadmap.__table__.create(bind=bind, checkfirst=True)  # type: ignore[attr-defined]
+
     def pin(self, user_id: str | None, full_name: str) -> None:
         if not user_id:
             return
-        try:
-            record = (
-                self._session.query(UserSyncedRepo)
-                .filter_by(user_id=user_id, repo_full_name=full_name)
-                .one_or_none()
-            )
-            if record:
-                record.pinned_at = datetime.now(timezone.utc)
-            else:
-                self._session.add(
-                    UserSyncedRepo(user_id=user_id, repo_full_name=full_name)
+        
+        def operation() -> None:
+            try:
+                record = (
+                    self._session.query(UserSyncedRepo)
+                    .filter_by(user_id=user_id, repo_full_name=full_name)
+                    .one_or_none()
                 )
-            self._session.commit()
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+                if record:
+                    record.pinned_at = datetime.now(timezone.utc)
+                else:
+                    self._session.add(
+                        UserSyncedRepo(user_id=user_id, repo_full_name=full_name)
+                    )
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._run_with_schema_guard(operation)
 
     def unpin(self, user_id: str, full_name: str) -> None:
-        try:
-            self._session.query(UserSyncedRepo).filter_by(
-                user_id=user_id, repo_full_name=full_name
-            ).delete()
-            self._session.commit()
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+        def operation() -> None:
+            try:
+                self._session.query(UserSyncedRepo).filter_by(
+                    user_id=user_id, repo_full_name=full_name
+                ).delete()
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._run_with_schema_guard(operation)
 
     def list(self, user_id: str | None) -> list[RoadmapResponse]:
         if not user_id:
             return []
-        records: Iterable[GeneratedRoadmap] = (
-            self._session.query(GeneratedRoadmap)
-            .join(
-                UserSyncedRepo,
-                UserSyncedRepo.repo_full_name == GeneratedRoadmap.repo_full_name,
+        
+        def operation() -> list[RoadmapResponse]:
+            records: Iterable[GeneratedRoadmap] = (
+                self._session.query(GeneratedRoadmap)
+                .join(
+                    UserSyncedRepo,
+                    UserSyncedRepo.repo_full_name
+                    == GeneratedRoadmap.repo_full_name,
+                )
+                .filter(UserSyncedRepo.user_id == user_id)
+                .order_by(UserSyncedRepo.pinned_at.desc())
+                .all()
             )
-            .filter(UserSyncedRepo.user_id == user_id)
-            .order_by(UserSyncedRepo.pinned_at.desc())
-            .all()
-        )
-        return [self._result_store._to_response(record) for record in records]
+            return [self._result_store._to_response(record) for record in records]
+
+        return self._run_with_schema_guard(operation)
 
     def upsert_state(
         self,
@@ -364,129 +399,148 @@ class UserSyncedRepoStore:
         is_archived: bool = False,
         progress_percent: int = 0,
     ) -> bool:
-        try:
-            record = (
-                self._session.query(UserSyncedRepo)
-                .filter_by(user_id=user_id, repo_full_name=full_name)
-                .one_or_none()
-            )
-            created = False
-            if record:
-                record.status = status
-                record.is_archived = is_archived
-                record.progress_percent = progress_percent
-                record.pinned_at = datetime.now(timezone.utc)
-            else:
-                self._session.add(
-                    UserSyncedRepo(
-                        user_id=user_id,
-                        repo_full_name=full_name,
-                        status=status,
-                        is_archived=is_archived,
-                        progress_percent=progress_percent,
-                    )
+        def operation() -> bool:
+            try:
+                record = (
+                    self._session.query(UserSyncedRepo)
+                    .filter_by(user_id=user_id, repo_full_name=full_name)
+                    .one_or_none()
                 )
-                created = True
-            self._session.commit()
-            return created
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+                created = False
+                if record:
+                    record.status = status
+                    record.is_archived = is_archived
+                    record.progress_percent = progress_percent
+                    record.pinned_at = datetime.now(timezone.utc)
+                else:
+                    self._session.add(
+                        UserSyncedRepo(
+                            user_id=user_id,
+                            repo_full_name=full_name,
+                            status=status,
+                            is_archived=is_archived,
+                            progress_percent=progress_percent,
+                        )
+                    )
+                    created = True
+                self._session.commit()
+                return created
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        return self._run_with_schema_guard(operation)
 
     def list_states(self, user_id: str | None) -> list[UserRepoStateResponse]:
         if not user_id:
             return []
-        results = (
-            self._session.query(UserSyncedRepo, GeneratedRoadmap)
-            .outerjoin(
-                GeneratedRoadmap,
-                GeneratedRoadmap.repo_full_name == UserSyncedRepo.repo_full_name,
-            )
-            .filter(UserSyncedRepo.user_id == user_id)
-            .order_by(UserSyncedRepo.pinned_at.desc())
-            .all()
-        )
-
-        responses: list[UserRepoStateResponse] = []
-        for user_record, roadmap_record in results:
-            summary = None
-            if roadmap_record and roadmap_record.repo_summary:
-                summary = RoadmapRepoSummary(**roadmap_record.repo_summary)
-            responses.append(
-                UserRepoStateResponse(
-                    repo_full_name=user_record.repo_full_name,
-                    status=user_record.status,
-                    is_archived=user_record.is_archived,
-                    progress_percent=user_record.progress_percent,
-                    pinned_at=user_record.pinned_at,
-                    repo=summary,
+        
+        def operation() -> list[UserRepoStateResponse]:
+            results = (
+                self._session.query(UserSyncedRepo, GeneratedRoadmap)
+                .outerjoin(
+                    GeneratedRoadmap,
+                    GeneratedRoadmap.repo_full_name
+                    == UserSyncedRepo.repo_full_name,
                 )
+                .filter(UserSyncedRepo.user_id == user_id)
+                .order_by(UserSyncedRepo.pinned_at.desc())
+                .all()
             )
-        return responses
+
+            responses: list[UserRepoStateResponse] = []
+            for user_record, roadmap_record in results:
+                summary = None
+                if roadmap_record and roadmap_record.repo_summary:
+                    summary = RoadmapRepoSummary(**roadmap_record.repo_summary)
+                responses.append(
+                    UserRepoStateResponse(
+                        repo_full_name=user_record.repo_full_name,
+                        status=user_record.status,
+                        is_archived=user_record.is_archived,
+                        progress_percent=user_record.progress_percent,
+                        pinned_at=user_record.pinned_at,
+                        repo=summary,
+                    )
+                )
+            return responses
+
+        return self._run_with_schema_guard(operation)
 
     def archive(self, user_id: str, full_name: str) -> None:
         """Archive a repository for a user."""
-        try:
-            record = (
-                self._session.query(UserSyncedRepo)
-                .filter_by(user_id=user_id, repo_full_name=full_name)
-                .one_or_none()
-            )
-            if record:
-                record.is_archived = True
-                record.updated_at = datetime.now(timezone.utc)
-                self._session.commit()
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+        def operation() -> None:
+            try:
+                record = (
+                    self._session.query(UserSyncedRepo)
+                    .filter_by(user_id=user_id, repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if record:
+                    record.is_archived = True
+                    record.updated_at = datetime.now(timezone.utc)
+                    self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._run_with_schema_guard(operation)
 
     def unarchive(self, user_id: str, full_name: str) -> None:
         """Unarchive a repository for a user."""
-        try:
-            record = (
-                self._session.query(UserSyncedRepo)
-                .filter_by(user_id=user_id, repo_full_name=full_name)
-                .one_or_none()
-            )
-            if record:
-                record.is_archived = False
-                record.updated_at = datetime.now(timezone.utc)
-                self._session.commit()
-        except SQLAlchemyError:
-            self._session.rollback()
-            raise
+        def operation() -> None:
+            try:
+                record = (
+                    self._session.query(UserSyncedRepo)
+                    .filter_by(user_id=user_id, repo_full_name=full_name)
+                    .one_or_none()
+                )
+                if record:
+                    record.is_archived = False
+                    record.updated_at = datetime.now(timezone.utc)
+                    self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._run_with_schema_guard(operation)
 
     def list_archived(self, user_id: str | None) -> list[UserRepoStateResponse]:
         """List archived repositories for a user."""
         if not user_id:
             return []
-        results = (
-            self._session.query(UserSyncedRepo, GeneratedRoadmap)
-            .outerjoin(
-                GeneratedRoadmap,
-                GeneratedRoadmap.repo_full_name == UserSyncedRepo.repo_full_name,
-            )
-            .filter(
-                UserSyncedRepo.user_id == user_id,
-                UserSyncedRepo.is_archived == True,  # noqa: E712
-            )
-            .order_by(UserSyncedRepo.pinned_at.desc())
-            .all()
-        )
-
-        responses: list[UserRepoStateResponse] = []
-        for user_record, roadmap_record in results:
-            summary = None
-            if roadmap_record and roadmap_record.repo_summary:
-                summary = RoadmapRepoSummary(**roadmap_record.repo_summary)
-            responses.append(
-                UserRepoStateResponse(
-                    repo_full_name=user_record.repo_full_name,
-                    status=user_record.status,
-                    is_archived=user_record.is_archived,
-                    progress_percent=user_record.progress_percent,
-                    pinned_at=user_record.pinned_at,
-                    repo=summary,
+        
+        def operation() -> list[UserRepoStateResponse]:
+            results = (
+                self._session.query(UserSyncedRepo, GeneratedRoadmap)
+                .outerjoin(
+                    GeneratedRoadmap,
+                    GeneratedRoadmap.repo_full_name
+                    == UserSyncedRepo.repo_full_name,
                 )
+                .filter(
+                    UserSyncedRepo.user_id == user_id,
+                    UserSyncedRepo.is_archived == True,  # noqa: E712
+                )
+                .order_by(UserSyncedRepo.pinned_at.desc())
+                .all()
             )
-        return responses
+
+            responses: list[UserRepoStateResponse] = []
+            for user_record, roadmap_record in results:
+                summary = None
+                if roadmap_record and roadmap_record.repo_summary:
+                    summary = RoadmapRepoSummary(**roadmap_record.repo_summary)
+                responses.append(
+                    UserRepoStateResponse(
+                        repo_full_name=user_record.repo_full_name,
+                        status=user_record.status,
+                        is_archived=user_record.is_archived,
+                        progress_percent=user_record.progress_percent,
+                        pinned_at=user_record.pinned_at,
+                        repo=summary,
+                    )
+                )
+            return responses
+
+        return self._run_with_schema_guard(operation)
