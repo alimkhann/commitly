@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import contextvars
+from datetime import datetime, timezone
 import json
 import logging
 from logging.config import dictConfig
 import time
-from datetime import datetime, timezone
 from typing import Any, Dict, MutableMapping, Optional
 from uuid import uuid4
 
@@ -171,7 +171,9 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
             raise
         else:
             elapsed_ms = (time.perf_counter() - start) * 1000
-            claims: Optional[Dict[str, Any]] = getattr(request.state, "clerk_claims", None)
+            claims: Optional[Dict[str, Any]] = getattr(
+                request.state, "clerk_claims", None
+            )
             user_id = claims.get("sub") if isinstance(claims, dict) else None
 
             bind_request_context(

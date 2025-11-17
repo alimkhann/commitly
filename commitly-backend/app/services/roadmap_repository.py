@@ -330,13 +330,13 @@ class UserSyncedRepoStore:
         bind = self._session.get_bind()
         if bind is None:
             return
-        UserSyncedRepo.__table__.create(bind=bind, checkfirst=True)  # type: ignore[attr-defined]
-        GeneratedRoadmap.__table__.create(bind=bind, checkfirst=True)  # type: ignore[attr-defined]
+        UserSyncedRepo.__table__.create(bind=bind, checkfirst=True) # noqa E501 # type: ignore[attr-defined]
+        GeneratedRoadmap.__table__.create(bind=bind, checkfirst=True) # noqa E501 # type: ignore[attr-defined]
 
     def pin(self, user_id: str | None, full_name: str) -> None:
         if not user_id:
             return
-        
+
         def operation() -> None:
             try:
                 record = (
@@ -373,14 +373,13 @@ class UserSyncedRepoStore:
     def list(self, user_id: str | None) -> list[RoadmapResponse]:
         if not user_id:
             return []
-        
+
         def operation() -> list[RoadmapResponse]:
             records: Iterable[GeneratedRoadmap] = (
                 self._session.query(GeneratedRoadmap)
                 .join(
                     UserSyncedRepo,
-                    UserSyncedRepo.repo_full_name
-                    == GeneratedRoadmap.repo_full_name,
+                    UserSyncedRepo.repo_full_name == GeneratedRoadmap.repo_full_name,
                 )
                 .filter(UserSyncedRepo.user_id == user_id)
                 .order_by(UserSyncedRepo.pinned_at.desc())
@@ -434,14 +433,13 @@ class UserSyncedRepoStore:
     def list_states(self, user_id: str | None) -> list[UserRepoStateResponse]:
         if not user_id:
             return []
-        
+
         def operation() -> list[UserRepoStateResponse]:
             results = (
                 self._session.query(UserSyncedRepo, GeneratedRoadmap)
                 .outerjoin(
                     GeneratedRoadmap,
-                    GeneratedRoadmap.repo_full_name
-                    == UserSyncedRepo.repo_full_name,
+                    GeneratedRoadmap.repo_full_name == UserSyncedRepo.repo_full_name,
                 )
                 .filter(UserSyncedRepo.user_id == user_id)
                 .order_by(UserSyncedRepo.pinned_at.desc())
@@ -469,6 +467,7 @@ class UserSyncedRepoStore:
 
     def archive(self, user_id: str, full_name: str) -> None:
         """Archive a repository for a user."""
+
         def operation() -> None:
             try:
                 record = (
@@ -488,6 +487,7 @@ class UserSyncedRepoStore:
 
     def unarchive(self, user_id: str, full_name: str) -> None:
         """Unarchive a repository for a user."""
+
         def operation() -> None:
             try:
                 record = (
@@ -509,14 +509,13 @@ class UserSyncedRepoStore:
         """List archived repositories for a user."""
         if not user_id:
             return []
-        
+
         def operation() -> list[UserRepoStateResponse]:
             results = (
                 self._session.query(UserSyncedRepo, GeneratedRoadmap)
                 .outerjoin(
                     GeneratedRoadmap,
-                    GeneratedRoadmap.repo_full_name
-                    == UserSyncedRepo.repo_full_name,
+                    GeneratedRoadmap.repo_full_name == UserSyncedRepo.repo_full_name,
                 )
                 .filter(
                     UserSyncedRepo.user_id == user_id,

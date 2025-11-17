@@ -13,8 +13,7 @@ from app.api import auth, donate, github, roadmap, waitlist
 from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.logging import configure_logging, StructuredLoggingMiddleware
-
+from app.core.logging import StructuredLoggingMiddleware, configure_logging
 
 configure_logging()
 logger = logging.getLogger(__name__)
