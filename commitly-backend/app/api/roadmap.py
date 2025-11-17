@@ -218,8 +218,12 @@ async def list_user_repositories(
     
     # Wrap sync DB call in executor to avoid blocking event loop
     user_id = get_user_id(current_user)
+    
+    def get_repos():
+        return service._pin_store.list_states(user_id)
+    
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, lambda: service._pin_store.list_states(user_id))
+    return await loop.run_in_executor(None, get_repos)
 
 
 @router.post("/sync/{owner}/{repo}", response_model=UserRepoStateResponse)
@@ -272,8 +276,12 @@ async def list_archived_repositories(
     
     # Wrap sync DB call in executor to avoid blocking event loop
     user_id = get_user_id(current_user)
+    
+    def get_archived():
+        return service._pin_store.list_archived(user_id)
+    
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, lambda: service._pin_store.list_archived(user_id))
+    return await loop.run_in_executor(None, get_archived)
 
 
 @router.post("/{owner}/{repo}/rating", response_model=RatingResponse)
@@ -284,7 +292,7 @@ async def set_repository_rating(
     current_user: ClerkClaims = Depends(require_clerk_auth),
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> RatingResponse:
-    return service.set_rating(get_user_id(current_user), owner, repo, payload.rating)
+    return await service.set_rating(get_user_id(current_user), owner, repo, payload.rating)
 
 
 @router.get("/{owner}/{repo}/rating", response_model=RatingResponse | None)
@@ -294,7 +302,7 @@ async def get_repository_rating(
     current_user: ClerkClaims = Depends(require_clerk_auth),
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> RatingResponse | None:
-    return service.get_user_rating(get_user_id(current_user), owner, repo)
+    return await service.get_user_rating(get_user_id(current_user), owner, repo)
 
 
 @router.post("/{owner}/{repo}/view", status_code=status.HTTP_204_NO_CONTENT)

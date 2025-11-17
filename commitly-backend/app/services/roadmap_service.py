@@ -204,58 +204,86 @@ class RoadmapService:
             repo_full_name: Full repository name (owner/repo)
             user_id: User identifier (optional for anonymous users)
         """
+        import asyncio
+        
         if not self._view_tracker:
             # View tracking disabled
             return
 
-        # Check if view should be counted (respects cooldown period)
-        should_count = self._view_tracker.increment_view_if_eligible(
-            repo_full_name, user_id
-        )
+        # Wrap sync DB calls in executor
+        def record_view():
+            # Check if view should be counted (respects cooldown period)
+            should_count = self._view_tracker.increment_view_if_eligible(
+                repo_full_name, user_id
+            )
 
-        if should_count:
-            # Increment the view count on the roadmap
-            self._result_store.increment_view_count(repo_full_name)
+            if should_count:
+                # Increment the view count on the roadmap
+                self._result_store.increment_view_count(repo_full_name)
+        
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, record_view)
 
     async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
-        return self._pin_store.list(user_id)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._pin_store.list, user_id)
 
     async def list_user_repos(self, user_id: str) -> list[UserRepoStateResponse]:
-        return self._pin_store.list_states(user_id)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._pin_store.list_states, user_id)
 
     async def sync_repo(
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
+        import asyncio
+        
         full_name = f"{owner}/{repo}"
-        roadmap = self._result_store.get(full_name)
+        
+        # Wrap DB operations in executor
+        loop = asyncio.get_event_loop()
+        
+        def get_roadmap():
+            return self._result_store.get(full_name)
+        
+        roadmap = await loop.run_in_executor(None, get_roadmap)
+        
         if roadmap is None:
             await self.generate(
                 repo_url=f"https://github.com/{full_name}",
                 force_refresh=False,
                 actor_id=user_id,
             )
-            roadmap = self._result_store.get(full_name)
+            roadmap = await loop.run_in_executor(None, get_roadmap)
+            
         if roadmap is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Roadmap could not be generated for this repository.",
             )
-        was_synced = any(
-            state.repo_full_name == full_name
-            for state in self._pin_store.list_states(user_id)
-        )
-
-        _ = self._pin_store.upsert_state(
-            user_id,
-            full_name,
-            status="synced",
-            is_archived=False,
-            progress_percent=0,
-        )
-        record_after = self._result_store.get(full_name)
-        if not was_synced:
-            self._result_store.increment_sync_count(full_name)
+        
+        def check_and_upsert():
+            states = self._pin_store.list_states(user_id)
+            was_synced = any(state.repo_full_name == full_name for state in states)
+            
+            self._pin_store.upsert_state(
+                user_id,
+                full_name,
+                status="synced",
+                is_archived=False,
+                progress_percent=0,
+            )
+            
             record_after = self._result_store.get(full_name)
+            if not was_synced:
+                self._result_store.increment_sync_count(full_name)
+                record_after = self._result_store.get(full_name)
+                
+            return was_synced, record_after
+        
+        was_synced, record_after = await loop.run_in_executor(None, check_and_upsert)
+        
         return UserRepoStateResponse(
             repo_full_name=full_name,
             status="synced",
@@ -266,103 +294,149 @@ class RoadmapService:
         )
 
     async def desync_repo(self, owner: str, repo: str, user_id: str) -> None:
+        import asyncio
+        
         full_name = f"{owner}/{repo}"
-        states = self._pin_store.list_states(user_id)
-        had_state = any(state.repo_full_name == full_name for state in states)
-        self._pin_store.unpin(user_id, full_name)
-        if had_state:
-            self._result_store.decrement_sync_count(full_name)
+        
+        def desync():
+            states = self._pin_store.list_states(user_id)
+            had_state = any(state.repo_full_name == full_name for state in states)
+            self._pin_store.unpin(user_id, full_name)
+            if had_state:
+                self._result_store.decrement_sync_count(full_name)
+        
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, desync)
 
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
-        self._pin_store.unpin(user_id, repo_full_name)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._pin_store.unpin, user_id, repo_full_name)
 
     async def archive_repo(
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
         """Archive a repository for a user."""
+        import asyncio
+        
         full_name = f"{owner}/{repo}"
-        states = self._pin_store.list_states(user_id)
-        existing_state = next(
-            (state for state in states if state.repo_full_name == full_name), None
-        )
-        if not existing_state:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository is not synced for this user.",
+        
+        def archive():
+            states = self._pin_store.list_states(user_id)
+            existing_state = next(
+                (state for state in states if state.repo_full_name == full_name), None
             )
-        self._pin_store.archive(user_id, full_name)
-        updated_states = self._pin_store.list_states(user_id)
-        updated_state = next(
-            (state for state in updated_states if state.repo_full_name == full_name),
-            None,
-        )
-        if not updated_state:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to archive repository.",
+            if not existing_state:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Repository is not synced for this user.",
+                )
+            self._pin_store.archive(user_id, full_name)
+            updated_states = self._pin_store.list_states(user_id)
+            updated_state = next(
+                (state for state in updated_states if state.repo_full_name == full_name),
+                None,
             )
-        return updated_state
+            if not updated_state:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to archive repository.",
+                )
+            return updated_state
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, archive)
 
     async def unarchive_repo(
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
         """Unarchive a repository for a user."""
+        import asyncio
+        
         full_name = f"{owner}/{repo}"
-        archived = self._pin_store.list_archived(user_id)
-        existing_archived = next(
-            (state for state in archived if state.repo_full_name == full_name), None
-        )
-        if not existing_archived:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Repository is not archived for this user.",
+        
+        def unarchive():
+            archived = self._pin_store.list_archived(user_id)
+            existing_archived = next(
+                (state for state in archived if state.repo_full_name == full_name), None
             )
-        self._pin_store.unarchive(user_id, full_name)
-        updated_states = self._pin_store.list_states(user_id)
-        updated_state = next(
-            (state for state in updated_states if state.repo_full_name == full_name),
-            None,
-        )
-        if not updated_state:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to unarchive repository.",
+            if not existing_archived:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Repository is not archived for this user.",
+                )
+            self._pin_store.unarchive(user_id, full_name)
+            updated_states = self._pin_store.list_states(user_id)
+            updated_state = next(
+                (state for state in updated_states if state.repo_full_name == full_name),
+                None,
             )
-        return updated_state
+            if not updated_state:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to unarchive repository.",
+                )
+            return updated_state
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, unarchive)
 
     async def list_archived_repos(self, user_id: str) -> list[UserRepoStateResponse]:
         """List archived repositories for a user."""
-        return self._pin_store.list_archived(user_id)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._pin_store.list_archived, user_id)
 
-    def set_rating(
+    async def set_rating(
         self, user_id: str, owner: str, repo: str, rating: int
     ) -> RatingResponse:
         """Set or update a user's rating for a repository."""
+        import asyncio
+        
         if not self._rating_store:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Rating service is not available",
             )
         full_name = f"{owner}/{repo}"
-        record = self._rating_store.upsert_rating(user_id, full_name, rating)
-        return RatingResponse(
-            rating=record.rating,
-            repo_full_name=record.repo_full_name,
-            user_id=record.user_id,
-            created_at=record.created_at,
-            updated_at=record.updated_at,
-        )
+        
+        def upsert():
+            record = self._rating_store.upsert_rating(user_id, full_name, rating)
+            return RatingResponse(
+                rating=record.rating,
+                repo_full_name=record.repo_full_name,
+                user_id=record.user_id,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, upsert)
 
-    def get_user_rating(
+    async def get_user_rating(
         self, user_id: str, owner: str, repo: str
     ) -> RatingResponse | None:
         """Get a user's rating for a repository."""
+        import asyncio
+        
         if not self._rating_store:
             return None
         full_name = f"{owner}/{repo}"
-        record = self._rating_store.get_user_rating(user_id, full_name)
-        if not record:
-            return None
+        
+        def get_rating():
+            record = self._rating_store.get_user_rating(user_id, full_name)
+            if not record:
+                return None
+            return RatingResponse(
+                rating=record.rating,
+                repo_full_name=record.repo_full_name,
+                user_id=record.user_id,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, get_rating)
         return RatingResponse(
             rating=record.rating,
             repo_full_name=record.repo_full_name,
