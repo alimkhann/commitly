@@ -30,8 +30,8 @@ export default function Hero({
     const { t } = useLanguage()
 
     return (
-        <section className="w-full px-8 pt-8 pb-32">
-            <div className="relative isolate rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col">
+        <section className="w-full px-8 pt-2 pb-32">
+            <div className="relative isolate rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col bg-black">
                 <div aria-hidden className="absolute inset-0 -z-10">
                     <ColorBends
                         colors={["#FF0000", "#00FF00", "#0000FF"]}

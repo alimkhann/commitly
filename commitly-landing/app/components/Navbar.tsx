@@ -16,7 +16,7 @@ export default function Navbar({ isScrolled, onDonateClick, onWaitlistClick }: N
     return (
         <div className="nav-shell">
             <header
-                className={`nav-pill px-4 sm:px-6 lg:px-2 py-2 transition-all duration-300 ${isScrolled ? 'nav-scrolled' : 'nav-transparent'
+                className={`nav-pill ${isScrolled ? 'max-w-[1200px]' : 'max-w-[1400px]'} mx-auto px-4 sm:px-6 lg:px-2 py-2 transition-all duration-300 ${isScrolled ? 'nav-scrolled' : 'nav-transparent'
                     }`}
             >
                 <div className="w-full flex items-center justify-between">

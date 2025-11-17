@@ -25,7 +25,7 @@ export default function BottomCTA({
     const { t } = useLanguage()
 
     return (
-        <section className="w-full bg-black">
+        <section className="w-full bg-background">
             <div className="max-w-[1344px] mx-auto px-6 sm:px-8 lg:px-20 xl:px-28 2xl:px-40">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-8 pb-24 sm:pb-48">
                     <div className="flex-1 w-full sm:w-auto">

@@ -48,7 +48,7 @@ export default function Page() {
     }, [])
 
     return (
-        <div className="min-h-screen w-full bg-black">
+        <div className="min-h-screen w-full bg-background">
             <Navbar
                 isScrolled={isScrolled}
                 onDonateClick={donate}
