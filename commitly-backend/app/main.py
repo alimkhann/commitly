@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
     import asyncio
-    
+
     # Startup: Test database connection
     logger.info("Testing database connection...")
     try:
@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
             with SessionLocal() as session:
                 session.execute(text("SELECT 1"))
                 session.commit()
-        
+
         # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
         await asyncio.wait_for(
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
                     )
                 )
                 return result.fetchone() is not None
-        
+
         # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
         column_exists = await asyncio.wait_for(

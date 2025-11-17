@@ -14,9 +14,9 @@ def main():
     print("=" * 70)
     print("ADDING MISSING COLUMNS TO generated_roadmaps")
     print("=" * 70)
-    
+
     engine = create_engine(str(settings.database_url))
-    
+
     # SQL statements to add missing columns
     column_additions = [
         "ALTER TABLE generated_roadmaps ADD COLUMN IF NOT EXISTS primary_language VARCHAR(64);",
@@ -33,7 +33,7 @@ def main():
         "ALTER TABLE generated_roadmaps ADD COLUMN IF NOT EXISTS rating_count INTEGER DEFAULT 0;",
         "ALTER TABLE generated_roadmaps ADD COLUMN IF NOT EXISTS rating_sum INTEGER DEFAULT 0;",
     ]
-    
+
     with engine.begin() as conn:
         print("\nAdding columns...")
         for i, sql in enumerate(column_additions, 1):
@@ -44,11 +44,11 @@ def main():
             except Exception as e:
                 print(f"     ⚠️  Warning: {e}")
                 # Continue anyway - column might already exist
-    
+
     print("\n" + "=" * 70)
     print("✅ Column addition complete!")
     print("\nNow verifying columns exist...")
-    
+
     # Verify columns were added
     with engine.connect() as conn:
         result = conn.execute(text("""
@@ -63,19 +63,19 @@ def main():
             )
             ORDER BY column_name
         """))
-        
+
         found_columns = [row[0] for row in result.fetchall()]
-        
+
         expected = [
             'contributor_count', 'difficulty', 'fork_count', 'languages',
             'last_pushed_at', 'license', 'primary_language', 'rating_count',
             'rating_sum', 'star_count', 'sync_count', 'topics', 'view_count'
         ]
-        
+
         print(f"\nFound {len(found_columns)}/{len(expected)} expected columns:")
         for col in sorted(found_columns):
             print(f"  ✅ {col}")
-        
+
         missing = set(expected) - set(found_columns)
         if missing:
             print(f"\n❌ Still missing: {', '.join(sorted(missing))}")

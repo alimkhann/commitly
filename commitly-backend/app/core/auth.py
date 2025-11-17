@@ -89,10 +89,10 @@ class JWKSCache:
             now = time.monotonic()
             if self._jwks and now < self._expires_at:
                 return self._jwks
-        
+
         # Fetch outside the lock to avoid blocking
         fresh_jwks = await self._fetch_async()
-        
+
         with self._lock:
             self._jwks = fresh_jwks
             self._expires_at = time.monotonic() + max(self.ttl_seconds, 60)
@@ -221,7 +221,7 @@ def verify_clerk_token(token: str) -> ClerkClaims:
 async def verify_clerk_token_async(token: str) -> ClerkClaims:
     """Async version of verify_clerk_token that doesn't block the event loop."""
     import asyncio
-    
+
     try:
         header = jwt.get_unverified_header(token)
     except JWTError as exc:
@@ -233,7 +233,7 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
 
     # Use async version to avoid blocking
     jwk_data = await jwks_cache.get_key_async(kid)
-    
+
     # Run CPU-intensive JWT operations in executor to avoid blocking
     def verify_signature():
         public_key = jwk.construct(jwk_data)
@@ -246,13 +246,13 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
         decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
         if not public_key.verify(message.encode("utf-8"), decoded_signature):
             raise InvalidClerkToken("Signature verification failed")
-        
+
         return jwt.get_unverified_claims(token)
-    
+
     # Run signature verification in thread pool to avoid blocking event loop
     loop = asyncio.get_event_loop()
     claims = await loop.run_in_executor(None, verify_signature)
-    
+
     now = int(time.time())
 
     exp = claims.get("exp")
@@ -357,7 +357,7 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ):  # type: ignore[override]
         import asyncio
-        
+
         token: Optional[str]
         try:
             token = _get_bearer_token(request)
