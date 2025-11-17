@@ -57,8 +57,16 @@ async def github_status(
     current_user: ClerkClaims = Depends(require_clerk_auth),
     session: Session = Depends(get_db),
 ):
-    store = GitHubTokenStore(session)
-    record = store.get_token(current_user["sub"])
+    import asyncio
+    
+    # Wrap sync DB call in executor to avoid blocking event loop
+    def get_status():
+        store = GitHubTokenStore(session)
+        return store.get_token(current_user["sub"])
+    
+    loop = asyncio.get_event_loop()
+    record = await loop.run_in_executor(None, get_status)
+    
     if record is None:
         return OAuthStatusResponse(connected=False)
     return OAuthStatusResponse(
