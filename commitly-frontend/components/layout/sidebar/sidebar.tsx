@@ -1,15 +1,34 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { ChevronLeft, Hammer, Search } from "lucide-react";
+import {
+  BookOpen,
+  ChevronLeft,
+  GitBranch,
+  Hammer,
+  Loader2,
+  Search,
+  Unlink,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   type RoadmapResponseBody,
   type RoadmapSummary,
@@ -22,12 +41,16 @@ import AccountSection from "./account-section";
 export default function Sidebar() {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
-  const { synced, pending, yourRepos, loading } = useRoadmapCatalog();
+  const { synced, pending, yourRepos, loading, desync, refreshUserRepos } =
+    useRoadmapCatalog();
   const [collapsed, setCollapsed] = useState(false);
+  const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
   const toggleCollapse = () => setCollapsed((prev) => !prev);
 
   const activeRepoId = useMemo(() => {
-    if (!pathname) return null;
+    if (!pathname) {
+      return null;
+    }
     const segments = pathname.split("/");
     return segments[1] === "repo" ? (segments[2] ?? null) : null;
   }, [pathname]);
@@ -40,6 +63,76 @@ export default function Sidebar() {
   const sidebarRows = useMemo(
     () => (userReposToRender.length > 0 ? userReposToRender : synced),
     [synced, userReposToRender]
+  );
+
+  const syncedMap = useMemo(
+    () => new Map(synced.map((item) => [item.fullName, item])),
+    [synced]
+  );
+
+  const aggregatedRows = useMemo<AggregatedSidebarRow[]>(() => {
+    const rows = [...pending, ...sidebarRows];
+    return rows.map((item) => {
+      if ("repo_full_name" in item) {
+        const identity = repoService.buildIdentityFromFullName(
+          item.repo_full_name
+        );
+        const syncedMatch = syncedMap.get(identity.fullName) ?? null;
+        const summary =
+          (item.repo as RoadmapSummary | null) ?? syncedMatch?.repo ?? null;
+        const pendingStatus = (item.status ?? "synced") === "pending";
+        return {
+          slug: identity.slug,
+          fullName: identity.fullName,
+          description:
+            summary?.description ?? syncedMatch?.repo.description ?? null,
+          language:
+            summary?.language ??
+            summary?.primary_language ??
+            syncedMatch?.repo.language ??
+            null,
+          generatedAt:
+            syncedMatch?.generated_at ??
+            ((item as UserRepoState).pinned_at ?? null),
+          stageCount: syncedMatch?.timeline.length ?? 0,
+          status: item.status ?? "synced",
+          pending: pendingStatus,
+          repoFullName: identity.fullName,
+        } satisfies AggregatedSidebarRow;
+      }
+      const identity = {
+        slug: item.slug,
+        fullName: item.fullName,
+      };
+      const syncedMatch = syncedMap.get(identity.fullName) ?? null;
+      const pendingFlag = Boolean((item as { pending?: boolean }).pending);
+      return {
+        slug: identity.slug,
+        fullName: identity.fullName,
+        description: syncedMatch?.repo.description ?? null,
+        language: syncedMatch?.repo.language ?? null,
+        generatedAt: syncedMatch?.generated_at ?? null,
+        stageCount: syncedMatch?.timeline.length ?? 0,
+        status: pendingFlag ? "pending" : "synced",
+        pending: pendingFlag,
+        repoFullName: identity.fullName,
+      } satisfies AggregatedSidebarRow;
+    });
+  }, [pending, sidebarRows, syncedMap]);
+
+  const handleDesync = useCallback(
+    async (fullName: string) => {
+      if (!isSignedIn) {
+        return;
+      }
+      setDesyncingRepo(fullName);
+      const success = await desync(fullName);
+      if (success) {
+        await refreshUserRepos();
+      }
+      setDesyncingRepo(null);
+    },
+    [desync, isSignedIn, refreshUserRepos]
   );
 
   return (
@@ -142,103 +235,22 @@ export default function Sidebar() {
             </div>
             <ScrollArea className="h-full max-h-[45vh]">
               <div className="flex flex-col gap-2 pr-3">
-                {pending.length + sidebarRows.length === 0 && !loading ? (
+                {aggregatedRows.length === 0 && !loading ? (
                   <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-muted-foreground text-sm">
                     Generate a roadmap to pin it here.
                   </div>
                 ) : (
-                  [...pending, ...sidebarRows].map((repo) => {
-                    const identity =
-                      "repo_full_name" in repo
-                        ? repoService.buildIdentityFromFullName(
-                            repo.repo_full_name
-                          )
-                        : (repo as { slug: string; fullName: string });
-                    const slug = identity.slug;
-                    const isActive = activeRepoId === slug;
-                    const href = `/repo/${slug}/timeline`;
-                    const isPending =
-                      (repo as { pending?: boolean }).pending === true;
-                    const status =
-                      (repo as { status?: string }).status ?? "synced";
-                    const syncedMatch = synced.find(
-                      (item) => item.fullName === identity.fullName
-                    );
-                    const summary: RoadmapResponseBody["repo"] | undefined =
-                      "repo" in repo
-                        ? (repo as UserRepoState & { repo: RoadmapSummary })
-                            .repo
-                        : syncedMatch?.repo;
-                    const language =
-                      summary?.language ??
-                      summary?.primary_language ??
-                      syncedMatch?.repo.language ??
-                      null;
-                    const description =
-                      summary?.description ??
-                      syncedMatch?.repo.description ??
-                      null;
-                    const generatedAt = syncedMatch?.generated_at ?? null;
-                    const stageCount = syncedMatch
-                      ? syncedMatch.timeline.length
-                      : 0;
-                    return (
-                      <Link
-                        className={cn(
-                          "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 backdrop-blur-sm transition-colors",
-                          isActive
-                            ? "border-primary/70 bg-primary/15"
-                            : "hover:border-white/10 hover:bg-card/25"
-                        )}
-                        href={href}
-                        key={slug}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <p className="font-medium text-sm leading-tight">
-                              {identity.fullName}
-                            </p>
-                            <p className="text-muted-foreground text-xs">
-                              {isPending
-                                ? "Generating timeline…"
-                                : [
-                                    language,
-                                    generatedAt &&
-                                      new Date(
-                                        generatedAt
-                                      ).toLocaleDateString(),
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" • ")}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              className="text-[11px] capitalize"
-                              variant={
-                                status === "synced" ? "accent" : "secondary"
-                              }
-                            >
-                              {status}
-                            </Badge>
-                            {!isPending && (
-                              <Badge
-                                className="text-[11px] capitalize"
-                                variant={isActive ? "accent" : "outline"}
-                              >
-                                {stageCount} stages
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        {!isPending && description && (
-                          <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
-                            {description}
-                          </p>
-                        )}
-                      </Link>
-                    );
-                  })
+                  aggregatedRows.map((row) => (
+                    <SidebarRepoRow
+                      collapsed={collapsed}
+                      desyncingRepo={desyncingRepo}
+                      isActive={activeRepoId === row.slug}
+                      isSignedIn={isSignedIn}
+                      key={row.slug}
+                      onDesync={handleDesync}
+                      row={row}
+                    />
+                  ))
                 )}
               </div>
             </ScrollArea>
@@ -246,6 +258,139 @@ export default function Sidebar() {
         )}
       </div>
       <AccountSection isCollapsed={collapsed} />
+    </div>
+  );
+}
+
+type AggregatedSidebarRow = {
+  slug: string;
+  fullName: string;
+  description: string | null;
+  language: string | null;
+  generatedAt: string | null;
+  stageCount: number;
+  status: string;
+  pending: boolean;
+  repoFullName: string;
+};
+
+function SidebarRepoRow({
+  row,
+  isActive,
+  collapsed,
+  onDesync,
+  desyncingRepo,
+  isSignedIn,
+}: {
+  row: AggregatedSidebarRow;
+  isActive: boolean;
+  collapsed: boolean;
+  onDesync: (fullName: string) => void | Promise<void>;
+  desyncingRepo: string | null;
+  isSignedIn: boolean;
+}) {
+  const { slug, fullName, description, language, generatedAt, stageCount, status, pending, repoFullName } =
+    row;
+  const desyncDisabled = desyncingRepo === repoFullName;
+
+  return (
+    <div
+      className={cn(
+        "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 backdrop-blur-sm transition-colors",
+        isActive
+          ? "border-primary/70 bg-primary/15"
+          : "hover:border-white/10 hover:bg-card/25"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <Link href={`/repo/${slug}/timeline`}>
+            <p className="font-medium text-sm leading-tight">{fullName}</p>
+          </Link>
+          <p className="text-muted-foreground text-xs">
+            {pending
+              ? "Generating timeline…"
+              : [
+                  language,
+                  generatedAt &&
+                    new Date(generatedAt).toLocaleDateString(),
+                ]
+                  .filter(Boolean)
+                  .join(" • ")}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge
+            className="text-[11px] capitalize"
+            variant={status === "synced" ? "accent" : "secondary"}
+          >
+            {status}
+          </Badge>
+          {!pending && (
+            <Badge
+              className="text-[11px] capitalize"
+              variant={isActive ? "accent" : "outline"}
+            >
+              {stageCount} stages
+            </Badge>
+          )}
+        </div>
+      </div>
+      {!pending && description && (
+        <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
+          {description}
+        </p>
+      )}
+      {!collapsed && (
+        <div className="mt-3 flex items-center gap-2">
+          <Button asChild size="icon" variant="ghost">
+            <Link aria-label="Open timeline" href={`/repo/${slug}/timeline`}>
+              <GitBranch className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild size="icon" variant="ghost">
+            <Link aria-label="Open guide" href={`/repo/${slug}/guide`}>
+              <BookOpen className="h-4 w-4" />
+            </Link>
+          </Button>
+          {isSignedIn && !pending && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  aria-label="Desync repository"
+                  disabled={desyncDisabled}
+                  size="icon"
+                  variant="ghost"
+                >
+                  {desyncDisabled ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Unlink className="h-4 w-4" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Desync this repository?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes your personal implementation state. The public
+                    timeline will remain available.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={desyncDisabled}
+                    onClick={() => onDesync(repoFullName)}
+                  >
+                    Confirm desync
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
+      )}
     </div>
   );
 }

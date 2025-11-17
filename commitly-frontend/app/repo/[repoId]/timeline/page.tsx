@@ -8,6 +8,7 @@ import {
   Clock3,
   RefreshCcw,
 } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { type JSX, useCallback, useEffect, useMemo, useState } from "react";
 import TabSwitch from "@/components/navigation/tab-switch";
@@ -55,7 +56,8 @@ export default function RepoTimelinePage() {
   const auth = useAuth();
   const isSignedIn = Boolean(auth.isSignedIn);
   const getToken = auth.getToken;
-  const { getBySlug, upsertRoadmap, yourRepos, desync } = useRoadmapCatalog();
+  const { getBySlug, upsertRoadmap, yourRepos, desync, refreshUserRepos } =
+    useRoadmapCatalog();
   const repoId = params.repoId as string;
   const cachedRecord = getBySlug(repoId);
   const fallbackRecord = repoService.findById(repoId);
@@ -85,8 +87,10 @@ export default function RepoTimelinePage() {
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [isRatingLoading, setIsRatingLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
@@ -180,7 +184,8 @@ export default function RepoTimelinePage() {
       const token = await getToken?.();
       const response = await repoService.generateRoadmap(
         repoUrl,
-        token ?? undefined
+        token ?? undefined,
+        { forceRefresh: true }
       );
       if (cancelled) {
         return;
@@ -241,6 +246,27 @@ export default function RepoTimelinePage() {
       setDesyncOpen(false);
     }
   }, [desync, syncedState]);
+
+  const handleImplement = useCallback(async () => {
+    if (!(identity && isSignedIn)) {
+      setActionError("Sign in to implement this roadmap.");
+      return;
+    }
+    setIsSyncing(true);
+    setActionError(null);
+    const token = await getToken?.();
+    const response = await repoService.syncRepo(
+      identity.owner,
+      identity.repoName,
+      token ?? undefined
+    );
+    if (response.ok) {
+      await refreshUserRepos();
+    } else {
+      setActionError(response.error ?? "Unable to sync repository.");
+    }
+    setIsSyncing(false);
+  }, [getToken, identity, isSignedIn, refreshUserRepos]);
 
   // Fetch user rating when identity and auth are available
   useEffect(() => {
@@ -374,6 +400,15 @@ export default function RepoTimelinePage() {
           <h1 className="font-semibold text-2xl">{headerTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {!syncedState && identity && (
+            <Button
+              disabled={!isSignedIn || isSyncing}
+              onClick={handleImplement}
+              size="sm"
+            >
+              {isSyncing ? "Syncing…" : "Implement"}
+            </Button>
+          )}
           {syncedState && (
             <Button
               onClick={() => setDesyncOpen(true)}
@@ -386,6 +421,12 @@ export default function RepoTimelinePage() {
           <TabSwitch repoId={repoId} />
         </div>
       </div>
+
+      {actionError && (
+        <p className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive text-sm">
+          {actionError}
+        </p>
+      )}
 
       {(showLoadingState || error) && (
         <section className="rounded-2xl border border-border/60 border-dashed bg-card/60 p-6 text-muted-foreground text-sm">
@@ -493,6 +534,7 @@ export default function RepoTimelinePage() {
       {activeRoadmap && (
         <TimelineCanvas
           isSignedIn={isSignedIn}
+          repoSlug={repoId}
           stages={timelineStages}
           statusIcon={statusIcon}
         />
@@ -519,10 +561,12 @@ function TimelineCanvas({
   stages,
   statusIcon,
   isSignedIn,
+  repoSlug,
 }: {
   stages: RepoTimelineStage[];
   statusIcon: Record<RepoTimelineStage["status"], JSX.Element>;
   isSignedIn: boolean;
+  repoSlug: string;
 }) {
   return (
     <section className="relative mx-auto w-full max-w-5xl px-2">
@@ -532,7 +576,7 @@ function TimelineCanvas({
           const align = index % 2 === 0 ? "left" : "right";
           const isCurrent = isSignedIn && stage.status === "in-progress";
           return (
-            <div className="grid md:contents" key={stage.id}>
+            <div className="grid md:contents" id={stage.id} key={stage.id}>
               <div
                 className={cn(
                   "md:col-start-1",
@@ -544,6 +588,7 @@ function TimelineCanvas({
                   align={align}
                   isCurrent={isCurrent}
                   isSignedIn={isSignedIn}
+                  repoSlug={repoSlug}
                   stage={stage}
                   statusIcon={statusIcon[stage.status]}
                 />
@@ -584,12 +629,14 @@ function TimelineNodeCard({
   statusIcon,
   isCurrent,
   isSignedIn,
+  repoSlug,
 }: {
   stage: RepoTimelineStage;
   align: "left" | "right";
   statusIcon: JSX.Element;
   isCurrent: boolean;
   isSignedIn: boolean;
+  repoSlug: string;
 }) {
   return (
     <Collapsible className="group">
@@ -667,8 +714,10 @@ function TimelineNodeCard({
           <div className="flex items-center justify-between border-border/60 border-t px-6 py-3 text-muted-foreground text-xs">
             <span>ETA: {stage.eta}</span>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost">
-                Open guide
+              <Button asChild size="sm" variant="ghost">
+                <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
+                  Open guide
+                </Link>
               </Button>
               <CollapsibleTrigger asChild>
                 <Button

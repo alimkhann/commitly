@@ -8,7 +8,8 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -18,6 +19,7 @@ import {
   useState,
 } from "react";
 import TabSwitch from "@/components/navigation/tab-switch";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { repoService } from "@/lib/services/repos";
@@ -25,6 +27,7 @@ import { repoService } from "@/lib/services/repos";
 export default function RepoGuidePage() {
   const params = useParams();
   const repoId = params.repoId as string;
+  const searchParams = useSearchParams();
   const { isSignedIn } = useAuth();
   const repo = repoService.findById(repoId);
   const [message, setMessage] = useState("");
@@ -35,6 +38,15 @@ export default function RepoGuidePage() {
     () => (isSignedIn ? (repo?.guideThread ?? []) : []),
     [repo, isSignedIn]
   );
+
+  const stageId = searchParams?.get("stage");
+
+  const stageContext = useMemo(() => {
+    if (!(repo && stageId)) {
+      return null;
+    }
+    return repo.timeline.find((stage) => stage.id === stageId) ?? null;
+  }, [repo, stageId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,6 +86,26 @@ export default function RepoGuidePage() {
       </div>
 
       <div className="mt-8 flex flex-1 flex-col items-center">
+        {stageContext && (
+          <div className="mb-6 w-full max-w-3xl rounded-3xl border border-border/50 bg-card/70 p-5 shadow-inner">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-2">
+                <Badge variant="outline">Timeline context</Badge>
+                <div>
+                  <p className="font-semibold text-lg">{stageContext.title}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {stageContext.summary}
+                  </p>
+                </div>
+              </div>
+              <Button asChild size="sm" variant="ghost">
+                <Link href={`/repo/${repoId}/timeline#${stageContext.id}`}>
+                  Back to stage
+                </Link>
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="mt-6 flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 overflow-y-auto pb-6">
           {thread.length === 0 ? (
             <div className="rounded-2xl border border-border/60 border-dashed bg-card/40 p-6 text-center text-muted-foreground text-sm">

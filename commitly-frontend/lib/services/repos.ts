@@ -73,24 +73,29 @@ export type RoadmapCatalogPage = {
 };
 
 export type CatalogFilters = {
-  page?: number
-  page_size?: number
-  language?: string
-  tag?: string
-  difficulty?: string
-  min_rating?: number
-  min_views?: number
-  min_syncs?: number
-  sort?: "newest" | "most_viewed" | "most_synced" | "highest_rated" | "trending"
-}
+  page?: number;
+  page_size?: number;
+  language?: string;
+  tag?: string;
+  difficulty?: string;
+  min_rating?: number;
+  min_views?: number;
+  min_syncs?: number;
+  sort?:
+    | "newest"
+    | "most_viewed"
+    | "most_synced"
+    | "highest_rated"
+    | "trending";
+};
 
 export type CatalogPage = {
-  items: RoadmapResponseBody[]
-  page: number
-  page_size: number
-  total_count: number
-  total_pages: number
-}
+  items: RoadmapResponseBody[];
+  page: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+};
 
 export type RepoImportResult = ApiClientResponse<RoadmapResponseBody> & {
   skipped?: boolean;
@@ -193,7 +198,8 @@ export const repoService = {
 
   async generateRoadmap(
     repoUrl: string,
-    authToken?: string
+    authToken?: string,
+    options?: { forceRefresh?: boolean }
   ): Promise<RepoImportResult> {
     if (!repoUrl.trim()) {
       return { ok: false, status: 0, error: "Repository URL is required." };
@@ -212,7 +218,10 @@ export const repoService = {
     return apiClient<RoadmapResponseBody>(env.apiBaseUrl, {
       path: API_ROUTES.generateRoadmap,
       method: "POST",
-      body: { repo_url: repoUrl },
+      body: {
+        repo_url: repoUrl,
+        force_refresh: options?.forceRefresh ?? false,
+      },
       authToken,
     });
   },
@@ -225,19 +234,25 @@ export const repoService = {
     }
 
     // Build query string from filters
-    const params = new URLSearchParams()
-    if (filters?.page) params.set("page", filters.page.toString())
-    if (filters?.page_size) params.set("page_size", filters.page_size.toString())
-    if (filters?.language) params.set("language", filters.language)
-    if (filters?.tag) params.set("tag", filters.tag)
-    if (filters?.difficulty) params.set("difficulty", filters.difficulty)
-    if (filters?.min_rating !== undefined) params.set("min_rating", filters.min_rating.toString())
-    if (filters?.min_views !== undefined) params.set("min_views", filters.min_views.toString())
-    if (filters?.min_syncs !== undefined) params.set("min_syncs", filters.min_syncs.toString())
-    if (filters?.sort) params.set("sort", filters.sort)
+    const params = new URLSearchParams();
+    if (filters?.page) params.set("page", filters.page.toString());
+    if (filters?.page_size)
+      params.set("page_size", filters.page_size.toString());
+    if (filters?.language) params.set("language", filters.language);
+    if (filters?.tag) params.set("tag", filters.tag);
+    if (filters?.difficulty) params.set("difficulty", filters.difficulty);
+    if (filters?.min_rating !== undefined)
+      params.set("min_rating", filters.min_rating.toString());
+    if (filters?.min_views !== undefined)
+      params.set("min_views", filters.min_views.toString());
+    if (filters?.min_syncs !== undefined)
+      params.set("min_syncs", filters.min_syncs.toString());
+    if (filters?.sort) params.set("sort", filters.sort);
 
-    const queryString = params.toString()
-    const path = queryString ? `${API_ROUTES.catalog}?${queryString}` : API_ROUTES.catalog
+    const queryString = params.toString();
+    const path = queryString
+      ? `${API_ROUTES.catalog}?${queryString}`
+      : API_ROUTES.catalog;
 
     return apiClient<CatalogPage>(env.apiBaseUrl, {
       path,

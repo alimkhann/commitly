@@ -34,7 +34,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { RepoRecord } from "@/data/repos";
-import { githubService } from "@/lib/services/github";
 import { type RoadmapResponseBody, repoService } from "@/lib/services/repos";
 
 const mapStaticRecordToRoadmap = (record: RepoRecord): RoadmapResponseBody => {
@@ -66,7 +65,7 @@ export default function SearchPage() {
   const repoList = useMemo(() => repoService.list(), []);
   const { synced, yourRepos, loading, refreshUserRepos, desync } =
     useRoadmapCatalog();
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn } = useAuth();
   const [publicRepos, setPublicRepos] = useState<RoadmapResponseBody[]>([]);
   const [publicMeta, setPublicMeta] = useState<{
     total_count: number;
@@ -75,33 +74,7 @@ export default function SearchPage() {
   } | null>(null);
   const [publicLoading, setPublicLoading] = useState(false);
   const [publicError, setPublicError] = useState<string | null>(null);
-  const [githubConnected, setGithubConnected] = useState(false);
-  const [isCheckingGithub, setIsCheckingGithub] = useState(false);
-  const [syncingRepo, setSyncingRepo] = useState<string | null>(null);
   const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const checkStatus = async () => {
-      if (!(isSignedIn && getToken)) {
-        setGithubConnected(false);
-        return;
-      }
-      setIsCheckingGithub(true);
-      const token = await getToken();
-      const response = await githubService.status(token ?? undefined);
-      if (!cancelled) {
-        const connected =
-          response.ok && "data" in response && response.data?.connected;
-        setGithubConnected(Boolean(connected));
-        setIsCheckingGithub(false);
-      }
-    };
-    checkStatus();
-    return () => {
-      cancelled = true;
-    };
-  }, [getToken, isSignedIn]);
 
   const backendConfigured = repoService.isBackendConfigured();
 
@@ -193,26 +166,6 @@ export default function SearchPage() {
     }
     return publicRepos;
   }, [backendConfigured, filteredRepos, publicRepos]);
-
-  const handleImplement = async (fullName: string) => {
-    if (!(isSignedIn && githubConnected)) {
-      return;
-    }
-    const identity = repoService.buildIdentityFromFullName(fullName);
-    setSyncingRepo(identity.slug);
-    const token = await getToken?.();
-    const response = await repoService.syncRepo(
-      identity.owner,
-      identity.repoName,
-      token ?? undefined
-    );
-    if (response.ok) {
-      await refreshUserRepos();
-    } else {
-      setPublicError(response.error ?? "Unable to sync repository.");
-    }
-    setSyncingRepo(null);
-  };
 
   const handleDesync = async (fullName: string) => {
     if (!isSignedIn) {
@@ -468,19 +421,6 @@ export default function SearchPage() {
                         Open timeline
                       </Link>
                     </Button>
-                    {isSignedIn && githubConnected && !isSynced && (
-                      <Button
-                        className="flex-1"
-                        disabled={
-                          syncingRepo === identity.slug || isCheckingGithub
-                        }
-                        onClick={() => handleImplement(repo.repo.full_name)}
-                      >
-                        {syncingRepo === identity.slug
-                          ? "Syncing…"
-                          : "Implement"}
-                      </Button>
-                    )}
                     {isSignedIn && isSynced && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
