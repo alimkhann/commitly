@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import math
-from typing import Sequence
+from typing import Any, Callable, Sequence, cast
 
 from fastapi import HTTPException, status
 
@@ -37,6 +38,8 @@ from app.services.roadmap_repository import (
     UserSyncedRepoStore,
 )
 from app.services.roadmap_view_tracker import RoadmapViewTrackerService
+
+BlockingCallable = Callable[..., Any]
 
 
 class RoadmapService:
@@ -79,11 +82,13 @@ class RoadmapService:
             cached = await self._cache.get(cache_key)
             if cached:
                 if actor_id:
-                    self._pin_store.pin(actor_id, identity.full_name)
+                    await self._run_db(
+                        self._pin_store.pin, actor_id, identity.full_name
+                    )
                 return RoadmapResponse.model_validate(cached)
         token = None
         if actor_id:
-            record = self._token_store.get_token(actor_id)
+            record = await self._run_db(self._token_store.get_token, actor_id)
             if record:
                 token = record.access_token
         if token is None:
@@ -118,7 +123,7 @@ class RoadmapService:
             )
         chunks = self._build_chunks(repo.full_name, commits)
         try:
-            self._chunk_store.persist(chunks)
+            await self._run_db(self._chunk_store.persist, chunks)
         except ChunkStorageError as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -150,12 +155,12 @@ class RoadmapService:
             await self._cache.set(
                 cache_key, response.model_dump(mode="json"), self._cache_ttl
             )
-        self._result_store.upsert(response)
-        self._pin_store.pin(actor_id, repo.full_name)
+        await self._run_db(self._result_store.upsert, response)
+        await self._run_db(self._pin_store.pin, actor_id, repo.full_name)
         return response
 
     async def get_cached(self, repo_full_name: str) -> RoadmapResponse:
-        result = self._result_store.get(repo_full_name)
+        result = await self._run_db(self._result_store.get, repo_full_name)
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -164,7 +169,7 @@ class RoadmapService:
         return result
 
     async def list_synced(self) -> list[RoadmapResponse]:
-        return self._result_store.list()
+        return await self._run_db(self._result_store.list)
 
     async def list_catalog(
         self,
@@ -179,7 +184,8 @@ class RoadmapService:
         sort: str = "newest",
     ) -> tuple[list[RoadmapResponse], int]:
         """List catalog with filters and pagination."""
-        return self._result_store.list_catalog(
+        return await self._run_db(
+            self._result_store.list_catalog,
             page=page,
             page_size=page_size,
             language=language,
@@ -204,50 +210,31 @@ class RoadmapService:
             repo_full_name: Full repository name (owner/repo)
             user_id: User identifier (optional for anonymous users)
         """
-        import asyncio
-
-        if not self._view_tracker:
+        view_tracker = self._view_tracker
+        if not view_tracker:
             # View tracking disabled
             return
 
-        # Wrap sync DB calls in executor
-        def record_view():
-            # Check if view should be counted (respects cooldown period)
-            should_count = self._view_tracker.increment_view_if_eligible(
-                repo_full_name, user_id
-            )
-
-            if should_count:
-                # Increment the view count on the roadmap
-                self._result_store.increment_view_count(repo_full_name)
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, record_view)
+        should_count = await self._run_db(
+            view_tracker.increment_view_if_eligible,
+            repo_full_name,
+            user_id,
+        )
+        if should_count:
+            await self._run_db(self._result_store.increment_view_count, repo_full_name)
 
     async def list_user_pins(self, user_id: str) -> list[RoadmapResponse]:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._pin_store.list, user_id)
+        return await self._run_db(self._pin_store.list, user_id)
 
     async def list_user_repos(self, user_id: str) -> list[UserRepoStateResponse]:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._pin_store.list_states, user_id)
+        return await self._run_db(self._pin_store.list_states, user_id)
 
     async def sync_repo(
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
-        import asyncio
-
         full_name = f"{owner}/{repo}"
 
-        # Wrap DB operations in executor
-        loop = asyncio.get_event_loop()
-
-        def get_roadmap():
-            return self._result_store.get(full_name)
-
-        roadmap = await loop.run_in_executor(None, get_roadmap)
+        roadmap = await self._run_db(self._result_store.get, full_name)
 
         if roadmap is None:
             await self.generate(
@@ -255,7 +242,7 @@ class RoadmapService:
                 force_refresh=False,
                 actor_id=user_id,
             )
-            roadmap = await loop.run_in_executor(None, get_roadmap)
+            roadmap = await self._run_db(self._result_store.get, full_name)
 
         if roadmap is None:
             raise HTTPException(
@@ -263,7 +250,7 @@ class RoadmapService:
                 detail="Roadmap could not be generated for this repository.",
             )
 
-        def check_and_upsert():
+        def check_and_upsert() -> tuple[bool, RoadmapResponse | None]:
             states = self._pin_store.list_states(user_id)
             was_synced = any(state.repo_full_name == full_name for state in states)
 
@@ -282,7 +269,7 @@ class RoadmapService:
 
             return was_synced, record_after
 
-        was_synced, record_after = await loop.run_in_executor(None, check_and_upsert)
+        was_synced, record_after = await self._run_db(check_and_upsert)
 
         return UserRepoStateResponse(
             repo_full_name=full_name,
@@ -294,8 +281,6 @@ class RoadmapService:
         )
 
     async def desync_repo(self, owner: str, repo: str, user_id: str) -> None:
-        import asyncio
-
         full_name = f"{owner}/{repo}"
 
         def desync():
@@ -305,20 +290,15 @@ class RoadmapService:
             if had_state:
                 self._result_store.decrement_sync_count(full_name)
 
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, desync)
+        await self._run_db(desync)
 
     async def unpin_repo(self, user_id: str, repo_full_name: str) -> None:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._pin_store.unpin, user_id, repo_full_name)
+        await self._run_db(self._pin_store.unpin, user_id, repo_full_name)
 
     async def archive_repo(
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
         """Archive a repository for a user."""
-        import asyncio
-
         full_name = f"{owner}/{repo}"
 
         def archive():
@@ -334,7 +314,11 @@ class RoadmapService:
             self._pin_store.archive(user_id, full_name)
             updated_states = self._pin_store.list_states(user_id)
             updated_state = next(
-                (state for state in updated_states if state.repo_full_name == full_name),
+                (
+                    state
+                    for state in updated_states
+                    if state.repo_full_name == full_name
+                ),
                 None,
             )
             if not updated_state:
@@ -344,15 +328,12 @@ class RoadmapService:
                 )
             return updated_state
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, archive)
+        return await self._run_db(archive)
 
     async def unarchive_repo(
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
         """Unarchive a repository for a user."""
-        import asyncio
-
         full_name = f"{owner}/{repo}"
 
         def unarchive():
@@ -368,7 +349,11 @@ class RoadmapService:
             self._pin_store.unarchive(user_id, full_name)
             updated_states = self._pin_store.list_states(user_id)
             updated_state = next(
-                (state for state in updated_states if state.repo_full_name == full_name),
+                (
+                    state
+                    for state in updated_states
+                    if state.repo_full_name == full_name
+                ),
                 None,
             )
             if not updated_state:
@@ -378,30 +363,27 @@ class RoadmapService:
                 )
             return updated_state
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, unarchive)
+        return await self._run_db(unarchive)
 
     async def list_archived_repos(self, user_id: str) -> list[UserRepoStateResponse]:
         """List archived repositories for a user."""
-        import asyncio
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._pin_store.list_archived, user_id)
+        return await self._run_db(self._pin_store.list_archived, user_id)
 
     async def set_rating(
         self, user_id: str, owner: str, repo: str, rating: int
     ) -> RatingResponse:
         """Set or update a user's rating for a repository."""
-        import asyncio
-
         if not self._rating_store:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Rating service is not available",
             )
         full_name = f"{owner}/{repo}"
+        rating_store = self._rating_store
 
         def upsert():
-            record = self._rating_store.upsert_rating(user_id, full_name, rating)
+            assert rating_store is not None
+            record = rating_store.upsert_rating(user_id, full_name, rating)
             return RatingResponse(
                 rating=record.rating,
                 repo_full_name=record.repo_full_name,
@@ -410,21 +392,20 @@ class RoadmapService:
                 updated_at=record.updated_at,
             )
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, upsert)
+        return await self._run_db(upsert)
 
     async def get_user_rating(
         self, user_id: str, owner: str, repo: str
     ) -> RatingResponse | None:
         """Get a user's rating for a repository."""
-        import asyncio
-
         if not self._rating_store:
             return None
         full_name = f"{owner}/{repo}"
+        rating_store = self._rating_store
 
         def get_rating():
-            record = self._rating_store.get_user_rating(user_id, full_name)
+            assert rating_store is not None
+            record = rating_store.get_user_rating(user_id, full_name)
             if not record:
                 return None
             return RatingResponse(
@@ -435,15 +416,12 @@ class RoadmapService:
                 updated_at=record.updated_at,
             )
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, get_rating)
-        return RatingResponse(
-            rating=record.rating,
-            repo_full_name=record.repo_full_name,
-            user_id=record.user_id,
-            created_at=record.created_at,
-            updated_at=record.updated_at,
-        )
+        return await self._run_db(get_rating)
+
+    async def _run_db(self, func: BlockingCallable, *args, **kwargs):
+        """Execute a blocking database operation in a worker thread."""
+
+        return await asyncio.to_thread(func, *args, **kwargs)
 
     def _parse_identity(self, repo_url: str) -> RepositoryIdentity:
         try:
@@ -513,8 +491,8 @@ class RoadmapService:
             language=repo.language,
             stars=repo.stars,
             default_branch=repo.default_branch,
-            html_url=repo.html_url,
-            owner_avatar_url=repo.owner_avatar_url,
+            html_url=cast(Any, repo.html_url),
+            owner_avatar_url=cast(Any, repo.owner_avatar_url),
             primary_language=primary_language,
             languages=languages_list,
             topics=repo.topics,

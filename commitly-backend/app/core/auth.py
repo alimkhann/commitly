@@ -242,7 +242,9 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
 
     # Use async version to avoid blocking
     jwk_data = await jwks_cache.get_key_async(kid)
-    logger.info("verify_clerk_token_async: Got JWKS data, starting signature verification")
+    logger.info(
+        "verify_clerk_token_async: Got JWKS data, starting signature verification"
+    )
 
     # Run CPU-intensive JWT operations in executor to avoid blocking
     def verify_signature():
@@ -297,7 +299,9 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
     ]
     if audience_values:
         if not any(audience in audience_values for audience in allowed_audiences):
-            logger.error(f"verify_clerk_token_async: Invalid audience {audience_values}")
+            logger.error(
+                f"verify_clerk_token_async: Invalid audience {audience_values}"
+            )
             raise InvalidClerkToken("Invalid audience")
 
     if settings.clerk_authorized_parties:
@@ -308,7 +312,9 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
                 _normalize_party(party) for party in settings.clerk_authorized_parties
             }
             if "*" not in allowed and normalized_azp not in allowed:
-                logger.error(f"verify_clerk_token_async: Unauthorized party {normalized_azp}")
+                logger.error(
+                    f"verify_clerk_token_async: Unauthorized party {normalized_azp}"
+                )
                 raise InvalidClerkToken("Token not issued for this application")
         else:
             logger.error("verify_clerk_token_async: Missing authorized party")
@@ -401,14 +407,16 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
                 # Use async version to avoid blocking the event loop
                 # Add timeout to prevent hanging
                 request.state.clerk_claims = await asyncio.wait_for(
-                    verify_clerk_token_async(token),
-                    timeout=10.0
+                    verify_clerk_token_async(token), timeout=10.0
                 )
             except asyncio.TimeoutError:
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.error("Clerk token verification timed out after 10 seconds")
-                request.state.clerk_auth_error = InvalidClerkToken("Token verification timeout")
+                request.state.clerk_auth_error = InvalidClerkToken(
+                    "Token verification timeout"
+                )
             except InvalidClerkToken as exc:
                 request.state.clerk_auth_error = exc
 

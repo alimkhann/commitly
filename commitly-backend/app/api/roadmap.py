@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -56,114 +57,27 @@ async def list_roadmaps(
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> CatalogPage:
     """List catalog with filters, sorting, and pagination."""
-    import logging
-    import math
+    items, total_count = await service.list_catalog(
+        page=page,
+        page_size=page_size,
+        language=language,
+        tag=tag,
+        difficulty=difficulty,
+        min_rating=min_rating,
+        min_views=min_views,
+        min_syncs=min_syncs,
+        sort=sort,
+    )
 
-    logger = logging.getLogger(__name__)
-    try:
-        logger.info(f"list_roadmaps: Starting with page={page}, page_size={page_size}")
+    total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
 
-        # Call service method - wrap sync database call in executor
-        # SQLAlchemy sessions are not thread-safe, so we must use executor carefully
-        import asyncio
-        import time
-
-        start_time = time.time()
-        logger.info("list_roadmaps: Calling service.list_catalog")
-
-        # Wrap the sync database call in executor to avoid blocking event loop
-        # The service.list_catalog is async but calls sync DB code internally
-        def call_db():
-            try:
-                logger.info("list_roadmaps.executor: Starting database call")
-                # Use the service's internal result_store directly for executor
-                # This avoids issues with async/sync boundaries
-                if hasattr(service, "_result_store"):
-                    return service._result_store.list_catalog(
-                        page=page,
-                        page_size=page_size,
-                        language=language,
-                        tag=tag,
-                        difficulty=difficulty,
-                        min_rating=min_rating,
-                        min_views=min_views,
-                        min_syncs=min_syncs,
-                        sort=sort,
-                    )
-                else:
-                    # For test stubs, fallback to async service method
-                    # This won't work in executor, but should work in tests
-                    raise RuntimeError(
-                        "Service doesn't have _result_store and executor can't "
-                        "call async methods"
-                    )
-            except Exception as e:
-                elapsed = time.time() - start_time
-                logger.error(
-                    f"list_roadmaps.executor: Error after {elapsed:.2f}s - "
-                    f"{type(e).__name__}: {e}",
-                    exc_info=True,
-                )
-                raise
-
-        # Check if we have _result_store (production) or need to use async method (tests)
-        if hasattr(service, "_result_store"):
-            # Production: Use executor for sync DB call
-            loop = asyncio.get_event_loop()
-            try:
-                items, total_count = await asyncio.wait_for(
-                    loop.run_in_executor(None, call_db),
-                    timeout=25.0,  # 25 second timeout (less than Render's 30s)
-                )
-                elapsed = time.time() - start_time
-                logger.info(
-                    f"list_roadmaps: Query completed in {elapsed:.2f}s - "
-                    f"Retrieved {len(items)} items, total={total_count}"
-                )
-            except asyncio.TimeoutError:
-                elapsed = time.time() - start_time
-                logger.error(
-                    f"list_roadmaps: Database query timed out after {elapsed:.2f}s"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail="Database query timed out",
-                )
-        else:
-            # Tests: Use async service method directly
-            logger.info("list_roadmaps: Using async service method (test mode)")
-            items, total_count = await service.list_catalog(
-                page=page,
-                page_size=page_size,
-                language=language,
-                tag=tag,
-                difficulty=difficulty,
-                min_rating=min_rating,
-                min_views=min_views,
-                min_syncs=min_syncs,
-                sort=sort,
-            )
-
-        total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
-
-        return CatalogPage(
-            items=items,
-            page=page,
-            page_size=page_size,
-            total_count=total_count,
-            total_pages=total_pages,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            f"list_roadmaps: Unexpected error - {type(e).__name__}: {e}",
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve catalog: {str(e)}",
-        ) from e
+    return CatalogPage(
+        items=items,
+        page=page,
+        page_size=page_size,
+        total_count=total_count,
+        total_pages=total_pages,
+    )
 
 
 @router.get("/cached/{owner}/{repo}", response_model=RoadmapResponse)
@@ -276,7 +190,9 @@ async def set_repository_rating(
     current_user: ClerkClaims = Depends(require_clerk_auth),
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> RatingResponse:
-    return await service.set_rating(get_user_id(current_user), owner, repo, payload.rating)
+    return await service.set_rating(
+        get_user_id(current_user), owner, repo, payload.rating
+    )
 
 
 @router.get("/{owner}/{repo}/rating", response_model=RatingResponse | None)

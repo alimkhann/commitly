@@ -38,70 +38,29 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle application startup and shutdown."""
+    """
+    Keep startup lightweight: only verify we can talk to the database.
+    Heavy schema fixes belong in Alembic migrations (run separately).
+    """
     import asyncio
 
-    # Startup: Test database connection
-    logger.info("Testing database connection...")
-    try:
-        def test_connection():
+    async def ping_database() -> None:
+        def _ping():
             with SessionLocal() as session:
                 session.execute(text("SELECT 1"))
-                session.commit()
 
-        # Run in executor to avoid blocking
         loop = asyncio.get_event_loop()
-        await asyncio.wait_for(
-            loop.run_in_executor(None, test_connection),
-            timeout=5.0
-        )
-        logger.info("✅ Database connection successful")
-    except asyncio.TimeoutError:
-        logger.error("❌ Database connection timeout after 5 seconds")
-    except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}", exc_info=True)
+        await loop.run_in_executor(None, _ping)
 
-    # Verify schema: Check if required columns exist
-    # Note: Migrations are run in pre-deploy script, not here
-    logger.info("Verifying database schema...")
     try:
-        def verify_schema():
-            with SessionLocal() as session:
-                # Check if primary_language column exists
-                result = session.execute(
-                    text(
-                        """
-                        SELECT column_name
-                        FROM information_schema.columns
-                        WHERE table_name = 'generated_roadmaps'
-                        AND column_name = 'primary_language'
-                        """
-                    )
-                )
-                return result.fetchone() is not None
-
-        # Run in executor to avoid blocking
-        loop = asyncio.get_event_loop()
-        column_exists = await asyncio.wait_for(
-            loop.run_in_executor(None, verify_schema),
-            timeout=5.0
-        )
-
-        if column_exists:
-            logger.info("✅ Database schema verified - all required columns exist")
-        else:
-            logger.warning(
-                "⚠️ Required columns missing. Pre-deploy script should have fixed this. "
-                "If this persists, check pre-deploy command execution."
-            )
+        await asyncio.wait_for(ping_database(), timeout=5.0)
+        logger.info("✅ Database connection healthy at startup")
     except asyncio.TimeoutError:
-        logger.error("❌ Schema verification timeout after 5 seconds")
-    except Exception as e:
-        logger.error(f"❌ Schema verification failed: {e}", exc_info=True)
+        logger.error("❌ Database ping timed out (5s)")
+    except Exception as exc:  # pragma: no cover - startup diagnostic
+        logger.error(f"❌ Database ping failed: {exc}", exc_info=True)
 
-    logger.info("🚀 Application startup complete")
     yield
-    # Shutdown
     logger.info("Application shutting down")
 
 
@@ -116,25 +75,36 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-# Ensure allowed_origins is always a list
-# (validator should handle this, but type-safe check)
 if isinstance(settings.allowed_origins, str):
-    cors_origins = [settings.allowed_origins] if settings.allowed_origins else ["*"]
+    configured_origins = [settings.allowed_origins] if settings.allowed_origins else []
 else:
-    cors_origins = list(settings.allowed_origins or ["*"])
+    configured_origins = list(settings.allowed_origins or [])
 
 local_dev_origins = {
     "http://localhost:3000",
     "http://localhost:3700",
 }
-for origin in local_dev_origins:
-    if origin not in cors_origins:
-        cors_origins.append(origin)
+
+cors_origins = sorted({*configured_origins, *local_dev_origins} - {None, ""})
+
+allow_origin_regex = None
+allow_credentials = True
+
+if "*" in configured_origins:
+    # FastAPI disallows credentials when using wildcard origins. Fall back to
+    # a permissive regex and explicitly disable credentials to avoid misconfig.
+    cors_origins = sorted({*configured_origins, *local_dev_origins} - {"*", None, ""})
+    allow_origin_regex = r"https?://.*"
+    allow_credentials = False
+    logger.warning(
+        "CORS wildcard detected. Falling back to regex with credentials disabled."
+    )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins or ["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_origin_regex=allow_origin_regex,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
