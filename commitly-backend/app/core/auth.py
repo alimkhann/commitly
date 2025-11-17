@@ -222,7 +222,7 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
     """Async version of verify_clerk_token that doesn't block the event loop."""
     import asyncio
     import logging
-    
+
     logger = logging.getLogger(__name__)
     logger.info("verify_clerk_token_async: Starting token verification")
 
@@ -237,7 +237,7 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
     if not isinstance(kid, str):
         logger.error("verify_clerk_token_async: Missing key identifier")
         raise InvalidClerkToken("Missing key identifier")
-    
+
     logger.info(f"verify_clerk_token_async: Fetching JWKS for kid={kid}")
 
     # Use async version to avoid blocking
@@ -262,7 +262,7 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
         if not public_key.verify(message.encode("utf-8"), decoded_signature):
             logger.error("verify_signature: Signature verification failed")
             raise InvalidClerkToken("Signature verification failed")
-        
+
         logger.info("verify_signature: Signature verified, getting claims")
         claims = jwt.get_unverified_claims(token)
         logger.info("verify_signature: Claims retrieved")

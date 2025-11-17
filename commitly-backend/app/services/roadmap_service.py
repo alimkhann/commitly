@@ -205,7 +205,7 @@ class RoadmapService:
             user_id: User identifier (optional for anonymous users)
         """
         import asyncio
-        
+
         if not self._view_tracker:
             # View tracking disabled
             return
@@ -220,7 +220,7 @@ class RoadmapService:
             if should_count:
                 # Increment the view count on the roadmap
                 self._result_store.increment_view_count(repo_full_name)
-        
+
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, record_view)
 
@@ -238,17 +238,17 @@ class RoadmapService:
         self, owner: str, repo: str, user_id: str
     ) -> UserRepoStateResponse:
         import asyncio
-        
+
         full_name = f"{owner}/{repo}"
-        
+
         # Wrap DB operations in executor
         loop = asyncio.get_event_loop()
-        
+
         def get_roadmap():
             return self._result_store.get(full_name)
-        
+
         roadmap = await loop.run_in_executor(None, get_roadmap)
-        
+
         if roadmap is None:
             await self.generate(
                 repo_url=f"https://github.com/{full_name}",
@@ -256,17 +256,17 @@ class RoadmapService:
                 actor_id=user_id,
             )
             roadmap = await loop.run_in_executor(None, get_roadmap)
-            
+
         if roadmap is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Roadmap could not be generated for this repository.",
             )
-        
+
         def check_and_upsert():
             states = self._pin_store.list_states(user_id)
             was_synced = any(state.repo_full_name == full_name for state in states)
-            
+
             self._pin_store.upsert_state(
                 user_id,
                 full_name,
@@ -274,16 +274,16 @@ class RoadmapService:
                 is_archived=False,
                 progress_percent=0,
             )
-            
+
             record_after = self._result_store.get(full_name)
             if not was_synced:
                 self._result_store.increment_sync_count(full_name)
                 record_after = self._result_store.get(full_name)
-                
+
             return was_synced, record_after
-        
+
         was_synced, record_after = await loop.run_in_executor(None, check_and_upsert)
-        
+
         return UserRepoStateResponse(
             repo_full_name=full_name,
             status="synced",
@@ -295,16 +295,16 @@ class RoadmapService:
 
     async def desync_repo(self, owner: str, repo: str, user_id: str) -> None:
         import asyncio
-        
+
         full_name = f"{owner}/{repo}"
-        
+
         def desync():
             states = self._pin_store.list_states(user_id)
             had_state = any(state.repo_full_name == full_name for state in states)
             self._pin_store.unpin(user_id, full_name)
             if had_state:
                 self._result_store.decrement_sync_count(full_name)
-        
+
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, desync)
 
@@ -318,9 +318,9 @@ class RoadmapService:
     ) -> UserRepoStateResponse:
         """Archive a repository for a user."""
         import asyncio
-        
+
         full_name = f"{owner}/{repo}"
-        
+
         def archive():
             states = self._pin_store.list_states(user_id)
             existing_state = next(
@@ -343,7 +343,7 @@ class RoadmapService:
                     detail="Failed to archive repository.",
                 )
             return updated_state
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, archive)
 
@@ -352,9 +352,9 @@ class RoadmapService:
     ) -> UserRepoStateResponse:
         """Unarchive a repository for a user."""
         import asyncio
-        
+
         full_name = f"{owner}/{repo}"
-        
+
         def unarchive():
             archived = self._pin_store.list_archived(user_id)
             existing_archived = next(
@@ -377,7 +377,7 @@ class RoadmapService:
                     detail="Failed to unarchive repository.",
                 )
             return updated_state
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, unarchive)
 
@@ -392,14 +392,14 @@ class RoadmapService:
     ) -> RatingResponse:
         """Set or update a user's rating for a repository."""
         import asyncio
-        
+
         if not self._rating_store:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Rating service is not available",
             )
         full_name = f"{owner}/{repo}"
-        
+
         def upsert():
             record = self._rating_store.upsert_rating(user_id, full_name, rating)
             return RatingResponse(
@@ -409,7 +409,7 @@ class RoadmapService:
                 created_at=record.created_at,
                 updated_at=record.updated_at,
             )
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, upsert)
 
@@ -418,11 +418,11 @@ class RoadmapService:
     ) -> RatingResponse | None:
         """Get a user's rating for a repository."""
         import asyncio
-        
+
         if not self._rating_store:
             return None
         full_name = f"{owner}/{repo}"
-        
+
         def get_rating():
             record = self._rating_store.get_user_rating(user_id, full_name)
             if not record:
@@ -434,7 +434,7 @@ class RoadmapService:
                 created_at=record.created_at,
                 updated_at=record.updated_at,
             )
-        
+
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, get_rating)
         return RatingResponse(

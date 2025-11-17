@@ -214,16 +214,8 @@ async def list_user_repositories(
     current_user: ClerkClaims = Depends(require_clerk_auth),
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> list[UserRepoStateResponse]:
-    import asyncio
-    
-    # Wrap sync DB call in executor to avoid blocking event loop
     user_id = get_user_id(current_user)
-    
-    def get_repos():
-        return service._pin_store.list_states(user_id)
-    
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, get_repos)
+    return await service.list_user_repos(user_id)
 
 
 @router.post("/sync/{owner}/{repo}", response_model=UserRepoStateResponse)
@@ -272,16 +264,8 @@ async def list_archived_repositories(
     current_user: ClerkClaims = Depends(require_clerk_auth),
     service: RoadmapService = Depends(get_roadmap_service),
 ) -> list[UserRepoStateResponse]:
-    import asyncio
-    
-    # Wrap sync DB call in executor to avoid blocking event loop
     user_id = get_user_id(current_user)
-    
-    def get_archived():
-        return service._pin_store.list_archived(user_id)
-    
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, get_archived)
+    return await service.list_archived_repos(user_id)
 
 
 @router.post("/{owner}/{repo}/rating", response_model=RatingResponse)
