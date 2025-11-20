@@ -1,13 +1,33 @@
 export type RepoDifficulty = "intro" | "easy" | "medium" | "hard";
 
+export type StageTask = {
+  label: string;
+  steps: string[];
+  files?: string[];
+  commands?: string[];
+};
+
+export type CodeExample = {
+  file: string;
+  language: string;
+  description: string;
+  snippet: string;
+};
+
 export type RepoTimelineStage = {
   id: string;
+  index?: number;
   title: string;
   summary: string;
   status: "not-started" | "in-progress" | "done";
   eta: string;
-  tasks: string[];
+  category?: "setup" | "feature" | "refactor" | "testing" | "ops" | "other";
+  difficulty?: "intro" | "easy" | "medium" | "hard";
+  goals?: string[];
+  tasks: StageTask[];
+  code_examples?: CodeExample[];
   resources: { label: string; href: string }[];
+  commit_window?: string[];
 };
 
 export type RepoGuideMessage = {
@@ -52,9 +72,14 @@ export const repos: RepoRecord[] = [
         status: "done",
         eta: "15m",
         tasks: [
-          "Install Python 3.11 + Poetry",
-          "Run `make bootstrap` to pull weights",
-          "Validate CUDA availability",
+          {
+            label: "Setup Environment",
+            steps: [
+              "Install Python 3.11 + Poetry",
+              "Run `make bootstrap` to pull weights",
+              "Validate CUDA availability",
+            ],
+          },
         ],
         resources: [
           { label: "Project README", href: "https://github.com/deepseek" },
@@ -69,9 +94,14 @@ export const repos: RepoRecord[] = [
         status: "in-progress",
         eta: "40m",
         tasks: [
-          "Set `TRACE_AGENTS=1` env variable",
-          "Add request payload from docs/examples",
-          "Capture spans in Jaeger / OpenTelemetry",
+          {
+            label: "Enable Tracing",
+            steps: [
+              "Set `TRACE_AGENTS=1` env variable",
+              "Add request payload from docs/examples",
+              "Capture spans in Jaeger / OpenTelemetry",
+            ],
+          },
         ],
         resources: [
           { label: "Tracing guide", href: "#" },
@@ -86,9 +116,14 @@ export const repos: RepoRecord[] = [
         status: "not-started",
         eta: "1h",
         tasks: [
-          "Wrap SSE writer with reconnect support",
-          "Normalize error payloads to JSON schema",
-          "Add integration test that simulates flaky upstream",
+          {
+            label: "Implement Retry Logic",
+            steps: [
+              "Wrap SSE writer with reconnect support",
+              "Normalize error payloads to JSON schema",
+              "Add integration test that simulates flaky upstream",
+            ],
+          },
         ],
         resources: [
           { label: "Streaming RFC", href: "#" },
@@ -140,9 +175,14 @@ export const repos: RepoRecord[] = [
         status: "done",
         eta: "20m",
         tasks: [
-          "Install Docker Desktop",
-          "Open repo in Codespaces/devcontainer",
-          "Run `yarn watch` and `yarn web`",
+          {
+            label: "Configure Devcontainer",
+            steps: [
+              "Install Docker Desktop",
+              "Open repo in Codespaces/devcontainer",
+              "Run `yarn watch` and `yarn web`",
+            ],
+          },
         ],
         resources: [
           { label: "Development docs", href: "#" },
@@ -157,9 +197,14 @@ export const repos: RepoRecord[] = [
         status: "in-progress",
         eta: "35m",
         tasks: [
-          "Audit `notebookKernelQuickPick.ts`",
-          "Add `recommended` badge using codicons",
-          "Write smoke test that asserts quick pick values",
+          {
+            label: "Update Kernel Picker",
+            steps: [
+              "Audit `notebookKernelQuickPick.ts`",
+              "Add `recommended` badge using codicons",
+              "Write smoke test that asserts quick pick values",
+            ],
+          },
         ],
         resources: [
           { label: "Notebook guide", href: "#" },
@@ -174,9 +219,14 @@ export const repos: RepoRecord[] = [
         status: "not-started",
         eta: "50m",
         tasks: [
-          "Use `standardTelemetryService` with feature flag",
-          "Record kernel id & workspace trust state",
-          "Document payload contract",
+          {
+            label: "Add Telemetry",
+            steps: [
+              "Use `standardTelemetryService` with feature flag",
+              "Record kernel id & workspace trust state",
+              "Document payload contract",
+            ],
+          },
         ],
         resources: [{ label: "Telemetry checklist", href: "#" }],
       },
@@ -224,9 +274,14 @@ export const repos: RepoRecord[] = [
         status: "done",
         eta: "25m",
         tasks: [
-          "Install Vulkan SDK 1.3.290",
-          "Verify `glslc` on PATH",
-          "Run `./build-android-armeabi-v7a.sh`",
+          {
+            label: "Validate Toolchain",
+            steps: [
+              "Install Vulkan SDK 1.3.290",
+              "Verify `glslc` on PATH",
+              "Run `./build-android-armeabi-v7a.sh`",
+            ],
+          },
         ],
         resources: [{ label: "Android build doc", href: "#" }],
       },
@@ -238,9 +293,14 @@ export const repos: RepoRecord[] = [
         status: "in-progress",
         eta: "55m",
         tasks: [
-          "Enable `NCNN_INT8=ON`",
-          "Run benchmark with `BENCHMARK_OP=1`",
-          "Capture perfetto trace on Pixel 6",
+          {
+            label: "Profile Int8 Path",
+            steps: [
+              "Enable `NCNN_INT8=ON`",
+              "Run benchmark with `BENCHMARK_OP=1`",
+              "Capture perfetto trace on Pixel 6",
+            ],
+          },
         ],
         resources: [
           { label: "Quantization notes", href: "#" },
@@ -255,9 +315,14 @@ export const repos: RepoRecord[] = [
         status: "not-started",
         eta: "35m",
         tasks: [
-          "Patch `.github/workflows/nightly.yml`",
-          "Strip symbols after linking",
-          "Upload checksums for release manager",
+          {
+            label: "Optimize CI Artifacts",
+            steps: [
+              "Patch `.github/workflows/nightly.yml`",
+              "Strip symbols after linking",
+              "Upload checksums for release manager",
+            ],
+          },
         ],
         resources: [{ label: "CI storage policy", href: "#" }],
       },

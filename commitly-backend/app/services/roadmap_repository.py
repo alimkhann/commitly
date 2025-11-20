@@ -330,8 +330,12 @@ class UserSyncedRepoStore:
         bind = self._session.get_bind()
         if bind is None:
             return
-        UserSyncedRepo.__table__.create(bind=bind, checkfirst=True) # noqa E501 # type: ignore[attr-defined]
-        GeneratedRoadmap.__table__.create(bind=bind, checkfirst=True) # noqa E501 # type: ignore[attr-defined]
+        UserSyncedRepo.__table__.create(
+            bind=bind, checkfirst=True
+        )  # noqa E501 # type: ignore[attr-defined]
+        GeneratedRoadmap.__table__.create(
+            bind=bind, checkfirst=True
+        )  # noqa E501 # type: ignore[attr-defined]
 
     def pin(self, user_id: str | None, full_name: str) -> None:
         if not user_id:

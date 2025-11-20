@@ -2,14 +2,12 @@
 
 import { useAuth } from "@clerk/nextjs";
 import {
-  BookOpen,
+  Archive,
   ChevronLeft,
-  GitBranch,
   Hammer,
   Loader2,
   MoreHorizontal,
   Search,
-  Archive,
   Unlink,
 } from "lucide-react";
 import Image from "next/image";
@@ -380,13 +378,17 @@ function SidebarRepoRow({
           asChild
           className={cn(
             "h-10 w-10 rounded-lg transition-all",
-            isActive ? "bg-primary/20 text-primary" : "bg-transparent text-muted-foreground hover:bg-muted/20 hover:text-foreground"
+            isActive
+              ? "bg-primary/20 text-primary"
+              : "bg-transparent text-muted-foreground hover:bg-muted/20 hover:text-foreground"
           )}
           size="icon"
           variant="ghost"
         >
           <Link href={`/repo/${slug}/timeline`} title={fullName}>
-            <span className="text-xs font-bold">{fullName.substring(0, 2).toUpperCase()}</span>
+            <span className="font-bold text-xs">
+              {fullName.substring(0, 2).toUpperCase()}
+            </span>
           </Link>
         </Button>
       </div>
@@ -398,7 +400,7 @@ function SidebarRepoRow({
       className={cn(
         "group relative flex items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors",
         isActive
-          ? "bg-accent text-accent-foreground font-medium"
+          ? "bg-accent font-medium text-accent-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
       )}
     >
@@ -448,10 +450,12 @@ function SidebarRepoRow({
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Desync this repository?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        Desync this repository?
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes your personal implementation state. The public
-                        timeline will remain available.
+                        This removes your personal implementation state. The
+                        public timeline will remain available.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

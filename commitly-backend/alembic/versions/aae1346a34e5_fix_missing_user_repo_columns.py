@@ -5,13 +5,13 @@ Revises: add_view_tracker
 Create Date: 2025-11-20 22:13:47.814603
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
-revision = 'aae1346a34e5'
-down_revision = 'add_view_tracker'
+revision = "aae1346a34e5"
+down_revision = "add_view_tracker"
 branch_labels = None
 depends_on = None
 

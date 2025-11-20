@@ -13,6 +13,9 @@ from app.models.roadmap import (
     RatingResponse,
     RoadmapRepoSummary,
     RoadmapResponse,
+    StageTask,
+    TimelineResource,
+    TimelineStage,
     UserRepoStateResponse,
 )
 from app.services.ai.gemini import (
@@ -137,6 +140,12 @@ class RoadmapService:
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=str(exc),
             )
+
+        # Prepend Setup Stage and re-index
+        setup_stage = self._build_setup_stage(repo)
+        timeline.insert(0, setup_stage)
+        for i, stage in enumerate(timeline):
+            stage.index = i + 1
 
         # Classify difficulty using AI
         try:
@@ -502,6 +511,73 @@ class RoadmapService:
             last_pushed_at=repo.last_pushed_at,
             license=repo.license,
             contributor_count=repo.contributor_count,
+        )
+
+    def _build_setup_stage(self, repo: RepositoryMetadata) -> TimelineStage:
+        tasks = [
+            StageTask(
+                label="Clone Repository",
+                steps=[
+                    f"git clone https://github.com/{repo.full_name}.git",
+                    f"cd {repo.full_name.split('/')[-1]}",
+                ],
+                commands=[f"git clone https://github.com/{repo.full_name}.git"],
+            )
+        ]
+
+        # Heuristic for setup based on language
+        lang = (repo.language or "").lower()
+        if lang in ["python"]:
+            tasks.append(
+                StageTask(
+                    label="Install Dependencies",
+                    steps=["Create a virtual environment", "Install requirements"],
+                    commands=[
+                        "python -m venv venv",
+                        "source venv/bin/activate",
+                        "pip install -r requirements.txt",
+                    ],
+                )
+            )
+        elif lang in ["javascript", "typescript"]:
+            tasks.append(
+                StageTask(
+                    label="Install Dependencies",
+                    steps=["Install NPM packages"],
+                    commands=["npm install"],
+                )
+            )
+        elif lang in ["go"]:
+            tasks.append(
+                StageTask(
+                    label="Install Dependencies",
+                    steps=["Download Go modules"],
+                    commands=["go mod download"],
+                )
+            )
+        elif lang in ["rust"]:
+            tasks.append(
+                StageTask(
+                    label="Build Project",
+                    steps=["Build with Cargo"],
+                    commands=["cargo build"],
+                )
+            )
+
+        return TimelineStage(
+            id="stage-setup",
+            index=0,
+            title="Project Setup & Tour",
+            summary=f"Get {repo.full_name} running locally and explore the project structure.",
+            status="not-started",
+            eta="15m",
+            category="setup",
+            difficulty="intro",
+            goals=["Clone the repository", "Install dependencies", "Verify the build"],
+            tasks=tasks,
+            resources=[
+                TimelineResource(label="Repository", href=str(repo.html_url)),
+            ],
         )
 
 
