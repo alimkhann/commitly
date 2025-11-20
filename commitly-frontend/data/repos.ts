@@ -1,4 +1,4 @@
-export type RepoDifficulty = "beginner" | "intermediate" | "advanced";
+export type RepoDifficulty = "intro" | "easy" | "medium" | "hard";
 
 export type RepoTimelineStage = {
   id: string;
@@ -40,7 +40,7 @@ export const repos: RepoRecord[] = [
     stars: "112k",
     language: "Python",
     updatedAt: "2h ago",
-    difficulty: "advanced",
+    difficulty: "hard",
     tags: ["deep-learning", "agents", "streaming"],
     progress: 62,
     timeline: [
@@ -128,7 +128,7 @@ export const repos: RepoRecord[] = [
     stars: "165k",
     language: "TypeScript",
     updatedAt: "Yesterday",
-    difficulty: "intermediate",
+    difficulty: "medium",
     tags: ["desktop", "monaco", "extensions"],
     progress: 41,
     timeline: [
@@ -212,7 +212,7 @@ export const repos: RepoRecord[] = [
     stars: "20k",
     language: "C++",
     updatedAt: "3 days ago",
-    difficulty: "advanced",
+    difficulty: "hard",
     tags: ["inference", "c++", "android"],
     progress: 28,
     timeline: [

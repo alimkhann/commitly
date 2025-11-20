@@ -84,12 +84,58 @@ def clear_request_context() -> None:
     _request_context.set({})
 
 
+class ConsoleFormatter(logging.Formatter):
+    """Render log records as human-readable text."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        timestamp = datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        level = record.levelname
+        logger_name = record.name
+        message = record.getMessage()
+
+        extras = []
+        for attr in (
+            "request_id",
+            "method",
+            "path",
+            "status_code",
+            "elapsed_ms",
+            "user_id",
+            "client_ip",
+        ):
+            value = getattr(record, attr, None)
+            if value not in (None, ""):
+                extras.append(f"{attr}={value}")
+
+        extra_str = " ".join(extras)
+        if extra_str:
+            extra_str = f" [{extra_str}]"
+
+        formatted = f"{timestamp} [{level}] {logger_name}: {message}{extra_str}"
+
+        if record.exc_info:
+            formatted += f"\n{self.formatException(record.exc_info)}"
+        if record.stack_info:
+            formatted += f"\n{self.formatStack(record.stack_info)}"
+
+        return formatted
+
+
 def configure_logging() -> None:
     global _LOGGING_CONFIGURED
     if _LOGGING_CONFIGURED:
         return
 
     level = "DEBUG" if settings.debug else "INFO"
+    # Use ConsoleFormatter for local development readability
+    formatter_class = (
+        "app.core.logging.ConsoleFormatter"
+        if settings.debug
+        else "app.core.logging.JsonFormatter"
+    )
+
     dictConfig(
         {
             "version": 1,
@@ -97,7 +143,10 @@ def configure_logging() -> None:
             "formatters": {
                 "json": {
                     "()": "app.core.logging.JsonFormatter",
-                }
+                },
+                "console": {
+                    "()": "app.core.logging.ConsoleFormatter",
+                },
             },
             "filters": {
                 "request_context": {
@@ -108,7 +157,7 @@ def configure_logging() -> None:
                 "default": {
                     "class": "logging.StreamHandler",
                     "filters": ["request_context"],
-                    "formatter": "json",
+                    "formatter": "console" if settings.debug else "json",
                     "stream": "ext://sys.stdout",
                 }
             },

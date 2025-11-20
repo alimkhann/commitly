@@ -408,6 +408,15 @@ class GeminiRoadmapGenerator:
         mode: str,
     ) -> dict:
         prompt = self._build_prompt(repo, stage_budget, context)
+        logger.debug(
+            "Invoking Gemini generation",
+            extra={
+                "repo": repo.full_name,
+                "prompt_length": len(prompt),
+                "prompt_snippet": prompt[:200] + "...",
+                "attempt": attempt,
+            },
+        )
         payload = {
             "contents": [
                 {
@@ -449,6 +458,7 @@ class GeminiRoadmapGenerator:
                 extra={**extra, "error": str(exc)},
             )
             raise GeminiGenerationError(f"Gemini API network error: {exc}")
+
         if response.status_code >= 400:
             logger.error(
                 "Gemini API error",
@@ -461,7 +471,15 @@ class GeminiRoadmapGenerator:
             raise GeminiGenerationError(
                 f"Gemini API call failed (status {response.status_code})"
             )
-        logger.debug("Gemini call success", extra=extra)
+
+        logger.debug(
+            "Gemini call success",
+            extra={
+                **extra,
+                "response_length": len(response.text),
+                "response_snippet": response.text[:200] + "..."
+            }
+        )
         return response.json()
 
     async def classify_difficulty(
@@ -499,6 +517,14 @@ Based on the repository's complexity, codebase size, technologies used, and comm
 Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
 """  # noqa: E501
 
+        logger.debug(
+            "Classifying difficulty",
+            extra={
+                "repo": repo.full_name,
+                "prompt_snippet": difficulty_prompt[:200] + "..."
+            }
+        )
+
         payload = {
             "contents": [
                 {
@@ -533,6 +559,11 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
                 for part in candidate.get("content", {}).get("parts", []):
                     if "text" in part:
                         text += part["text"]
+
+            logger.debug(
+                "Difficulty classification raw response",
+                extra={"repo": repo.full_name, "raw_text": text}
+            )
 
             difficulty = text.strip().lower()
             # Validate and normalize difficulty

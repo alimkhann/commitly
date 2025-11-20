@@ -534,6 +534,11 @@ export default function RepoTimelinePage() {
             <Badge className="text-xs uppercase" variant="outline">
               {activeRoadmap.repo.language ?? "Unknown language"}
             </Badge>
+            {activeRoadmap.repo.difficulty && (
+              <Badge className="text-xs uppercase" variant="outline">
+                {activeRoadmap.repo.difficulty}
+              </Badge>
+            )}
             <Badge className="text-xs uppercase" variant="secondary">
               {activeRoadmap.repo.stars} stars
             </Badge>

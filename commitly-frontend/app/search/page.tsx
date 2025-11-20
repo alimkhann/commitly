@@ -45,7 +45,7 @@ const mapStaticRecordToRoadmap = (record: RepoRecord): RoadmapResponseBody => {
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<
-    "all" | "beginner" | "intermediate" | "advanced"
+    "all" | "intro" | "easy" | "medium" | "hard"
   >("all");
   const [sortBy, setSortBy] = useState<
     "newest" | "most_viewed" | "most_synced" | "highest_rated" | "trending"
@@ -179,7 +179,7 @@ export default function SearchPage() {
             />
           </div>
           <div className="flex gap-2">
-            {(["all", "beginner", "intermediate", "advanced"] as const).map(
+            {(["all", "intro", "easy", "medium", "hard"] as const).map(
               (level) => (
                 <Button
                   className="capitalize"
