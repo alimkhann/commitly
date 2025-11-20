@@ -6,7 +6,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import type { ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 import HomeBackground from "@/components/layout/home-background";
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper";
 import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider";
@@ -67,7 +67,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <RoadmapCatalogProvider>
             <div className="relative flex h-screen bg-background">
               <HomeBackground />
-              <SidebarWrapper />
+              <Suspense fallback={null}>
+                <SidebarWrapper />
+              </Suspense>
               <main className="relative z-10 flex h-screen flex-1 flex-col overflow-y-auto overflow-x-hidden bg-transparent">
                 {children}
               </main>

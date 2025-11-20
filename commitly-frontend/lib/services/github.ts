@@ -14,7 +14,12 @@ export type OAuthStartResponse = {
 export const githubService = {
   status(authToken?: string) {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        data: null,
+        error: "API base URL missing",
+      });
     }
     return apiClient<GithubStatusResponse>(env.apiBaseUrl, {
       path: "/api/v1/github/oauth/status",
@@ -23,7 +28,12 @@ export const githubService = {
   },
   start(authToken?: string, returnTo?: string) {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        data: null,
+        error: "API base URL missing",
+      });
     }
     return apiClient<OAuthStartResponse>(env.apiBaseUrl, {
       path: "/api/v1/github/oauth/start",
@@ -34,7 +44,12 @@ export const githubService = {
   },
   disconnect(authToken?: string) {
     if (!env.apiBaseUrl) {
-      return { ok: false, status: 0, error: "API base URL missing" };
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        data: null,
+        error: "API base URL missing",
+      });
     }
     return apiClient(env.apiBaseUrl, {
       path: "/api/v1/github/oauth/token",

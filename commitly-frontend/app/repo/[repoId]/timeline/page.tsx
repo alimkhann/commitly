@@ -103,10 +103,12 @@ export default function RepoTimelinePage() {
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [userRating, setUserRating] = useState<number | null>(null);
   const [isRatingLoading, setIsRatingLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [handledGeneration, setHandledGeneration] = useState(false);
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
@@ -188,33 +190,52 @@ export default function RepoTimelinePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!(shouldGenerate && repoUrlParam && identity && isSignedIn)) {
+    if (!(shouldGenerate && repoUrlParam && identity && isSignedIn && !handledGeneration)) {
       return;
     }
 
     const repoUrl = repoUrlParam;
 
     async function runGeneration() {
-      setIsGenerating(true);
-      setError(null);
-      const token = await getToken?.();
-      const response = await repoService.generateRoadmap(
-        repoUrl,
-        token ?? undefined,
-        { forceRefresh: true }
-      );
-      if (cancelled) {
-        return;
-      }
-      setIsGenerating(false);
-      if (response.ok && response.data) {
-        setRoadmap(response.data);
-        upsertRoadmap(response.data, true);
-        setFetchState("idle");
-        router.replace(`/repo/${repoId}/timeline`);
-      } else {
-        setError(response.error ?? "Unable to generate roadmap.");
+      try {
+        setIsGenerating(true);
+        setError(null);
+        setIsAuthError(false);
+        const token = await getToken?.();
+        const response = await repoService.generateRoadmap(
+          repoUrl,
+          token ?? undefined,
+          { forceRefresh: true }
+        );
+        if (cancelled) {
+          return;
+        }
+
+        setHandledGeneration(true);
+
+        if (response.ok && response.data) {
+          setRoadmap(response.data);
+          upsertRoadmap(response.data, true);
+          setFetchState("idle");
+          router.replace(`/repo/${repoId}/timeline`);
+        } else {
+          if (response.status === 401) {
+            setIsAuthError(true);
+            setError("GitHub authentication failed. Please reconnect your account.");
+          } else {
+            setError(response.error ?? "Unable to generate roadmap.");
+          }
+          setFetchState("error");
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Generation error:", err);
+        setError("An unexpected error occurred during generation.");
         setFetchState("error");
+      } finally {
+        if (!cancelled) {
+          setIsGenerating(false);
+        }
       }
     }
 
@@ -232,6 +253,7 @@ export default function RepoTimelinePage() {
     upsertRoadmap,
     repoId,
     router,
+    handledGeneration,
   ]);
 
   const fallbackRoadmap = useMemo(
@@ -398,6 +420,14 @@ export default function RepoTimelinePage() {
   const showLoadingState =
     (!activeRoadmap && fetchState === "loading") || isGenerating;
 
+  const showFullScreenLoading =
+    (isGenerating || (!handledGeneration && shouldGenerate && isSignedIn)) &&
+    fetchState !== "error";
+
+  if (showFullScreenLoading) {
+    return <GenerationLoadingCard repoName={identity?.fullName ?? "Repository"} />;
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-10 px-6 py-10 lg:px-12">
       <AlertDialog onOpenChange={setDesyncOpen} open={desyncOpen}>
@@ -465,17 +495,34 @@ export default function RepoTimelinePage() {
             </p>
           )}
           {error && (
-            <div className="mt-3 flex items-center gap-3 text-destructive">
-              <span>{error}</span>
-              <Button
-                onClick={() => {
-                  retryLoad();
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                <RefreshCcw className="mr-2 h-3.5 w-3.5" /> Retry
-              </Button>
+            <div className="mt-3 flex flex-col gap-3 text-destructive">
+              <div className="flex items-center gap-2">
+                <span>{error}</span>
+              </div>
+              {isAuthError && (
+                <Button
+                  asChild
+                  className="w-fit"
+                  size="sm"
+                  variant="outline"
+                >
+                  <Link href="/?settings=connections#connections">
+                    Reconnect GitHub in Settings
+                  </Link>
+                </Button>
+              )}
+              {!isAuthError && (
+                <Button
+                  onClick={() => {
+                    retryLoad();
+                  }}
+                  size="sm"
+                  variant="secondary"
+                  className="w-fit"
+                >
+                  <RefreshCcw className="mr-2 h-3.5 w-3.5" /> Retry
+                </Button>
+              )}
             </div>
           )}
         </section>
@@ -762,5 +809,22 @@ function TimelineNodeCard({
         </Card>
       </div>
     </Collapsible>
+  );
+}
+
+function GenerationLoadingCard({ repoName }: { repoName: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
+      <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
+        <div className="absolute inset-0 animate-ping rounded-full bg-primary/20 duration-1000" />
+        <Clock3 className="h-10 w-10 animate-spin text-primary duration-3000" />
+      </div>
+      <div className="max-w-md space-y-2">
+        <h2 className="font-semibold text-2xl">Generating roadmap for {repoName}</h2>
+        <p className="text-muted-foreground">
+          Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute.
+        </p>
+      </div>
+    </div>
   );
 }

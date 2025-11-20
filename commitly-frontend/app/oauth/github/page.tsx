@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 
-export default function GithubOAuthResult() {
+function GithubOAuthResultContent() {
   const router = useRouter();
   const params = useSearchParams();
   const status = params.get("status");
@@ -32,5 +32,13 @@ export default function GithubOAuthResult() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function GithubOAuthResult() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GithubOAuthResultContent />
+    </Suspense>
   );
 }

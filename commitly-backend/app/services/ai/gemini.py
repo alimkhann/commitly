@@ -436,12 +436,19 @@ class GeminiRoadmapGenerator:
             "attempt": attempt,
             "mode": mode,
         }
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            response = await client.post(
-                self._endpoint,
-                params={"key": self._api_key},
-                json=payload,
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                response = await client.post(
+                    self._endpoint,
+                    params={"key": self._api_key},
+                    json=payload,
+                )
+        except httpx.HTTPError as exc:
+            logger.error(
+                "Gemini API network error",
+                extra={**extra, "error": str(exc)},
             )
+            raise GeminiGenerationError(f"Gemini API network error: {exc}")
         if response.status_code >= 400:
             logger.error(
                 "Gemini API error",
@@ -507,7 +514,7 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
         }
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     self._endpoint,
                     params={"key": self._api_key},

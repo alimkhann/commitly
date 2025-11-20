@@ -16,8 +16,8 @@ import {
   Settings,
   Sparkles,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import ReportBug from "@/components/modals/report-bug";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -41,9 +41,16 @@ type AccountSectionProps = {
 
 export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isLoaded, user, isSignedIn } = useUser();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [reportBugOpen, setReportBugOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams?.get("settings") === "connections") {
+      setAccountSettingsOpen(true);
+    }
+  }, [searchParams]);
 
   const displayName = useMemo(() => {
     if (!user) {
