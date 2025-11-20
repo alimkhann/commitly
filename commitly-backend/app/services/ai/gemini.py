@@ -117,7 +117,6 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                     "goals": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "minItems": 1,
                     },
                     "tasks": {
                         "type": "array",
@@ -134,7 +133,6 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                             },
                             "required": ["label", "steps"],
                         },
-                        "minItems": 1,
                     },
                     "code_examples": {
                         "type": "array",
@@ -159,7 +157,6 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                             },
                             "required": ["label", "href"],
                         },
-                        "minItems": 1,
                     },
                     "commit_window": {"type": "array", "items": {"type": "string"}},
                 },
@@ -177,7 +174,6 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                     "resources",
                 ],
             },
-            "minItems": 1,
         }
     },
     "required": ["timeline"],
@@ -575,11 +571,11 @@ class GeminiRoadmapGenerator:
                 }
             ],
             "generation_config": {
-                "response_mime_type": "application/json",
-                "response_json_schema": TIMELINE_SCHEMA,
+                "responseMimeType": "application/json",
+                "responseSchema": TIMELINE_SCHEMA,
                 "temperature": 0.2,
-                "top_p": 0.8,
-                "max_output_tokens": MAX_OUTPUT_TOKENS,
+                "topP": 0.8,
+                "maxOutputTokens": MAX_OUTPUT_TOKENS,
             },
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -692,8 +688,8 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             ],
             "generation_config": {
                 "temperature": 0.3,
-                "top_p": 0.8,
-                "max_output_tokens": 10,
+                "topP": 0.8,
+                "maxOutputTokens": 10,
             },
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
