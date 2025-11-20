@@ -64,6 +64,10 @@ class Settings(BaseSettings):
         default="*",
         validation_alias="ALLOWED_ORIGINS",
     )
+    frontend_origin: Optional[HttpUrl] = Field(
+        default=None,
+        validation_alias="FRONTEND_ORIGIN",
+    )
 
     # GitHub ingestion
     github_api_base: HttpUrl = Field(

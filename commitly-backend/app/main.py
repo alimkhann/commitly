@@ -18,6 +18,13 @@ from app.core.logging import StructuredLoggingMiddleware, configure_logging
 configure_logging()
 logger = logging.getLogger(__name__)
 
+FIRST_PARTY_ORIGINS = {
+    "https://commitly.one",
+    "https://www.commitly.one",
+    "http://localhost:3700",
+    "http://localhost:3000",
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,17 +77,23 @@ local_dev_origins = {
 
 cors_origins = sorted({*configured_origins, *local_dev_origins} - {None, ""})
 
+first_party_origins = {origin.rstrip("/") for origin in FIRST_PARTY_ORIGINS}
+if settings.frontend_origin:
+    first_party_origins.add(str(settings.frontend_origin).rstrip("/"))
+
+cors_origins = sorted({*cors_origins, *first_party_origins} - {None, ""})
+
 allow_origin_regex = None
 allow_credentials = True
 
 if "*" in configured_origins:
-    # FastAPI disallows credentials when using wildcard origins. Fall back to
-    # a permissive regex and explicitly disable credentials to avoid misconfig.
-    cors_origins = sorted({*configured_origins, *local_dev_origins} - {"*", None, ""})
-    allow_origin_regex = r"https?://.*"
-    allow_credentials = False
+    sanitized = sorted({*cors_origins} - {"*"})
+    if not sanitized:
+        sanitized = sorted({*local_dev_origins, *first_party_origins})
+    cors_origins = sanitized
     logger.warning(
-        "CORS wildcard detected. Falling back to regex with credentials disabled."
+        "CORS wildcard detected. Replacing with explicit origins: %s",
+        cors_origins,
     )
 
 app.add_middleware(
