@@ -224,11 +224,11 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
     import logging
 
     logger = logging.getLogger(__name__)
-    logger.info("verify_clerk_token_async: Starting token verification")
+    logger.debug("verify_clerk_token_async: Starting token verification")
 
     try:
         header = jwt.get_unverified_header(token)
-        logger.info("verify_clerk_token_async: Got unverified header")
+        logger.debug("verify_clerk_token_async: Got unverified header")
     except JWTError as exc:
         logger.error("verify_clerk_token_async: Malformed token header")
         raise InvalidClerkToken("Malformed token header") from exc
@@ -238,19 +238,19 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
         logger.error("verify_clerk_token_async: Missing key identifier")
         raise InvalidClerkToken("Missing key identifier")
 
-    logger.info(f"verify_clerk_token_async: Fetching JWKS for kid={kid}")
+    logger.debug(f"verify_clerk_token_async: Fetching JWKS for kid={kid}")
 
     # Use async version to avoid blocking
     jwk_data = await jwks_cache.get_key_async(kid)
-    logger.info(
+    logger.debug(
         "verify_clerk_token_async: Got JWKS data, starting signature verification"
     )
 
     # Run CPU-intensive JWT operations in executor to avoid blocking
     def verify_signature():
-        logger.info("verify_signature: Constructing public key")
+        logger.debug("verify_signature: Constructing public key")
         public_key = jwk.construct(jwk_data)
-        logger.info("verify_signature: Public key constructed")
+        logger.debug("verify_signature: Public key constructed")
 
         try:
             message, encoded_signature = token.rsplit(".", 1)
@@ -258,23 +258,23 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
             logger.error("verify_signature: Invalid token structure")
             raise InvalidClerkToken("Token structure is invalid") from exc
 
-        logger.info("verify_signature: Decoding signature")
+        logger.debug("verify_signature: Decoding signature")
         decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
-        logger.info("verify_signature: Verifying signature with public key")
+        logger.debug("verify_signature: Verifying signature with public key")
         if not public_key.verify(message.encode("utf-8"), decoded_signature):
             logger.error("verify_signature: Signature verification failed")
             raise InvalidClerkToken("Signature verification failed")
 
-        logger.info("verify_signature: Signature verified, getting claims")
+        logger.debug("verify_signature: Signature verified, getting claims")
         claims = jwt.get_unverified_claims(token)
-        logger.info("verify_signature: Claims retrieved")
+        logger.debug("verify_signature: Claims retrieved")
         return claims
 
     # Run signature verification in thread pool to avoid blocking event loop
-    logger.info("verify_clerk_token_async: Running signature verification in executor")
+    logger.debug("verify_clerk_token_async: Running signature verification in executor")
     loop = asyncio.get_event_loop()
     claims = await loop.run_in_executor(None, verify_signature)
-    logger.info("verify_clerk_token_async: Signature verification complete")
+    logger.debug("verify_clerk_token_async: Signature verification complete")
 
     now = int(time.time())
 
@@ -324,7 +324,7 @@ async def verify_clerk_token_async(token: str) -> ClerkClaims:
         logger.error("verify_clerk_token_async: Missing subject claim")
         raise InvalidClerkToken("Token is missing subject claim")
 
-    logger.info("verify_clerk_token_async: Token verification successful")
+    logger.debug("verify_clerk_token_async: Token verification successful")
     return cast(ClerkClaims, claims)
 
 

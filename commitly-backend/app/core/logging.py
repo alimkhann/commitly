@@ -129,6 +129,16 @@ def configure_logging() -> None:
                     "level": "WARNING",
                     "propagate": False,
                 },
+                "httpcore": {
+                    "handlers": ["default"],
+                    "level": "WARNING",
+                    "propagate": False,
+                },
+                "httpx": {
+                    "handlers": ["default"],
+                    "level": "WARNING",
+                    "propagate": False,
+                },
             },
         }
     )
