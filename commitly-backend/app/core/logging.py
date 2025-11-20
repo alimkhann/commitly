@@ -130,7 +130,7 @@ def configure_logging() -> None:
 
     level = "DEBUG" if settings.debug else "INFO"
     # Use ConsoleFormatter for local development readability
-    formatter_class = (
+    _ = (
         "app.core.logging.ConsoleFormatter"
         if settings.debug
         else "app.core.logging.JsonFormatter"

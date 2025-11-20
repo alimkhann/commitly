@@ -568,7 +568,10 @@ class RoadmapService:
             id="stage-setup",
             index=0,
             title="Project Setup & Tour",
-            summary=f"Get {repo.full_name} running locally and explore the project structure.",
+            summary=(
+                f"Get {repo.full_name} running locally and explore the "
+                "project structure."
+            ),
             status="not-started",
             eta="15m",
             category="setup",
