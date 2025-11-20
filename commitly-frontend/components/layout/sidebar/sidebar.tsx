@@ -7,7 +7,9 @@ import {
   GitBranch,
   Hammer,
   Loader2,
+  MoreHorizontal,
   Search,
+  Archive,
   Unlink,
 } from "lucide-react";
 import Image from "next/image";
@@ -29,6 +31,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   type RoadmapResponseBody,
@@ -43,10 +51,18 @@ import AccountSection from "./account-section";
 export default function Sidebar() {
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
-  const { synced, pending, yourRepos, loading, desync, refreshUserRepos } =
-    useRoadmapCatalog();
+  const {
+    synced,
+    pending,
+    yourRepos,
+    loading,
+    desync,
+    archive,
+    refreshUserRepos,
+  } = useRoadmapCatalog();
   const [collapsed, setCollapsed] = useState(false);
   const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
+  const [archivingRepo, setArchivingRepo] = useState<string | null>(null);
   const toggleCollapse = () => setCollapsed((prev) => !prev);
 
   const activeRepoId = useMemo(() => {
@@ -63,11 +79,8 @@ export default function Sidebar() {
   );
 
   const sidebarRows = useMemo<SidebarSourceRow[]>(
-    () =>
-      (userReposToRender.length > 0
-        ? userReposToRender
-        : synced) as SidebarSourceRow[],
-    [synced, userReposToRender]
+    () => (isSignedIn ? userReposToRender : synced),
+    [isSignedIn, synced, userReposToRender]
   );
 
   const syncedMap = useMemo(
@@ -96,13 +109,22 @@ export default function Sidebar() {
         return;
       }
       setDesyncingRepo(fullName);
-      const success = await desync(fullName);
-      if (success) {
-        await refreshUserRepos();
-      }
+      await desync(fullName);
       setDesyncingRepo(null);
     },
-    [desync, isSignedIn, refreshUserRepos]
+    [desync, isSignedIn]
+  );
+
+  const handleArchive = useCallback(
+    async (fullName: string) => {
+      if (!isSignedIn) {
+        return;
+      }
+      setArchivingRepo(fullName);
+      await archive(fullName);
+      setArchivingRepo(null);
+    },
+    [archive, isSignedIn]
   );
 
   return (
@@ -212,11 +234,13 @@ export default function Sidebar() {
                 ) : (
                   aggregatedRows.map((row) => (
                     <SidebarRepoRow
+                      archivingRepo={archivingRepo}
                       collapsed={collapsed}
                       desyncingRepo={desyncingRepo}
                       isActive={activeRepoId === row.slug}
                       isSignedIn={isSignedIn}
                       key={row.slug}
+                      onArchive={handleArchive}
                       onDesync={handleDesync}
                       row={row}
                     />
@@ -330,123 +354,116 @@ function SidebarRepoRow({
   isActive,
   collapsed,
   onDesync,
+  onArchive,
   desyncingRepo,
+  archivingRepo,
   isSignedIn,
 }: {
   row: AggregatedSidebarRow;
   isActive: boolean;
   collapsed: boolean;
   onDesync: (fullName: string) => void | Promise<void>;
+  onArchive: (fullName: string) => void | Promise<void>;
   desyncingRepo: string | null;
+  archivingRepo: string | null;
   isSignedIn: boolean;
 }) {
-  const {
-    slug,
-    fullName,
-    description,
-    language,
-    generatedAt,
-    stageCount,
-    status,
-    pending,
-    repoFullName,
-  } = row;
-  const desyncDisabled = desyncingRepo === repoFullName;
+  const { slug, fullName, pending, repoFullName } = row;
+  const isDesyncing = desyncingRepo === repoFullName;
+  const isArchiving = archivingRepo === repoFullName;
+  const isLoading = isDesyncing || isArchiving;
+
+  if (collapsed) {
+    return (
+      <div className="flex justify-center py-2">
+        <Button
+          asChild
+          className={cn(
+            "h-10 w-10 rounded-lg transition-all",
+            isActive ? "bg-primary/20 text-primary" : "bg-transparent text-muted-foreground hover:bg-muted/20 hover:text-foreground"
+          )}
+          size="icon"
+          variant="ghost"
+        >
+          <Link href={`/repo/${slug}/timeline`} title={fullName}>
+            <span className="text-xs font-bold">{fullName.substring(0, 2).toUpperCase()}</span>
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div
       className={cn(
-        "group rounded-xl border border-white/5 bg-card/15 px-3 py-3 backdrop-blur-sm transition-colors",
+        "group relative flex items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors",
         isActive
-          ? "border-primary/70 bg-primary/15"
-          : "hover:border-white/10 hover:bg-card/25"
+          ? "bg-accent text-accent-foreground font-medium"
+          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <Link href={`/repo/${slug}/timeline`}>
-            <p className="font-medium text-sm leading-tight">{fullName}</p>
-          </Link>
-          <p className="text-muted-foreground text-xs">
-            {pending
-              ? "Generating timeline…"
-              : [
-                  language,
-                  generatedAt && new Date(generatedAt).toLocaleDateString(),
-                ]
-                  .filter(Boolean)
-                  .join(" • ")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge
-            className="text-[11px] capitalize"
-            variant={status === "synced" ? "accent" : "secondary"}
-          >
-            {status}
-          </Badge>
-          {!pending && (
-            <Badge
-              className="text-[11px] capitalize"
-              variant={isActive ? "accent" : "outline"}
-            >
-              {stageCount} stages
-            </Badge>
+      <Link
+        className="flex-1 truncate pr-2"
+        href={`/repo/${slug}/timeline`}
+        title={fullName}
+      >
+        {fullName}
+      </Link>
+
+      {pending ? (
+        <Loader2 className="h-3 w-3 animate-spin opacity-50" />
+      ) : (
+        <div
+          className={cn(
+            "flex items-center opacity-0 transition-opacity group-hover:opacity-100",
+            (isActive || isLoading) && "opacity-100"
           )}
-        </div>
-      </div>
-      {!pending && description && (
-        <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">
-          {description}
-        </p>
-      )}
-      {!collapsed && (
-        <div className="mt-3 flex items-center gap-2">
-          <Button asChild size="icon" variant="ghost">
-            <Link aria-label="Open timeline" href={`/repo/${slug}/timeline`}>
-              <GitBranch className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild size="icon" variant="ghost">
-            <Link aria-label="Open guide" href={`/repo/${slug}/guide`}>
-              <BookOpen className="h-4 w-4" />
-            </Link>
-          </Button>
-          {isSignedIn && !pending && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
+        >
+          {isLoading ? (
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
-                  aria-label="Desync repository"
-                  disabled={desyncDisabled}
+                  className="h-6 w-6 p-0 hover:bg-transparent"
                   size="icon"
                   variant="ghost"
                 >
-                  {desyncDisabled ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Unlink className="h-4 w-4" />
-                  )}
+                  <MoreHorizontal className="h-3 w-3" />
+                  <span className="sr-only">Actions</span>
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Desync this repository?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This removes your personal implementation state. The public
-                    timeline will remain available.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    disabled={desyncDisabled}
-                    onClick={() => onDesync(repoFullName)}
-                  >
-                    Confirm desync
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={() => onArchive(repoFullName)}>
+                  <Archive className="mr-2 h-3.5 w-3.5" />
+                  Archive
+                </DropdownMenuItem>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Unlink className="mr-2 h-3.5 w-3.5" />
+                      Desync
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Desync this repository?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This removes your personal implementation state. The public
+                        timeline will remain available.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => onDesync(repoFullName)}>
+                        Confirm desync
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       )}

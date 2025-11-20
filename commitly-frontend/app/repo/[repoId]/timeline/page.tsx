@@ -56,7 +56,7 @@ export default function RepoTimelinePage() {
   const auth = useAuth();
   const isSignedIn = Boolean(auth.isSignedIn);
   const getToken = auth.getToken;
-  const { getBySlug, upsertRoadmap, yourRepos, desync, refreshUserRepos } =
+  const { getBySlug, upsertRoadmap, yourRepos, desync, refreshUserRepos, unarchive } =
     useRoadmapCatalog();
   const repoId = params.repoId as string;
   const cachedRecord = getBySlug(repoId);
@@ -263,6 +263,13 @@ export default function RepoTimelinePage() {
     }
   }, [desync, syncedState]);
 
+  const handleUnarchive = useCallback(async () => {
+    if (!syncedState) {
+      return;
+    }
+    await unarchive(syncedState.repo_full_name);
+  }, [unarchive, syncedState]);
+
   const handleImplement = useCallback(async () => {
     if (!(identity && isSignedIn)) {
       setActionError("Sign in to implement this roadmap.");
@@ -425,13 +432,18 @@ export default function RepoTimelinePage() {
               {isSyncing ? "Syncing…" : "Implement"}
             </Button>
           )}
-          {syncedState && (
+          {syncedState && !syncedState.is_archived && (
             <Button
               onClick={() => setDesyncOpen(true)}
               size="sm"
               variant="outline"
             >
               Desync
+            </Button>
+          )}
+          {syncedState && syncedState.is_archived && (
+            <Button onClick={handleUnarchive} size="sm" variant="outline">
+              Unarchive
             </Button>
           )}
           <TabSwitch repoId={repoId} />

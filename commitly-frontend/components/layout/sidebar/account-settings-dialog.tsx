@@ -291,23 +291,13 @@ function GithubConnectionPreferences() {
 }
 
 function ArchivedRepositoriesPreferences() {
-  const { archivedRepos, unarchive, refreshArchivedRepos } =
-    useRoadmapCatalog();
+  const { archivedRepos, unarchive } = useRoadmapCatalog();
   const [loading, setLoading] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    refreshArchivedRepos().catch(() => {
-      // Error handling is done in the function
-    });
-  }, [refreshArchivedRepos]);
 
   const handleUnarchive = async (fullName: string) => {
     setLoading((prev) => ({ ...prev, [fullName]: true }));
     try {
-      const success = await unarchive(fullName);
-      if (success) {
-        await refreshArchivedRepos();
-      }
+      await unarchive(fullName);
     } finally {
       setLoading((prev) => ({ ...prev, [fullName]: false }));
     }

@@ -1,21 +1,9 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { Eye, Filter, GitBranch, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,9 +51,7 @@ export default function SearchPage() {
     "newest" | "most_viewed" | "most_synced" | "highest_rated" | "trending"
   >("newest");
   const repoList = useMemo(() => repoService.list(), []);
-  const { synced, yourRepos, loading, refreshUserRepos, desync } =
-    useRoadmapCatalog();
-  const { isSignedIn } = useAuth();
+  const { synced, yourRepos, loading } = useRoadmapCatalog();
   const [publicRepos, setPublicRepos] = useState<RoadmapResponseBody[]>([]);
   const [publicMeta, setPublicMeta] = useState<{
     total_count: number;
@@ -74,7 +60,6 @@ export default function SearchPage() {
   } | null>(null);
   const [publicLoading, setPublicLoading] = useState(false);
   const [publicError, setPublicError] = useState<string | null>(null);
-  const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
 
   const backendConfigured = repoService.isBackendConfigured();
 
@@ -168,18 +153,6 @@ export default function SearchPage() {
     }
     return publicRepos;
   }, [backendConfigured, filteredRepos, publicRepos]);
-
-  const handleDesync = async (fullName: string) => {
-    if (!isSignedIn) {
-      return;
-    }
-    setDesyncingRepo(fullName);
-    const success = await desync(fullName);
-    if (success) {
-      await refreshUserRepos();
-    }
-    setDesyncingRepo(null);
-  };
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">
@@ -291,47 +264,13 @@ export default function SearchPage() {
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    <Button asChild className="flex-1" variant="secondary">
+                    <Button asChild className="w-full" variant="secondary">
                       <Link
                         href={`/repo/${repo.slug}/timeline?fullName=${repo.repo?.full_name ?? repo.repo_full_name}`}
                       >
                         Open timeline
                       </Link>
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          className="flex-1"
-                          disabled={desyncingRepo === repo.repo_full_name}
-                          variant="outline"
-                        >
-                          {desyncingRepo === repo.repo_full_name
-                            ? "Desyncing…"
-                            : "Desync"}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Desync this repository?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to desync? This removes your
-                            personal implementation state. The public timeline
-                            will remain available.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            disabled={desyncingRepo === repo.repo_full_name}
-                            onClick={() => handleDesync(repo.repo_full_name)}
-                          >
-                            Confirm desync
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
                   </div>
                 </CardContent>
               </Card>
@@ -420,49 +359,13 @@ export default function SearchPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button asChild className="flex-1" variant="secondary">
+                    <Button asChild className="w-full" variant="secondary">
                       <Link
                         href={`/repo/${identity.slug}/timeline?fullName=${repo.repo.full_name}`}
                       >
                         Open timeline
                       </Link>
                     </Button>
-                    {isSignedIn && isSynced && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            className="flex-1"
-                            disabled={desyncingRepo === repo.repo.full_name}
-                            variant="outline"
-                          >
-                            {desyncingRepo === repo.repo.full_name
-                              ? "Desyncing…"
-                              : "Desync"}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Desync this repository?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to desync? This removes your
-                              personal implementation state. The public timeline
-                              will remain available.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              disabled={desyncingRepo === repo.repo.full_name}
-                              onClick={() => handleDesync(repo.repo.full_name)}
-                            >
-                              Confirm desync
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
                   </div>
                 </CardContent>
               </Card>
