@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import math
+import re
 from typing import Any, Optional, Sequence
 
 import httpx
@@ -213,6 +214,7 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                     "goals",
                     "tasks",
                     "resources",
+                    "commit_window",
                 ],
             },
         }
@@ -533,8 +535,15 @@ class GeminiRoadmapGenerator:
             raise GeminiGenerationError("Gemini response was empty")
         parsed: dict[str, Any] = {}
         if text:
+            # Clean up markdown code blocks if present
+            cleaned_text = text.strip()
+            # Use regex to remove markdown code blocks (e.g. ```json ... ```)
+            match = re.search(r"^```(?:\w+)?\s*(.*)\s*```$", cleaned_text, re.DOTALL)
+            if match:
+                cleaned_text = match.group(1)
+
             try:
-                parsed = json.loads(text)
+                parsed = json.loads(cleaned_text)
             except json.JSONDecodeError as exc:
                 level = logging.WARNING if is_truncated else logging.ERROR
                 logger.log(
