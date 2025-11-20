@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -188,14 +188,43 @@ class TimelineResource(BaseModel):
     href: Annotated[str, Field(max_length=500)]
 
 
+class StageTask(BaseModel):
+    label: str
+    steps: List[str]
+    files: List[str] = []
+    commands: List[str] = []
+
+
+class CodeExample(BaseModel):
+    file: str
+    language: str
+    description: str
+    snippet: str
+
+
 class TimelineStage(BaseModel):
     id: str
+    index: int = 0
     title: str
     summary: str
     status: Literal["not-started", "in-progress", "done"]
     eta: str
-    tasks: List[str]
+    category: Literal["setup", "feature", "refactor", "testing", "ops", "other"] = (
+        "other"
+    )
+    difficulty: Literal["intro", "easy", "medium", "hard"] = "medium"
+    goals: List[str] = []
+    tasks: List[StageTask]
+    code_examples: List[CodeExample] = []
     resources: List[TimelineResource]
+    commit_window: List[str] = []
+
+    @field_validator("tasks", mode="before")
+    @classmethod
+    def convert_legacy_tasks(cls, v):
+        if isinstance(v, list) and len(v) > 0 and isinstance(v[0], str):
+            return [StageTask(label="Tasks", steps=v)]
+        return v
 
 
 class RoadmapRepoSummary(BaseModel):

@@ -56,8 +56,14 @@ export default function RepoTimelinePage() {
   const auth = useAuth();
   const isSignedIn = Boolean(auth.isSignedIn);
   const getToken = auth.getToken;
-  const { getBySlug, upsertRoadmap, yourRepos, desync, refreshUserRepos, unarchive } =
-    useRoadmapCatalog();
+  const {
+    getBySlug,
+    upsertRoadmap,
+    yourRepos,
+    desync,
+    refreshUserRepos,
+    unarchive,
+  } = useRoadmapCatalog();
   const repoId = params.repoId as string;
   const cachedRecord = getBySlug(repoId);
   const fallbackRecord = repoService.findById(repoId);
@@ -190,7 +196,15 @@ export default function RepoTimelinePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!(shouldGenerate && repoUrlParam && identity && isSignedIn && !handledGeneration)) {
+    if (
+      !(
+        shouldGenerate &&
+        repoUrlParam &&
+        identity &&
+        isSignedIn &&
+        !handledGeneration
+      )
+    ) {
       return;
     }
 
@@ -221,7 +235,9 @@ export default function RepoTimelinePage() {
         } else {
           if (response.status === 401) {
             setIsAuthError(true);
-            setError("GitHub authentication failed. Please reconnect your account.");
+            setError(
+              "GitHub authentication failed. Please reconnect your account."
+            );
           } else {
             setError(response.error ?? "Unable to generate roadmap.");
           }
@@ -425,7 +441,9 @@ export default function RepoTimelinePage() {
     fetchState !== "error";
 
   if (showFullScreenLoading) {
-    return <GenerationLoadingCard repoName={identity?.fullName ?? "Repository"} />;
+    return (
+      <GenerationLoadingCard repoName={identity?.fullName ?? "Repository"} />
+    );
   }
 
   return (
@@ -500,12 +518,7 @@ export default function RepoTimelinePage() {
                 <span>{error}</span>
               </div>
               {isAuthError && (
-                <Button
-                  asChild
-                  className="w-fit"
-                  size="sm"
-                  variant="outline"
-                >
+                <Button asChild className="w-fit" size="sm" variant="outline">
                   <Link href="/?settings=connections#connections">
                     Reconnect GitHub in Settings
                   </Link>
@@ -513,12 +526,12 @@ export default function RepoTimelinePage() {
               )}
               {!isAuthError && (
                 <Button
+                  className="w-fit"
                   onClick={() => {
                     retryLoad();
                   }}
                   size="sm"
                   variant="secondary"
-                  className="w-fit"
                 >
                   <RefreshCcw className="mr-2 h-3.5 w-3.5" /> Retry
                 </Button>
@@ -750,19 +763,78 @@ function TimelineNodeCard({
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-4 pt-2">
+              {stage.goals && stage.goals.length > 0 && (
+                <div className="rounded-lg border border-border/60 bg-background/60 p-4">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Goals
+                  </p>
+                  <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
+                    {stage.goals.map((goal, idx) => (
+                      <li className="flex items-start gap-2" key={idx}>
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-accent" />
+                        <span>{goal}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="rounded-lg border border-border/60 bg-background/60 p-4">
                 <p className="text-muted-foreground text-xs uppercase tracking-wide">
                   {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
                 </p>
-                <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
-                  {stage.tasks.map((task) => (
-                    <li className="flex items-start gap-2" key={task}>
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                      <span>{task}</span>
-                    </li>
+                <div className="mt-3 space-y-4">
+                  {stage.tasks.map((task, idx) => (
+                    <div className="space-y-2" key={idx}>
+                      <div className="flex items-start gap-2 font-medium text-sm">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                        <span>{task.label}</span>
+                      </div>
+                      {task.steps.length > 0 && (
+                        <ul className="ml-4 list-disc space-y-1 pl-2 text-muted-foreground text-xs">
+                          {task.steps.map((step, sIdx) => (
+                            <li key={sIdx}>{step}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {task.commands && task.commands.length > 0 && (
+                        <div className="mt-2 ml-4 rounded bg-muted px-2 py-1 font-mono text-xs">
+                          {task.commands.map((cmd, cIdx) => (
+                            <div key={cIdx}>$ {cmd}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
+
+              {stage.code_examples && stage.code_examples.length > 0 && (
+                <div className="rounded-lg border border-border/60 bg-background/60 p-4">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
+                    Code Examples
+                  </p>
+                  <div className="mt-3 space-y-4">
+                    {stage.code_examples.map((example, idx) => (
+                      <div className="space-y-2" key={idx}>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-mono">{example.file}</span>
+                          <Badge className="text-[10px]" variant="outline">
+                            {example.language}
+                          </Badge>
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                          {example.description}
+                        </p>
+                        <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
+                          <code>{example.snippet}</code>
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {stage.resources.length > 0 && (
                 <div>
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">
@@ -825,9 +897,12 @@ function GenerationLoadingCard({ repoName }: { repoName: string }) {
         <Clock3 className="h-10 w-10 animate-spin text-primary duration-3000" />
       </div>
       <div className="max-w-md space-y-2">
-        <h2 className="font-semibold text-2xl">Generating roadmap for {repoName}</h2>
+        <h2 className="font-semibold text-2xl">
+          Generating roadmap for {repoName}
+        </h2>
         <p className="text-muted-foreground">
-          Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute.
+          Analyzing commit history, identifying key milestones, and structuring
+          your learning path. This may take up to a minute.
         </p>
       </div>
     </div>
