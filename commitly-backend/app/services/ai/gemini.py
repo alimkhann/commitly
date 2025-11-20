@@ -23,8 +23,8 @@ MIN_RETRY_CHUNKS = 5
 MAX_GEMINI_ATTEMPTS = 5
 
 PROMPT_TEMPLATE = """
-You are Commitly, an engineering mentor that reads GitHub commit history and drafts
-actionable learning roadmaps.
+You are Commitly, an engineering mentor that reads GitHub commit history and designs
+learning roadmaps for developers who want to REBUILD the project themselves.
 
 Repository: {name}
 Description: {description}
@@ -32,57 +32,98 @@ Stars: {stars}
 Language: {language}
 Default branch: {branch}
 
-You will read the commit episodes below. Use them to propose ONLY {stage_budget}
-sequential roadmap stages (roughly the first quarter of the full project) that
-help a new contributor understand how the project evolved.
+You are given a compressed commit history below.
 
-Each stage should:
-- Have a clear index (1-based).
-- Have a category (setup, feature, refactor, testing, ops, other) and difficulty.
-- Have at least one learning goal.
-- Have structured tasks with explicit steps.
-- Reference real files and commands where applicable.
-- Include one helpful resource link (GitHub file, docs, or issue).
-- Optionally provide short code examples (max 2).
-- Always set status to "not-started" and ETA to a short estimate like "45m" or "2h".
+Your job:
+- Compress the ENTIRE evolution of this repository (from the first commit to the most recent)
+  into {stage_budget} ordered learning stages.
+- Each stage should feel like a self-contained "episode" a learner can complete in 30–90 minutes.
+- The roadmap must help a developer gradually re-implement the project, not just read diffs.
 
-Return JSON that matches this schema exactly:
+Follow these rules:
+
+1. Coverage
+   - Stages must cover the whole project history, not just early commits.
+   - Group related commits into feature-oriented stages (setup, major features, refactors, ops).
+   - Prefer stages that are pedagogically useful over mechanically covering every tiny change.
+
+2. Stage semantics
+   - Use exactly one "setup" stage near the beginning for repository onboarding.
+   - For the remaining stages, choose a mix of:
+     - "feature" (new capability or user-facing behavior)
+     - "refactor" (structural or quality-of-life changes)
+     - "testing" (tests, QA tools)
+     - "ops" (deployment, logging, monitoring)
+     - "other" only if nothing else fits.
+   - Assign difficulty as: "intro", "easy", "medium", or "hard" based on the work required.
+
+3. Teaching focus
+   Every stage MUST:
+   - State 1–3 concrete learning GOALS (what the learner will understand after finishing).
+   - Include 1–3 TASKS. For each task:
+     - Give a short label.
+     - Provide 2–5 specific STEPS that a learner can follow ("Open file X", "Create function Y", "Run command Z").
+     - List 1–4 FILES that are central to the task.
+     - Include relevant COMMANDS when setup, running, or building is required.
+   - Optionally include up to 2 CODE EXAMPLES:
+     - Keep each snippet short (3–15 lines).
+     - Show clean final code, not raw diffs or patch markers.
+     - Explain what the snippet demonstrates.
+
+4. Stage 0 (setup & tour)
+   - If the repository has any non-trivial setup, create a first stage that:
+     - Helps the learner clone the repo.
+     - Installs dependencies.
+     - Runs the development server or main command.
+     - Gives a quick tour of top-level folders and core technologies.
+   - Mark this stage as category "setup" and difficulty "intro".
+
+5. Output format
+   - Return ONLY JSON, no markdown.
+   - The JSON must conform exactly to this schema (field names and allowed values):
 {{
   "timeline": [
     {{
       "id": "stage-1",
       "index": 1,
-      "title": "...",
-      "summary": "...",
+      "title": "…",
+      "summary": "…",
       "status": "not-started",
-      "eta": "30m",
-      "category": "feature",
-      "difficulty": "easy",
+      "eta": "45m",
+      "category": "setup|feature|refactor|testing|ops|other",
+      "difficulty": "intro|easy|medium|hard",
       "goals": ["..."],
       "tasks": [
         {{
-          "label": "...",
-          "steps": ["..."],
-          "files": ["..."],
-          "commands": ["..."]
+          "label": "Task name",
+          "steps": ["...", "..."],
+          "files": ["path/to/file.tsx"],
+          "commands": ["pnpm dev"]
         }}
       ],
       "code_examples": [
         {{
-          "file": "...",
-          "language": "...",
-          "description": "...",
-          "snippet": "..."
+          "file": "app/api/chat/route.ts",
+          "language": "ts",
+          "description": "Short explanation",
+          "snippet": "const x = 1;"
         }}
       ],
-      "resources": [{{ "label": "...", "href": "..." }}],
+      "resources": [{{ "label": "Docs", "href": "https://..." }}],
       "commit_window": ["sha1", "sha2"]
     }}
   ]
 }}
 
-Commit context:
+
+   Where:
+   - status must always be "not-started".
+   - index is 0-based for the setup stage (if present) and increases by 1 for each stage after.
+   - commit_window is a list of commit SHAs that influenced this stage.
+
+Commit history context (oldest to newest):
 {context}
+
 """
 
 TIMELINE_SCHEMA: dict[str, Any] = {
