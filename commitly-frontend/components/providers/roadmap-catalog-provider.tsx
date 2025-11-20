@@ -31,7 +31,7 @@ type CatalogContextValue = {
   refresh: () => Promise<void>;
   refreshUserRepos: () => Promise<void>;
   refreshArchivedRepos: () => Promise<void>;
-  upsertRoadmap: (roadmap: RoadmapResponseBody) => void;
+  upsertRoadmap: (roadmap: RoadmapResponseBody, shouldSync?: boolean) => void;
   markPending: (identity: RepoIdentity) => void;
   getBySlug: (slug: string) => SyncedRepoRecord | PendingRepoRecord | undefined;
   desync: (fullName: string) => Promise<boolean>;
@@ -251,7 +251,7 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
   }, [backendConfigured, isSignedIn, refreshUserRepos, refreshArchivedRepos]);
 
   const upsertRoadmap = useCallback(
-    (roadmap: RoadmapResponseBody) => {
+    (roadmap: RoadmapResponseBody, shouldSync = false) => {
       setSynced((previous) => {
         const nextRecord = toSyncedRecord(roadmap);
         const index = previous.findIndex(
@@ -271,23 +271,33 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
         if (!isSignedIn) {
           return previous;
         }
-        const next: UserRepoState = {
-          repo_full_name: roadmap.repo.full_name,
-          status: "synced",
-          is_archived: false,
-          progress_percent: 0,
-          pinned_at: new Date().toISOString(),
-          repo: roadmap.repo,
-        };
+
         const idx = previous.findIndex(
           (item) => item.repo_full_name === roadmap.repo.full_name
         );
+
         if (idx >= 0) {
           const clone = [...previous];
-          clone[idx] = next;
+          clone[idx] = {
+            ...clone[idx],
+            repo: roadmap.repo,
+          };
           return clone;
         }
-        return [next, ...previous];
+
+        if (shouldSync) {
+          const next: UserRepoState = {
+            repo_full_name: roadmap.repo.full_name,
+            status: "synced",
+            is_archived: false,
+            progress_percent: 0,
+            pinned_at: new Date().toISOString(),
+            repo: roadmap.repo,
+          };
+          return [next, ...previous];
+        }
+
+        return previous;
       });
     },
     [isSignedIn]

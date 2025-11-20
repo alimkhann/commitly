@@ -74,9 +74,25 @@ export default function RepoTimelinePage() {
     }
     return (
       repoService.parseRepoInput(fullNameParam ?? "") ??
-      repoService.parseRepoInput(repoUrlParam ?? "")
+      repoService.parseRepoInput(repoUrlParam ?? "") ??
+      // Fallback: try to parse slug as owner-repo
+      // This is a heuristic and might fail for complex names but prevents hanging
+      (() => {
+        const parts = repoId.split("-");
+        if (parts.length >= 2) {
+          const owner = parts[0];
+          const repoName = parts.slice(1).join("-");
+          return {
+            owner,
+            repoName,
+            fullName: `${owner}/${repoName}`,
+            slug: repoId,
+          };
+        }
+        return null;
+      })()
     );
-  }, [cachedRecord, fullNameParam, repoUrlParam]);
+  }, [cachedRecord, fullNameParam, repoUrlParam, repoId]);
   const [roadmap, setRoadmap] = useState<RoadmapResponseBody | null>(
     cachedRecord && "repo" in cachedRecord
       ? (cachedRecord as RoadmapResponseBody)
@@ -193,7 +209,7 @@ export default function RepoTimelinePage() {
       setIsGenerating(false);
       if (response.ok && response.data) {
         setRoadmap(response.data);
-        upsertRoadmap(response.data);
+        upsertRoadmap(response.data, true);
         setFetchState("idle");
         router.replace(`/repo/${repoId}/timeline`);
       } else {

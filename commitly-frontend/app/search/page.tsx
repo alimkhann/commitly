@@ -292,7 +292,9 @@ export default function SearchPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button asChild className="flex-1" variant="secondary">
-                      <Link href={`/repo/${repo.slug}/timeline`}>
+                      <Link
+                        href={`/repo/${repo.slug}/timeline?fullName=${repo.repo?.full_name ?? repo.repo_full_name}`}
+                      >
                         Open timeline
                       </Link>
                     </Button>
@@ -419,7 +421,9 @@ export default function SearchPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button asChild className="flex-1" variant="secondary">
-                      <Link href={`/repo/${identity.slug}/timeline`}>
+                      <Link
+                        href={`/repo/${identity.slug}/timeline?fullName=${repo.repo.full_name}`}
+                      >
                         Open timeline
                       </Link>
                     </Button>
