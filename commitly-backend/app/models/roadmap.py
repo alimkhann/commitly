@@ -214,6 +214,8 @@ class TimelineStage(BaseModel):
     )
     difficulty: Literal["intro", "easy", "medium", "hard"] = "medium"
     goals: List[str] = []
+    prerequisites: List[str] = []
+    checkpoints: List[str] = []
     tasks: List[StageTask]
     code_examples: List[CodeExample] = []
     resources: List[TimelineResource]

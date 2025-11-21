@@ -625,12 +625,38 @@ export default function RepoTimelinePage() {
       )}
 
       {activeRoadmap && (
-        <TimelineCanvas
-          isSignedIn={isSignedIn}
-          repoSlug={repoId}
-          stages={timelineStages}
-          statusIcon={statusIcon}
-        />
+        <>
+          <div className="sticky top-20 z-10 mb-8 -mx-2 overflow-x-auto px-2 py-2 md:static md:mx-0 md:mb-10 md:overflow-visible md:p-0">
+            <div className="flex flex-nowrap gap-2 md:flex-wrap">
+              {timelineStages.map((stage) => (
+                <Button
+                  key={stage.id}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 rounded-full text-xs"
+                  onClick={() =>
+                    document
+                      .getElementById(stage.id)
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                  }
+                >
+                  <span className="mr-1.5 font-mono text-muted-foreground">
+                    {stage.index}
+                  </span>
+                  {stage.title.length > 20
+                    ? `${stage.title.slice(0, 20)}…`
+                    : stage.title}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <TimelineCanvas
+            isSignedIn={isSignedIn}
+            repoSlug={repoId}
+            stages={timelineStages}
+            statusIcon={statusIcon}
+          />
+        </>
       )}
 
       {!activeRoadmap && fetchState === "idle" && !isGenerating && (
@@ -664,7 +690,7 @@ function TimelineCanvas({
   return (
     <section className="relative mx-auto w-full max-w-5xl px-2">
       <div className="-translate-x-1/2 pointer-events-none absolute inset-y-0 left-1/2 hidden w-px bg-border/50 md:block" />
-      <div className="grid gap-y-10 md:grid-cols-[1fr_40px_1fr] md:gap-x-8">
+      <div className="grid gap-y-16 md:grid-cols-[1fr_40px_1fr] md:gap-x-8">
         {stages.map((stage, index) => {
           const align = index % 2 === 0 ? "left" : "right";
           const isCurrent = isSignedIn && stage.status === "in-progress";
@@ -731,6 +757,23 @@ function TimelineNodeCard({
   isSignedIn: boolean;
   repoSlug: string;
 }) {
+  const ctaLabel = useMemo(() => {
+    if (!isSignedIn) return "Details";
+    switch (stage.status) {
+      case "not-started":
+        return "Start this stage";
+      case "in-progress":
+        return "Continue";
+      case "done":
+        return "Review";
+      default:
+        return "Details";
+    }
+  }, [isSignedIn, stage.status]);
+
+  const ctaVariant =
+    isSignedIn && stage.status !== "done" ? "default" : "secondary";
+
   return (
     <Collapsible className="group">
       <div className="relative">
@@ -742,36 +785,66 @@ function TimelineNodeCard({
         />
         <Card
           className={cn(
-            "border-border/60 bg-card/70 shadow-black/25 shadow-lg",
+            "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
             isCurrent && "ring-1 ring-primary/40"
           )}
         >
-          <CardHeader className={cn("pb-2", align === "right" && "text-right")}>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">{stage.title}</CardTitle>
-              <Badge
-                className="flex items-center gap-1 text-xs"
-                variant="secondary"
+          <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
+            <div className="flex flex-col gap-1">
+              <div
+                className={cn(
+                  "flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground",
+                  align === "right" && "justify-end"
+                )}
               >
-                {statusIcon}
-                {stage.status === "not-started" && !isSignedIn
-                  ? "not started"
-                  : stage.status.replace("-", " ")}
-              </Badge>
+                <span>Stage {stage.index}</span>
+                <span>·</span>
+                <span>{stage.category}</span>
+                <span>·</span>
+                <span>{stage.difficulty}</span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle className={cn("text-lg", align === "right" && "order-2")}>
+                  {stage.title}
+                </CardTitle>
+                <Badge
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 text-[10px]",
+                    align === "right" && "order-1"
+                  )}
+                  variant="secondary"
+                >
+                  {statusIcon}
+                  <span className="uppercase">
+                    {stage.status === "not-started" && !isSignedIn
+                      ? "not started"
+                      : stage.status.replace("-", " ")}
+                  </span>
+                </Badge>
+              </div>
             </div>
-            <CardDescription>{stage.summary}</CardDescription>
+            <CardDescription className="mt-1.5 leading-relaxed">
+              {stage.summary}
+            </CardDescription>
           </CardHeader>
           <CollapsibleContent>
-            <CardContent className="space-y-4 pt-2">
+            <CardContent className="space-y-6 pt-1">
+              {/* Goals Section */}
               {stage.goals && stage.goals.length > 0 && (
-                <div className="rounded-lg border border-border/60 bg-background/60 p-4">
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Goals
-                  </p>
-                  <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Goals
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <ul className="space-y-2">
                     {stage.goals.map((goal, idx) => (
-                      <li className="flex items-start gap-2" key={idx}>
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-accent" />
+                      <li
+                        className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                        key={idx}
+                      >
+                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
                         <span>{goal}</span>
                       </li>
                     ))}
@@ -779,28 +852,53 @@ function TimelineNodeCard({
                 </div>
               )}
 
-              <div className="rounded-lg border border-border/60 bg-background/60 p-4">
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                  {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
-                </p>
-                <div className="mt-3 space-y-4">
+              {/* Tasks Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
+                  </h4>
+                  <div className="h-px flex-1 bg-border/40" />
+                </div>
+                <div className="space-y-3">
                   {stage.tasks.map((task, idx) => (
-                    <div className="space-y-2" key={idx}>
-                      <div className="flex items-start gap-2 font-medium text-sm">
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                        <span>{task.label}</span>
-                      </div>
+                    <div
+                      className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
+                      key={idx}
+                    >
+                      <p className="font-medium text-sm text-foreground">
+                        {task.label}
+                      </p>
                       {task.steps.length > 0 && (
-                        <ul className="ml-4 list-disc space-y-1 pl-2 text-muted-foreground text-xs">
+                        <ul className="mt-2.5 space-y-1.5">
                           {task.steps.map((step, sIdx) => (
-                            <li key={sIdx}>{step}</li>
+                            <li
+                              className="flex items-start gap-2 text-xs text-muted-foreground"
+                              key={sIdx}
+                            >
+                              <span className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground" />
+                              <span>{step}</span>
+                            </li>
                           ))}
                         </ul>
                       )}
-                      {task.commands && task.commands.length > 0 && (
-                        <div className="mt-2 ml-4 rounded bg-muted px-2 py-1 font-mono text-xs">
-                          {task.commands.map((cmd, cIdx) => (
-                            <div key={cIdx}>$ {cmd}</div>
+                      {(task.files?.length ?? 0) > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+                          <span className="font-medium text-foreground/80">
+                            Files:
+                          </span>
+                          {task.files?.join(", ")}
+                        </div>
+                      )}
+                      {(task.commands?.length ?? 0) > 0 && (
+                        <div className="mt-2.5 space-y-1">
+                          {task.commands?.map((cmd, cIdx) => (
+                            <div
+                              className="w-fit rounded bg-muted/50 px-2 py-1 font-mono text-[10px] text-foreground/90"
+                              key={cIdx}
+                            >
+                              $ {cmd}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -809,76 +907,95 @@ function TimelineNodeCard({
                 </div>
               </div>
 
+              {/* Code Examples Section */}
               {stage.code_examples && stage.code_examples.length > 0 && (
-                <div className="rounded-lg border border-border/60 bg-background/60 p-4">
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Code Examples
-                  </p>
-                  <div className="mt-3 space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Code Examples
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <div className="space-y-3">
                     {stage.code_examples.map((example, idx) => (
-                      <div className="space-y-2" key={idx}>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-mono">{example.file}</span>
-                          <Badge className="text-[10px]" variant="outline">
-                            {example.language}
-                          </Badge>
+                      <Collapsible className="group/code" key={idx}>
+                        <div className="rounded-lg border border-border/50 bg-muted/30">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-medium">
+                                  {example.file}
+                                </span>
+                                <Badge
+                                  className="h-4 px-1 text-[9px]"
+                                  variant="outline"
+                                >
+                                  {example.language}
+                                </Badge>
+                              </div>
+                              <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                                {example.description}
+                              </p>
+                            </div>
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="border-t border-border/50 p-3 pt-0">
+                              <p className="mb-2 text-[11px] text-muted-foreground">
+                                {example.description}
+                              </p>
+                              <pre className="overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
+                                <code>{example.snippet}</code>
+                              </pre>
+                            </div>
+                          </CollapsibleContent>
                         </div>
-                        <p className="text-muted-foreground text-xs">
-                          {example.description}
-                        </p>
-                        <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-xs">
-                          <code>{example.snippet}</code>
-                        </pre>
-                      </div>
+                      </Collapsible>
                     ))}
                   </div>
                 </div>
               )}
 
+              {/* Resources Section */}
               {stage.resources.length > 0 && (
-                <div>
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                    Resources
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-3">
+                <div className="pt-2">
+                  <div className="flex flex-wrap gap-2">
                     {stage.resources.map((resource) => (
-                      <Button
-                        asChild
-                        className="border border-border/60"
+                      <a
+                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                        href={resource.href}
                         key={resource.label}
-                        size="sm"
-                        variant="ghost"
+                        rel="noreferrer"
+                        target="_blank"
                       >
-                        <a
-                          href={resource.href}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          {resource.label}
-                        </a>
-                      </Button>
+                        <span>{resource.label}</span>
+                        <span className="opacity-50">↗</span>
+                      </a>
                     ))}
                   </div>
                 </div>
               )}
             </CardContent>
           </CollapsibleContent>
-          <div className="flex items-center justify-between border-border/60 border-t px-6 py-3 text-muted-foreground text-xs">
-            <span>ETA: {stage.eta}</span>
+          <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+              <Clock3 className="h-3.5 w-3.5" />
+              <span>{stage.eta}</span>
+            </div>
             <div className="flex items-center gap-2">
-              <Button asChild size="sm" variant="ghost">
+              <Button asChild size="sm" variant={ctaVariant}>
                 <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
-                  Open guide
+                  {ctaLabel}
                 </Link>
               </Button>
               <CollapsibleTrigger asChild>
                 <Button
-                  className="gap-1 rounded-xl"
+                  className="h-8 w-8 p-0"
                   size="sm"
-                  variant="secondary"
+                  variant="ghost"
                 >
-                  Details
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                  <span className="sr-only">Toggle details</span>
                 </Button>
               </CollapsibleTrigger>
             </div>
