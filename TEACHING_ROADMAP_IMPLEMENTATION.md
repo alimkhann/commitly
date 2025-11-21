@@ -10,7 +10,7 @@ Evolve the roadmap feature into a teaching-oriented learning path for beginners.
         *   [x] Implement multi-step pipeline (Plan -> Expand).
         *   [x] Implement time-based commit clustering.
         *   [x] Update prompts for teaching focus.
-    *   [ ] Linting & Formatting.
+    *   [x] Linting & Formatting.
 
 2.  **Frontend Updates**
     *   [ ] Update types in `commitly-frontend`.
@@ -19,4 +19,4 @@ Evolve the roadmap feature into a teaching-oriented learning path for beginners.
 ## Progress
 - [x] Backend models updated.
 - [x] Gemini service refactored with multi-step pipeline.
-- [ ] Linting checks.
+- [x] Linting checks.
