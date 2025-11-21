@@ -115,6 +115,8 @@ export default function RepoTimelinePage() {
   const [isRatingLoading, setIsRatingLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [handledGeneration, setHandledGeneration] = useState(false);
+  const [generationStatus, setGenerationStatus] =
+    useState<string>("Initializing...");
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
@@ -216,37 +218,46 @@ export default function RepoTimelinePage() {
         setError(null);
         setIsAuthError(false);
         const token = await getToken?.();
-        const response = await repoService.generateRoadmap(
+
+        const stream = repoService.generateRoadmapStream(
           repoUrl,
           token ?? undefined,
           { forceRefresh: true }
         );
-        if (cancelled) {
-          return;
-        }
 
-        setHandledGeneration(true);
+        for await (const event of stream) {
+          if (cancelled) break;
 
-        if (response.ok && response.data) {
-          setRoadmap(response.data);
-          upsertRoadmap(response.data, true);
-          setFetchState("idle");
-          router.replace(`/repo/${repoId}/timeline`);
-        } else {
-          if (response.status === 401) {
-            setIsAuthError(true);
-            setError(
-              "GitHub authentication failed. Please reconnect your account."
-            );
-          } else {
-            setError(response.error ?? "Unable to generate roadmap.");
+          if (event.type === "progress") {
+            setGenerationStatus(event.message);
+          } else if (event.type === "result") {
+            const roadmapData = event.data;
+            setRoadmap(roadmapData);
+            upsertRoadmap(roadmapData, true);
+            setFetchState("idle");
+            setHandledGeneration(true);
+            router.replace(`/repo/${repoId}/timeline`);
+            break;
+          } else if (event.type === "error") {
+            throw new Error(event.message);
           }
-          setFetchState("error");
         }
       } catch (err) {
         if (cancelled) return;
         console.error("Generation error:", err);
-        setError("An unexpected error occurred during generation.");
+        // Check if it's an auth error from the stream (might need better error handling in service)
+        if (err instanceof Error && err.message.includes("401")) {
+          setIsAuthError(true);
+          setError(
+            "GitHub authentication failed. Please reconnect your account."
+          );
+        } else {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "An unexpected error occurred during generation."
+          );
+        }
         setFetchState("error");
       } finally {
         if (!cancelled) {
@@ -442,7 +453,10 @@ export default function RepoTimelinePage() {
 
   if (showFullScreenLoading) {
     return (
-      <GenerationLoadingCard repoName={identity?.fullName ?? "Repository"} />
+      <GenerationLoadingCard
+        repoName={identity?.fullName ?? "Repository"}
+        status={generationStatus}
+      />
     );
   }
 
@@ -626,19 +640,19 @@ export default function RepoTimelinePage() {
 
       {activeRoadmap && (
         <>
-          <div className="sticky top-20 z-10 mb-8 -mx-2 overflow-x-auto px-2 py-2 md:static md:mx-0 md:mb-10 md:overflow-visible md:p-0">
+          <div className="-mx-2 sticky top-20 z-10 mb-8 overflow-x-auto px-2 py-2 md:static md:mx-0 md:mb-10 md:overflow-visible md:p-0">
             <div className="flex flex-nowrap gap-2 md:flex-wrap">
               {timelineStages.map((stage) => (
                 <Button
-                  key={stage.id}
-                  variant="outline"
-                  size="sm"
                   className="h-7 shrink-0 rounded-full text-xs"
+                  key={stage.id}
                   onClick={() =>
                     document
                       .getElementById(stage.id)
                       ?.scrollIntoView({ behavior: "smooth", block: "center" })
                   }
+                  size="sm"
+                  variant="outline"
                 >
                   <span className="mr-1.5 font-mono text-muted-foreground">
                     {stage.index}
@@ -793,7 +807,7 @@ function TimelineNodeCard({
             <div className="flex flex-col gap-1">
               <div
                 className={cn(
-                  "flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground",
+                  "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
                   align === "right" && "justify-end"
                 )}
               >
@@ -804,7 +818,9 @@ function TimelineNodeCard({
                 <span>{stage.difficulty}</span>
               </div>
               <div className="flex items-start justify-between gap-3">
-                <CardTitle className={cn("text-lg", align === "right" && "order-2")}>
+                <CardTitle
+                  className={cn("text-lg", align === "right" && "order-2")}
+                >
                   {stage.title}
                 </CardTitle>
                 <Badge
@@ -833,7 +849,7 @@ function TimelineNodeCard({
               {stage.goals && stage.goals.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
                       Goals
                     </h4>
                     <div className="h-px flex-1 bg-border/40" />
@@ -841,7 +857,7 @@ function TimelineNodeCard({
                   <ul className="space-y-2">
                     {stage.goals.map((goal, idx) => (
                       <li
-                        className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
                         key={idx}
                       >
                         <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
@@ -852,10 +868,56 @@ function TimelineNodeCard({
                 </div>
               )}
 
+              {/* Prerequisites Section */}
+              {stage.prerequisites && stage.prerequisites.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                      Prerequisites
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <ul className="space-y-2">
+                    {stage.prerequisites.map((prereq, idx) => (
+                      <li
+                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
+                        key={idx}
+                      >
+                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-accent/70" />
+                        <span>{prereq}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Checkpoints Section */}
+              {stage.checkpoints && stage.checkpoints.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                      Checkpoints
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <ul className="space-y-2">
+                    {stage.checkpoints.map((checkpoint, idx) => (
+                      <li
+                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
+                        key={idx}
+                      >
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+                        <span>{checkpoint}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Tasks Section */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
                     {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
                   </h4>
                   <div className="h-px flex-1 bg-border/40" />
@@ -866,39 +928,48 @@ function TimelineNodeCard({
                       className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
                       key={idx}
                     >
-                      <p className="font-medium text-sm text-foreground">
-                        {task.label}
-                      </p>
-                      {task.steps.length > 0 && (
-                        <ul className="mt-2.5 space-y-1.5">
-                          {task.steps.map((step, sIdx) => (
-                            <li
-                              className="flex items-start gap-2 text-xs text-muted-foreground"
-                              key={sIdx}
-                            >
-                              <span className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground" />
-                              <span>{step}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {(task.files?.length ?? 0) > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-foreground text-sm">
+                          {task.label}
+                        </p>
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        {task.steps.map((step, sIdx) => (
+                          <p
+                            className="text-muted-foreground text-xs leading-relaxed"
+                            key={sIdx}
+                          >
+                            {step}
+                          </p>
+                        ))}
+                      </div>
+                      {task.files && task.files.length > 0 && (
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                           <span className="font-medium text-foreground/80">
                             Files:
                           </span>
-                          {task.files?.join(", ")}
+                          {task.files.map((file, fIdx) => (
+                            <code
+                              className="rounded bg-muted/50 px-1 py-0.5 font-mono"
+                              key={fIdx}
+                            >
+                              {file}
+                            </code>
+                          ))}
                         </div>
                       )}
-                      {(task.commands?.length ?? 0) > 0 && (
-                        <div className="mt-2.5 space-y-1">
-                          {task.commands?.map((cmd, cIdx) => (
-                            <div
-                              className="w-fit rounded bg-muted/50 px-2 py-1 font-mono text-[10px] text-foreground/90"
+                      {task.commands && task.commands.length > 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <span className="font-medium text-foreground/80">
+                            Run:
+                          </span>
+                          {task.commands.map((cmd, cIdx) => (
+                            <code
+                              className="rounded bg-muted/50 px-1 py-0.5 font-mono"
                               key={cIdx}
                             >
-                              $ {cmd}
-                            </div>
+                              {cmd}
+                            </code>
                           ))}
                         </div>
                       )}
@@ -911,7 +982,7 @@ function TimelineNodeCard({
               {stage.code_examples && stage.code_examples.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
                       Code Examples
                     </h4>
                     <div className="h-px flex-1 bg-border/40" />
@@ -923,7 +994,7 @@ function TimelineNodeCard({
                           <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-medium">
+                                <span className="font-medium font-mono text-xs">
                                   {example.file}
                                 </span>
                                 <Badge
@@ -940,11 +1011,11 @@ function TimelineNodeCard({
                             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
                           </CollapsibleTrigger>
                           <CollapsibleContent>
-                            <div className="border-t border-border/50 p-3 pt-0">
+                            <div className="border-border/50 border-t p-3 pt-0">
                               <p className="mb-2 text-[11px] text-muted-foreground">
                                 {example.description}
                               </p>
-                              <pre className="overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
+                              <pre className="max-w-full overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
                                 <code>{example.snippet}</code>
                               </pre>
                             </div>
@@ -977,7 +1048,7 @@ function TimelineNodeCard({
               )}
             </CardContent>
           </CollapsibleContent>
-          <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+          <div className="flex items-center justify-between border-border/60 border-t bg-muted/20 px-5 py-3">
             <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
               <Clock3 className="h-3.5 w-3.5" />
               <span>{stage.eta}</span>
@@ -989,11 +1060,7 @@ function TimelineNodeCard({
                 </Link>
               </Button>
               <CollapsibleTrigger asChild>
-                <Button
-                  className="h-8 w-8 p-0"
-                  size="sm"
-                  variant="ghost"
-                >
+                <Button className="h-8 w-8 p-0" size="sm" variant="ghost">
                   <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
                   <span className="sr-only">Toggle details</span>
                 </Button>
@@ -1006,7 +1073,13 @@ function TimelineNodeCard({
   );
 }
 
-function GenerationLoadingCard({ repoName }: { repoName: string }) {
+function GenerationLoadingCard({
+  repoName,
+  status,
+}: {
+  repoName: string;
+  status?: string;
+}) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
       <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
@@ -1018,8 +1091,8 @@ function GenerationLoadingCard({ repoName }: { repoName: string }) {
           Generating roadmap for {repoName}
         </h2>
         <p className="text-muted-foreground">
-          Analyzing commit history, identifying key milestones, and structuring
-          your learning path. This may take up to a minute.
+          {status ||
+            "Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute."}
         </p>
       </div>
     </div>

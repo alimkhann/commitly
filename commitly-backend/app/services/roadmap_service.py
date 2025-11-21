@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import json
 import math
 from typing import Any, Callable, Sequence, cast
 
@@ -180,6 +181,156 @@ class RoadmapService:
         await self._run_db(self._result_store.upsert, response)
         await self._run_db(self._pin_store.pin, actor_id, repo.full_name)
         return response
+
+    async def generate_stream(
+        self,
+        repo_url: str,
+        force_refresh: bool = False,
+        actor_id: str | None = None,
+    ):
+        """
+        Generates a roadmap while yielding progress updates.
+        Yields JSON strings: {"type": "progress"|"result"|"error", ...}
+        """
+        identity = self._parse_identity(repo_url)
+        cache_key = f"roadmap:{identity.full_name.lower()}"
+
+        # Check cache first
+        if not force_refresh and self._cache:
+            cached = await self._cache.get(cache_key)
+            if cached:
+                if actor_id:
+                    await self._run_db(
+                        self._pin_store.pin, actor_id, identity.full_name
+                    )
+                yield json.dumps({"type": "result", "data": cached})
+                return
+
+        token = None
+        if actor_id:
+            record = await self._run_db(self._token_store.get_token, actor_id)
+            if record:
+                token = record.access_token
+        if token is None:
+            token = self._default_token
+
+        if not token:
+            yield json.dumps(
+                {"type": "error", "message": "Connect GitHub to generate a roadmap"}
+            )
+            return
+
+        yield json.dumps({"type": "progress", "message": "Connecting to GitHub..."})
+
+        github_client = GitHubService(token=token)
+        try:
+            repo = await self._fetch_repo(github_client, identity)
+        except Exception as exc:
+            # Try fallback token logic if needed, simplified here
+            if token != self._default_token and self._default_token:
+                github_client = GitHubService(token=self._default_token)
+                try:
+                    repo = await self._fetch_repo(github_client, identity)
+                except Exception as e:
+                    yield json.dumps({"type": "error", "message": str(e)})
+                    return
+            else:
+                yield json.dumps({"type": "error", "message": str(exc)})
+                return
+
+        yield json.dumps(
+            {
+                "type": "progress",
+                "message": f"Fetching commit history for {repo.full_name}...",
+            }
+        )
+
+        try:
+            commits = await github_client.fetch_commits(
+                identity, repo.default_branch, self._commit_limit
+            )
+        except Exception as exc:
+            yield json.dumps({"type": "error", "message": str(exc)})
+            return
+
+        if not commits:
+            yield json.dumps(
+                {"type": "error", "message": "Repository does not contain commits"}
+            )
+            return
+
+        chunks = self._build_chunks(repo.full_name, commits)
+        try:
+            await self._run_db(self._chunk_store.persist, chunks)
+        except ChunkStorageError as exc:
+            yield json.dumps({"type": "error", "message": str(exc)})
+            return
+
+        stage_budget = max(1, math.ceil(len(commits) * self._timeline_fraction))
+
+        # Queue for bridging callback to generator
+        queue = asyncio.Queue()
+
+        async def progress_callback(msg: str):
+            await queue.put({"type": "progress", "message": msg})
+
+        async def run_generation():
+            try:
+                timeline = await self._generator.generate(
+                    repo, chunks, stage_budget, progress_callback=progress_callback
+                )
+
+                # Post-processing
+                setup_stage = self._build_setup_stage(repo)
+                timeline.insert(0, setup_stage)
+                for i, stage in enumerate(timeline):
+                    stage.index = i + 1
+
+                # Difficulty
+                await queue.put(
+                    {"type": "progress", "message": "Classifying difficulty..."}
+                )
+                try:
+                    difficulty = await self._generator.classify_difficulty(repo, chunks)
+                except Exception:
+                    difficulty = "medium"
+
+                response = RoadmapResponse(
+                    repo=self._to_summary(repo, difficulty),
+                    timeline=timeline,
+                    cached=False,
+                    generated_at=datetime.now(timezone.utc),
+                )
+
+                # Cache and Store
+                if self._cache:
+                    await self._cache.set(
+                        cache_key, response.model_dump(mode="json"), self._cache_ttl
+                    )
+                await self._run_db(self._result_store.upsert, response)
+                if actor_id:
+                    await self._run_db(self._pin_store.pin, actor_id, repo.full_name)
+
+                await queue.put(
+                    {"type": "result", "data": response.model_dump(mode="json")}
+                )
+            except Exception as e:
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                await queue.put(None)
+
+        # Start generation task
+        task = asyncio.create_task(run_generation())
+
+        # Yield events
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield json.dumps(item)
+
+        # Ensure task is done (should be if None was put)
+        await task
 
     async def get_cached(self, repo_full_name: str) -> RoadmapResponse:
         result = await self._run_db(self._result_store.get, repo_full_name)

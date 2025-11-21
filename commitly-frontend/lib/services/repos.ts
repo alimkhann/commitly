@@ -10,6 +10,7 @@ import { env } from "@/lib/config/env";
 
 const API_ROUTES = {
   generateRoadmap: "/api/v1/roadmap/generate",
+  generateRoadmapStream: "/api/v1/roadmap/generate/stream",
   catalog: "/api/v1/roadmap/catalog",
   cached: (owner: string, repo: string) =>
     `/api/v1/roadmap/cached/${owner}/${repo}`,
@@ -205,6 +206,55 @@ export const repoService = {
 
   isBackendConfigured(): boolean {
     return Boolean(env.apiBaseUrl);
+  },
+
+  async *generateRoadmapStream(
+    repoUrl: string,
+    authToken?: string,
+    options?: { forceRefresh?: boolean }
+  ): AsyncGenerator<any, void, unknown> {
+    if (!env.apiBaseUrl) {
+      throw new Error("API base URL missing");
+    }
+
+    const params = new URLSearchParams({
+      repo_url: repoUrl,
+      force_refresh: String(options?.forceRefresh ?? false),
+    });
+
+    const url = `${env.apiBaseUrl}${API_ROUTES.generateRoadmapStream}?${params}`;
+
+    const response = await fetch(url, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    });
+
+    if (!(response.ok && response.body)) {
+      throw new Error(`Failed to start stream: ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          try {
+            yield JSON.parse(data);
+          } catch (e) {
+            console.error("Failed to parse SSE data", e);
+          }
+        }
+      }
+    }
   },
 
   generateRoadmap(
