@@ -222,9 +222,10 @@ export const repoService = {
       force_refresh: String(options?.forceRefresh ?? false),
     });
 
-    const url = `${env.apiBaseUrl}${API_ROUTES.generateRoadmapStream}?${params}`;
+    const url = new URL(API_ROUTES.generateRoadmapStream, env.apiBaseUrl);
+    url.search = params.toString();
 
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
     });
 

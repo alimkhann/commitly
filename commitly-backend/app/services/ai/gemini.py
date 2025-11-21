@@ -996,7 +996,7 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             "generation_config": {
                 "temperature": 0.3,
                 "topP": 0.8,
-                "maxOutputTokens": 10,
+                "maxOutputTokens": 50,
             },
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -1115,6 +1115,18 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             logger.error(f"Gemini call failed: {e}")
             raise GeminiGenerationError(f"Gemini call failed: {e}")
 
+    def _parse_json_from_text(self, text: str) -> Any:
+        if not text:
+            raise ValueError("Empty text")
+
+        cleaned_text = text.strip()
+        # Remove markdown code blocks
+        match = re.search(r"^```(?:\w+)?\s*(.*)\s*```$", cleaned_text, re.DOTALL)
+        if match:
+            cleaned_text = match.group(1)
+
+        return json.loads(cleaned_text)
+
     async def _plan_stages(
         self, repo: RepositoryMetadata, episodes: list[dict], stage_budget: int
     ) -> list[dict]:
@@ -1136,9 +1148,10 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
 
         text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
         try:
-            data = json.loads(text)
+            data = self._parse_json_from_text(text)
             return data.get("stages", [])
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to parse planning response: {e}")
             return []
 
     async def _expand_stage(
@@ -1162,7 +1175,7 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             raise GeminiGenerationError("No candidates")
 
         text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
-        data = json.loads(text)
+        data = self._parse_json_from_text(text)
 
         # Merge stage_def and data
         return TimelineStage(
@@ -1203,7 +1216,7 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
 
         # Parse the reviewed timeline
         try:
-            parsed = json.loads(text)
+            parsed = self._parse_json_from_text(text)
             reviewed_data = parsed.get("timeline", [])
 
             # Reconstruct TimelineStage objects

@@ -78,6 +78,21 @@ class RoadmapService:
         self._rating_store = rating_store
         self._view_tracker = view_tracker
 
+    def _calculate_stage_budget(self, commit_count: int) -> int:
+        """
+        Calculate the number of stages based on commit count.
+        We want a curve that gives ~8-10 stages for small repos (40 commits)
+        and scales up to ~25 stages for large repos (500+ commits).
+        """
+        if commit_count < 10:
+            return max(3, commit_count // 2)
+
+        # Base of 7 stages + 1 stage for every 20 commits
+        budget = 7 + int(commit_count / 20)
+
+        # Cap at 25 stages to keep the roadmap manageable
+        return min(25, budget)
+
     async def generate(
         self,
         repo_url: str,
@@ -162,7 +177,7 @@ class RoadmapService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(exc),
             )
-        stage_budget = max(1, math.ceil(len(commits) * self._timeline_fraction))
+        stage_budget = self._calculate_stage_budget(len(commits))
         logger.info(f"Planning {stage_budget} stages for {identity.full_name}")
         try:
             timeline = await self._generator.generate(repo, chunks, stage_budget)
@@ -296,7 +311,7 @@ class RoadmapService:
             yield json.dumps({"type": "error", "message": str(exc)})
             return
 
-        stage_budget = max(1, math.ceil(len(commits) * self._timeline_fraction))
+        stage_budget = self._calculate_stage_budget(len(commits))
         logger.info(f"Planning {stage_budget} stages for {identity.full_name}")
 
         # Queue for bridging callback to generator
