@@ -1,9 +1,9 @@
+# flake8: noqa: E501
 from __future__ import annotations
 
 import base64
 import json
 import logging
-import math
 import re
 from typing import Any, Optional, Sequence
 
@@ -127,6 +127,83 @@ Commit history context (oldest to newest):
 
 """
 
+PLANNING_PROMPT = """
+You are an expert engineering mentor designing a learning roadmap for a developer who wants to REBUILD this project: {name}.
+
+Your goal: Plan a curriculum of {stage_budget} distinct learning stages.
+
+Repository Context:
+{context}
+
+Instructions:
+1. Analyze the commit clusters above.
+2. Group them into logical "Stages" that represent meaningful milestones (e.g. "Initial Setup", "Authentication System", "Core API").
+3. Ensure the stages cover the ENTIRE project lifecycle.
+4. Return a JSON list of stages.
+
+Output Schema:
+{{
+  "stages": [
+    {{
+      "id": "stage-1",
+      "index": 1,
+      "title": "Stage Title",
+      "summary": "High-level summary of what is built here.",
+      "category": "setup|feature|refactor|testing|ops|other",
+      "difficulty": "intro|easy|medium|hard",
+      "commit_window": ["start_sha", "end_sha"]
+    }}
+  ]
+}}
+"""
+
+EXPANSION_PROMPT = """
+You are an expert engineering mentor. You are writing the detailed content for ONE stage of a learning roadmap.
+
+Repository: {name}
+Stage: {stage_title}
+Summary: {stage_summary}
+
+Relevant Commits:
+{context}
+
+Your Task:
+Create a detailed, actionable guide for this stage. The learner should be able to REPLICATE the features in these commits.
+
+Requirements:
+1. **Prerequisites**: What must be done/known before this stage?
+2. **Goals**: 1-3 clear learning objectives.
+3. **Tasks**: Step-by-step instructions.
+   - Use "step_by_step" style: "1. Run X", "2. Edit Y".
+   - Reference specific FILES and COMMANDS.
+4. **Checkpoints**: How does the user know they are done? (e.g. "Server starts on port 3000").
+5. **Code Examples**: Key snippets (clean, final code).
+
+Output JSON Schema:
+{{
+  "goals": ["..."],
+  "prerequisites": ["..."],
+  "checkpoints": ["..."],
+  "tasks": [
+    {{
+      "label": "Task Name",
+      "steps": ["1. ...", "2. ..."],
+      "files": ["path/to/file"],
+      "commands": ["npm run dev"]
+    }}
+  ],
+  "code_examples": [
+    {{
+      "file": "path/to/file",
+      "language": "ts",
+      "description": "...",
+      "snippet": "..."
+    }}
+  ],
+  "resources": [{{ "label": "...", "href": "..." }}]
+}}
+"""
+
 TIMELINE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -157,6 +234,14 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                         "enum": ["intro", "easy", "medium", "hard"],
                     },
                     "goals": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "prerequisites": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "checkpoints": {
                         "type": "array",
                         "items": {"type": "string"},
                     },
@@ -212,6 +297,8 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                     "category",
                     "difficulty",
                     "goals",
+                    "prerequisites",
+                    "checkpoints",
                     "tasks",
                     "resources",
                     "commit_window",
@@ -220,6 +307,84 @@ TIMELINE_SCHEMA: dict[str, Any] = {
         }
     },
     "required": ["timeline"],
+}
+
+PLANNING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "stages": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "index": {"type": "integer"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "category": {"type": "string"},
+                    "difficulty": {"type": "string"},
+                    "commit_window": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": [
+                    "id",
+                    "index",
+                    "title",
+                    "summary",
+                    "category",
+                    "difficulty",
+                    "commit_window",
+                ],
+            },
+        }
+    },
+    "required": ["stages"],
+}
+
+EXPANSION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "goals": {"type": "array", "items": {"type": "string"}},
+        "prerequisites": {"type": "array", "items": {"type": "string"}},
+        "checkpoints": {"type": "array", "items": {"type": "string"}},
+        "tasks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "steps": {"type": "array", "items": {"type": "string"}},
+                    "files": {"type": "array", "items": {"type": "string"}},
+                    "commands": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["label", "steps"],
+            },
+        },
+        "code_examples": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "language": {"type": "string"},
+                    "description": {"type": "string"},
+                    "snippet": {"type": "string"},
+                },
+                "required": ["file", "language", "description", "snippet"],
+            },
+        },
+        "resources": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "href": {"type": "string"},
+                },
+                "required": ["label", "href"],
+            },
+        },
+    },
+    "required": ["goals", "prerequisites", "checkpoints", "tasks"],
 }
 
 
@@ -260,127 +425,142 @@ class GeminiRoadmapGenerator:
         chunk_list = list(chunks)
         if not chunk_list:
             raise GeminiGenerationError("Repository does not have enough commits")
-        attempt_chunks = chunk_list
-        attempt = 0
-        while attempt < MAX_GEMINI_ATTEMPTS:
-            attempt += 1
-            context = self._render_episodes_context(attempt_chunks)
-            body = await self._invoke_gemini(
-                repo=repo,
-                stage_budget=stage_budget,
-                context=context,
-                attempt=attempt,
-                chunk_count=len(attempt_chunks),
-                total_chunks=len(chunk_list),
-                mode="default",
-            )
-            try:
-                timeline = self._parse_timeline(body)
-                return [TimelineStage(**stage) for stage in timeline]
-            except GeminiGenerationError:
-                finish_reasons = self._extract_finish_reasons(body)
-                if (
-                    "MAX_TOKENS" in finish_reasons
-                    and len(attempt_chunks) > MIN_RETRY_CHUNKS
-                ):
-                    new_length = max(MIN_RETRY_CHUNKS, len(attempt_chunks) // 2)
-                    if (
-                        new_length == len(attempt_chunks)
-                        and len(attempt_chunks) > MIN_RETRY_CHUNKS
-                    ):
-                        new_length = max(MIN_RETRY_CHUNKS, len(attempt_chunks) - 1)
-                    if new_length < len(attempt_chunks):
-                        attempt_chunks = attempt_chunks[:new_length]
-                        logger.info(
-                            "Retrying Gemini with %d/%d chunks due to MAX_TOKENS "
-                            "(attempt %d)",
-                            new_length,
-                            len(chunk_list),
-                            attempt + 1,
-                        )
-                        continue
-                raise
 
-        # Final fallback with compressed context (commit headers only)
-        minimal_context = self._render_minimal_context(chunk_list[:MIN_RETRY_CHUNKS])
+        # 1. Group commits
+        episodes = self._group_commits_into_episodes(chunk_list)
+
+        # 2. Plan Stages
         try:
-            body = await self._invoke_gemini(
-                repo=repo,
-                stage_budget=stage_budget,
-                context=minimal_context,
-                attempt=attempt + 1,
-                chunk_count=min(len(chunk_list), MIN_RETRY_CHUNKS),
-                total_chunks=len(chunk_list),
-                mode="minimal",
-            )
-            timeline = self._parse_timeline(body)
-            return [TimelineStage(**stage) for stage in timeline]
-        except GeminiGenerationError:
-            logger.warning(
-                "Gemini exhausted attempts; falling back to heuristic roadmap",
-                extra={
-                    "repo": repo.full_name,
-                    "total_chunks": len(chunk_list),
-                    "stage_budget": stage_budget,
-                },
-            )
+            stages_plan = await self._plan_stages(repo, episodes, stage_budget)
+        except Exception as e:
+            logger.error(f"Planning failed: {e}")
+            # Fallback to old method or heuristic
             return self._fallback_timeline(repo, chunk_list, stage_budget)
+
+        # 3. Expand Stages
+        full_timeline = []
+        for stage_def in stages_plan:
+            # Find commits for this stage
+            stage_commits = self._find_commits_for_stage(
+                chunk_list, stage_def.get("commit_window", [])
+            )
+
+            try:
+                expanded_stage = await self._expand_stage(
+                    repo, stage_def, stage_commits
+                )
+                full_timeline.append(expanded_stage)
+            except Exception as e:
+                logger.error(f"Expansion failed for stage {stage_def.get('id')}: {e}")
+                # Add minimal stage
+                full_timeline.append(
+                    TimelineStage(
+                        id=stage_def.get("id"),
+                        index=stage_def.get("index"),
+                        title=stage_def.get("title"),
+                        summary=stage_def.get("summary"),
+                        status="not-started",
+                        eta="45m",
+                        category=stage_def.get("category", "feature"),
+                        difficulty=stage_def.get("difficulty", "medium"),
+                        goals=["Review commits"],
+                        tasks=[],
+                        commit_window=stage_def.get("commit_window", []),
+                    )
+                )
+
+        return full_timeline
+
+    def _fallback_timeline(
+        self, repo: RepositoryMetadata, chunks: list[CommitChunk], stage_budget: int
+    ) -> list[TimelineStage]:
+        return [
+            TimelineStage(
+                id="stage-1",
+                index=1,
+                title="Explore Repository",
+                summary="Automated generation failed. Please explore the repository manually.",
+                status="not-started",
+                eta="1h",
+                category="other",
+                difficulty="medium",
+                goals=["Review codebase"],
+                prerequisites=[],
+                checkpoints=[],
+                tasks=[],
+                code_examples=[],
+                resources=[
+                    TimelineResource(label="Repository", href=repo.html_url or "")
+                ],
+                commit_window=[],
+            )
+        ]
 
     def _group_commits_into_episodes(self, chunks: Sequence[CommitChunk]) -> list[dict]:
         """
-        Group consecutive commits into 'episodes' to provide better context to the LLM.
-        Target 8-12 episodes total.
+        Group consecutive commits into 'episodes' based on time gaps and size.
         """
         if not chunks:
             return []
 
-        target_episodes = 10
-        commits_per_episode = max(1, math.ceil(len(chunks) / target_episodes))
-
         episodes = []
         current_episode_commits = []
 
+        # Sort chunks by authored_at if available, else preserve order
+        # Assuming chunks might be mixed, but usually they come ordered from DB/Git.
+        # We'll trust the input order but check timestamps for gaps.
+
+        last_time = None
+
         for i, chunk in enumerate(chunks):
-            current_episode_commits.append(chunk)
+            is_new_episode = False
 
-            if (
-                len(current_episode_commits) >= commits_per_episode
-                or i == len(chunks) - 1
-            ):
-                # Finalize episode
-                first_commit = current_episode_commits[0]
-                last_commit = current_episode_commits[-1]
+            if last_time and chunk.authored_at:
+                # If gap > 24 hours, new episode
+                if (chunk.authored_at - last_time).total_seconds() > 86400:
+                    is_new_episode = True
 
-                summary_lines = []
-                for c in current_episode_commits:
-                    first_line = (
-                        (c.content or "").splitlines()[0]
-                        if (c.content or "").splitlines()
-                        else "No content"
-                    )
-                    summary_lines.append(first_line[:50])
+            # Or if current episode is too big (e.g. > 20 commits)
+            if len(current_episode_commits) >= 20:
+                is_new_episode = True
 
-                summary = "; ".join(summary_lines[:3])
-                if len(summary_lines) > 3:
-                    summary += "..."
-
-                episodes.append(
-                    {
-                        "index": len(episodes) + 1,
-                        "summary": summary,
-                        "shas": [c.commit_sha[:7] for c in current_episode_commits],
-                        "details": "\n\n".join(
-                            [c.content or "" for c in current_episode_commits]
-                        ),
-                        "commit_window": [
-                            first_commit.commit_sha,
-                            last_commit.commit_sha,
-                        ],
-                    }
-                )
+            if is_new_episode and current_episode_commits:
+                self._finalize_episode(episodes, current_episode_commits)
                 current_episode_commits = []
 
+            current_episode_commits.append(chunk)
+            if chunk.authored_at:
+                last_time = chunk.authored_at
+
+        if current_episode_commits:
+            self._finalize_episode(episodes, current_episode_commits)
+
         return episodes
+
+    def _finalize_episode(self, episodes: list, commits: list):
+        first_commit = commits[0]
+        last_commit = commits[-1]
+
+        summary_lines = []
+        for c in commits[:5]:  # Take first 5 for summary
+            first_line = (
+                (c.content or "").splitlines()[0]
+                if (c.content or "").splitlines()
+                else "No content"
+            )
+            summary_lines.append(first_line[:60])
+
+        summary = "; ".join(summary_lines)
+
+        episodes.append(
+            {
+                "index": len(episodes) + 1,
+                "summary": summary,
+                "shas": [c.commit_sha[:7] for c in commits],
+                "details": "\n\n".join([c.content or "" for c in commits]),
+                "commit_window": [first_commit.commit_sha, last_commit.commit_sha],
+            }
+        )
 
     def _render_episodes_context(self, chunks: Sequence[CommitChunk]) -> str:
         episodes = self._group_commits_into_episodes(chunks)
@@ -814,102 +994,141 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             )
             return "medium"
 
-    def _fallback_timeline(
-        self,
-        repo: RepositoryMetadata,
-        chunks: Sequence[CommitChunk],
-        stage_budget: int,
-    ) -> list[TimelineStage]:
-        if not chunks:
-            raise GeminiGenerationError(
-                "Gemini failed to generate and no commits available for fallback"
-            )
-        stage_count = max(1, min(stage_budget, len(chunks)))
-        group_size = math.ceil(len(chunks) / stage_count)
-        timeline: list[TimelineStage] = []
-        repo_url = (
-            repo.html_url or f"https://github.com/{repo.full_name}"
-            if getattr(repo, "full_name", None)
-            else None
+    async def _call_gemini_generic(
+        self, prompt: str, schema: dict, repo_name: str, temperature: float = 0.2
+    ) -> dict:
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generation_config": {
+                "responseMimeType": "application/json",
+                "responseSchema": schema,
+                "temperature": temperature,
+                "topP": 0.8,
+                "maxOutputTokens": MAX_OUTPUT_TOKENS,
+            },
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                response = await client.post(
+                    self._endpoint,
+                    params={"key": self._api_key},
+                    json=payload,
+                )
+                if response.status_code >= 400:
+                    logger.error(f"Gemini API error: {response.text}")
+                    raise GeminiGenerationError(
+                        f"Gemini API error: {response.status_code}"
+                    )
+
+                return response.json()
+        except Exception as e:
+            logger.error(f"Gemini call failed: {e}")
+            raise GeminiGenerationError(f"Gemini call failed: {e}")
+
+    async def _plan_stages(
+        self, repo: RepositoryMetadata, episodes: list[dict], stage_budget: int
+    ) -> list[dict]:
+        context = ""
+        for ep in episodes:
+            context += f"Episode {ep['index']}: {ep['summary']}\nWindow: {ep['commit_window']}\n\n"
+
+        prompt = PLANNING_PROMPT.format(
+            name=repo.full_name, stage_budget=stage_budget, context=context
         )
-        for idx in range(stage_count):
-            start = idx * group_size
-            end = min(len(chunks), start + group_size)
-            stage_chunks = chunks[start:end]
-            if not stage_chunks:
-                continue
-            title = self._fallback_title(stage_chunks, idx)
-            summary = self._fallback_summary(stage_chunks)
-            tasks = self._fallback_tasks(stage_chunks)
-            resources = (
-                [TimelineResource(label="Repository", href=repo_url)]
-                if repo_url
-                else [TimelineResource(label="GitHub", href="https://github.com/")]
-            )
-            timeline.append(
-                TimelineStage(
-                    id=f"stage-{idx + 1}",
-                    index=idx + 1,
-                    title=title,
-                    summary=summary,
-                    status="not-started",
-                    eta="45m",
-                    category="feature",
-                    difficulty="medium",
-                    goals=["Understand the changes in this commit range"],
-                    tasks=tasks,
-                    resources=resources,
-                    commit_window=[
-                        stage_chunks[0].commit_sha,
-                        stage_chunks[-1].commit_sha,
-                    ],
-                )
-            )
-        if not timeline:
-            raise GeminiGenerationError("Fallback timeline generation failed")
-        return timeline
 
-    def _fallback_title(self, stage_chunks: Sequence[CommitChunk], idx: int) -> str:
-        first = stage_chunks[0].commit_sha[:7]
-        last = stage_chunks[-1].commit_sha[:7]
-        if first == last:
-            window = first
-        else:
-            window = f"{first}…{last}"
-        return f"Stage {idx + 1}: Review commits {window}"
+        response = await self._call_gemini_generic(
+            prompt, PLANNING_SCHEMA, repo.full_name
+        )
 
-    def _fallback_summary(self, stage_chunks: Sequence[CommitChunk]) -> str:
-        lines = []
-        for chunk in stage_chunks[:3]:
-            first_line = (chunk.content or "").splitlines()
-            text = first_line[0].strip() if first_line else ""
-            if text:
-                lines.append(text[:180])
-        if not lines:
-            lines = [
-                f"{len(stage_chunks)} commits touching {stage_chunks[0].chunk_type}"
-            ]
-        return " / ".join(lines)
+        candidates = response.get("candidates", [])
+        if not candidates:
+            raise GeminiGenerationError("No candidates")
 
-    def _fallback_tasks(self, stage_chunks: Sequence[CommitChunk]) -> list[StageTask]:
-        tasks: list[StageTask] = []
-        for chunk in stage_chunks[:3]:
-            lines = [line.strip() for line in (chunk.content or "").splitlines()]
-            snippet = ""
-            for line in lines:
-                if line and not line.startswith("---"):
-                    snippet = line[:140]
-                    break
-            if snippet:
-                tasks.append(
-                    StageTask(label=f"Review {chunk.commit_sha[:7]}", steps=[snippet])
-                )
+        text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
+        try:
+            data = json.loads(text)
+            return data.get("stages", [])
+        except Exception:
+            return []
 
-        if not tasks:
-            window = (
-                f"{stage_chunks[0].commit_sha[:7]}–{stage_chunks[-1].commit_sha[:7]}"
-            )
-            tasks = [
-                StageTask(label="Review Commits", steps=[f"Read commits {window}"])
-            ]
-        return tasks
+    async def _expand_stage(
+        self, repo: RepositoryMetadata, stage_def: dict, commits: list[CommitChunk]
+    ) -> TimelineStage:
+        context = self._render_minimal_context(commits, max_lines=20)
+
+        prompt = EXPANSION_PROMPT.format(
+            name=repo.full_name,
+            stage_title=stage_def.get("title"),
+            stage_summary=stage_def.get("summary"),
+            context=context,
+        )
+
+        response = await self._call_gemini_generic(
+            prompt, EXPANSION_SCHEMA, repo.full_name
+        )
+
+        candidates = response.get("candidates", [])
+        if not candidates:
+            raise GeminiGenerationError("No candidates")
+
+        text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
+        data = json.loads(text)
+
+        # Merge stage_def and data
+        return TimelineStage(
+            id=stage_def["id"],
+            index=stage_def["index"],
+            title=stage_def["title"],
+            summary=stage_def["summary"],
+            status="not-started",
+            eta="45m",  # Could ask AI for this too
+            category=stage_def.get("category", "feature"),
+            difficulty=stage_def.get("difficulty", "medium"),
+            goals=data.get("goals", []),
+            prerequisites=data.get("prerequisites", []),
+            checkpoints=data.get("checkpoints", []),
+            tasks=[StageTask(**t) for t in data.get("tasks", [])],
+            code_examples=[t for t in data.get("code_examples", [])],
+            resources=[TimelineResource(**r) for r in data.get("resources", [])],
+            commit_window=stage_def.get("commit_window", []),
+        )
+
+    def _find_commits_for_stage(
+        self, chunks: list[CommitChunk], window: list[str]
+    ) -> list[CommitChunk]:
+        if not window or len(window) != 2:
+            return []
+
+        start_sha, end_sha = window
+        found = []
+        in_window = False
+
+        for chunk in chunks:
+            if chunk.commit_sha.startswith(start_sha) or start_sha.startswith(
+                chunk.commit_sha
+            ):
+                in_window = True
+
+            if in_window:
+                found.append(chunk)
+
+            if chunk.commit_sha.startswith(end_sha) or end_sha.startswith(
+                chunk.commit_sha
+            ):
+                in_window = False
+                break
+
+        return found
