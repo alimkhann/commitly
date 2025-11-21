@@ -229,7 +229,16 @@ export const repoService = {
     });
 
     if (!(response.ok && response.body)) {
-      throw new Error(`Failed to start stream: ${response.statusText}`);
+      let errorMessage = `Failed to start stream: ${response.status} ${response.statusText}`;
+      try {
+        const errorBody = await response.text();
+        if (errorBody) {
+          errorMessage += ` - ${errorBody}`;
+        }
+      } catch (e) {
+        // Ignore error reading body
+      }
+      throw new Error(errorMessage);
     }
 
     const reader = response.body.getReader();
