@@ -102,7 +102,20 @@ class RoadmapService:
                 detail="Connect GitHub to generate a roadmap",
             )
         github_client = GitHubService(token=token)
-        repo = await self._fetch_repo(github_client, identity)
+        try:
+            repo = await self._fetch_repo(github_client, identity)
+        except HTTPException as exc:
+            if (
+                exc.status_code == status.HTTP_401_UNAUTHORIZED
+                and token != self._default_token
+                and self._default_token
+            ):
+                # Fallback to default token if user token is invalid
+                github_client = GitHubService(token=self._default_token)
+                repo = await self._fetch_repo(github_client, identity)
+            else:
+                raise exc
+
         try:
             commits = await github_client.fetch_commits(
                 identity, repo.default_branch, self._commit_limit
