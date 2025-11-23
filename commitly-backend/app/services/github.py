@@ -240,44 +240,115 @@ class GitHubService:
         branch: str,
         limit: int,
     ) -> List[CommitSnapshot]:
-        response = await self._request(
-            "GET",
-            f"/repos/{identity.full_name}/commits",
-            params={"sha": branch, "per_page": max(1, min(100, limit))},
-        )
-        commits = response.json()
-        snapshots: List[CommitSnapshot] = []
-        for entry in commits:
-            sha = entry["sha"]
-            detail = await self._request(
-                "GET", f"/repos/{identity.full_name}/commits/{sha}"
-            )
-            detail_payload = detail.json()
-            files_payload = detail_payload.get("files") or []
-            files = [
-                CommitFileDiff(
-                    filename=item.get("filename", "unknown"),
-                    status=item.get("status", "modified"),
-                    patch=item.get("patch"),
+        """
+        Fetch commits from the repository.
+        If limit > 100, we paginate to get the list of commits.
+        If the total number of commits exceeds 100, we sample them to avoid rate limits
+        while still covering a longer history.
+        """
+        all_commits_meta = []
+        page = 1
+        per_page = 100
+
+        # 1. Fetch list of commits (metadata only)
+        while len(all_commits_meta) < limit:
+            try:
+                response = await self._request(
+                    "GET",
+                    f"/repos/{identity.full_name}/commits",
+                    params={
+                        "sha": branch,
+                        "per_page": per_page,
+                        "page": page
+                    },
                 )
-                for item in files_payload
-            ]
-            commit = detail_payload.get("commit", {})
-            authored = commit.get("author") or {}
-            authored_date = authored.get("date")
-            snapshots.append(
-                CommitSnapshot(
-                    sha=sha,
-                    message=commit.get("message", ""),
-                    html_url=detail_payload.get("html_url", ""),
-                    authored_date=(
-                        datetime.fromisoformat(authored_date.replace("Z", "+00:00"))
-                        if authored_date
-                        else None
-                    ),
-                    files=files,
-                )
-            )
+                batch = response.json()
+                if not batch:
+                    break
+
+                all_commits_meta.extend(batch)
+
+                if len(batch) < per_page:
+                    break
+
+                page += 1
+            except GitHubServiceError:
+                break
+
+        # Trim to limit
+        all_commits_meta = all_commits_meta[:limit]
+
+        if not all_commits_meta:
+            return []
+
+        # 2. Sample commits if we have too many
+        # We want to fetch details for at most ~100 commits to respect rate limits
+        # but distributed across the range we fetched.
+        DETAIL_LIMIT = 100
+        commits_to_fetch = []
+
+        if len(all_commits_meta) <= DETAIL_LIMIT:
+            commits_to_fetch = all_commits_meta
+        else:
+            # Uniform sampling
+            step = len(all_commits_meta) / DETAIL_LIMIT
+            for i in range(DETAIL_LIMIT):
+                idx = int(i * step)
+                if idx < len(all_commits_meta):
+                    commits_to_fetch.append(all_commits_meta[idx])
+
+            # Ensure the very last commit (most recent) is included if not already
+            if all_commits_meta[0]["sha"] != commits_to_fetch[0]["sha"]:
+                 commits_to_fetch[0] = all_commits_meta[0]
+
+        # 3. Fetch details in parallel
+        # Use a semaphore to limit concurrency
+        sem = asyncio.Semaphore(10)
+
+        async def fetch_detail(entry):
+            async with sem:
+                sha = entry["sha"]
+                try:
+                    detail = await self._request(
+                        "GET", f"/repos/{identity.full_name}/commits/{sha}"
+                    )
+                    detail_payload = detail.json()
+                    files_payload = detail_payload.get("files") or []
+                    files = [
+                        CommitFileDiff(
+                            filename=item.get("filename", "unknown"),
+                            status=item.get("status", "modified"),
+                            patch=item.get("patch"),
+                        )
+                        for item in files_payload
+                    ]
+                    commit = detail_payload.get("commit", {})
+                    authored = commit.get("author") or {}
+                    authored_date = authored.get("date")
+                    return CommitSnapshot(
+                        sha=sha,
+                        message=commit.get("message", ""),
+                        html_url=detail_payload.get("html_url", ""),
+                        authored_date=(
+                            datetime.fromisoformat(authored_date.replace("Z", "+00:00"))
+                            if authored_date
+                            else None
+                        ),
+                        files=files,
+                    )
+                except Exception:
+                    return None
+
+        tasks = [fetch_detail(c) for c in commits_to_fetch]
+        results = await asyncio.gather(*tasks)
+
+        # Filter out failures and sort by date (newest first, as returned by API)
+        snapshots = [r for r in results if r is not None]
+
+        # Since we fetched in parallel, order might be preserved but let's ensure it matches input order
+        # Actually asyncio.gather preserves order of results matching tasks.
+        # The input `commits_to_fetch` was ordered (newest to oldest).
+
         return snapshots
 
 

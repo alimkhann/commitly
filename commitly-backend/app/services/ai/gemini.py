@@ -101,7 +101,7 @@ Follow these rules:
       "summary": "…",
       "status": "not-started",
       "eta": "45m",
-      "category": "setup|feature|refactor|testing|ops|other",
+      "category": "setup|feature|refactor|testing|ops|perf|docs|style|chore|other",
       "difficulty": "intro|easy|medium|hard",
       "goals": ["..."],
       "tasks": [
@@ -176,7 +176,7 @@ Output Schema:
       "index": 1,
       "title": "Stage Title",
       "summary": "High-level summary of what is built here.",
-      "category": "setup|feature|refactor|testing|ops|other",
+      "category": "setup|feature|refactor|testing|ops|perf|docs|style|chore|other",
       "difficulty": "intro|easy|medium|hard",
       "commit_window": ["start_sha", "end_sha"]
     }}
@@ -255,6 +255,10 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                             "refactor",
                             "testing",
                             "ops",
+                            "perf",
+                            "docs",
+                            "style",
+                            "chore",
                             "other",
                         ],
                     },
