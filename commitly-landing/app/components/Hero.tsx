@@ -30,8 +30,8 @@ export default function Hero({
     const { t } = useLanguage()
 
     return (
-        <section className="w-full px-8 pt-2 pb-32">
-            <div className="relative isolate rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col bg-black">
+        <section className="w-full px-2 sm:px-2 pt-2 pb-32">
+            <div className="relative isolate rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col bg-black min-h-[calc(100vh-6rem)] justify-center">
                 <div aria-hidden className="absolute inset-0 -z-10">
                     <ColorBends
                         colors={["#FF0000", "#00FF00", "#0000FF"]}
@@ -79,20 +79,6 @@ export default function Hero({
                             {waitlistStatus === 'error' && t.errorMessage}
                         </div>
                     )}
-                </div>
-
-                {/* Editor mock */}
-                <div className="hidden sm:block w-full max-w-[1180px] mx-auto px-4 sm:px-0" style={{ height: '26.25rem' }}>
-                    <div className="rounded-t-md overflow-hidden editor-shadow h-full">
-                        <Image
-                            src="/editor-mock.jpg"
-                            width={1180}
-                            height={738}
-                            alt="Editor mock"
-                            priority
-                            className="w-full h-full object-cover object-top"
-                        />
-                    </div>
                 </div>
             </div>
         </section>

@@ -39,15 +39,15 @@ export default function WaitlistModal({
                 </div>
                 <form onSubmit={onSubmit} className="space-y-3">
                     <div className="flex rounded-lg overflow-hidden bg-black/70 ring-1 ring-inset ring-white/10">
-                        <input 
+                        <input
                             className="input-dark flex-1 px-5"
                             placeholder={t.modalEmailPlaceholder}
                             value={waitlistEmail}
-                            onChange={(e) => setWaitlistEmail(e.target.value)} 
+                            onChange={(e) => setWaitlistEmail(e.target.value)}
                         />
-                        <button 
+                        <button
                             disabled={isSubmittingWaitlist || !waitlistEmail}
-                            className="btn-white rounded-none px-5 disabled:opacity-60"
+                            className="btn-white rounded-none px-5 disabled:opacity-60 !text-sm sm:!text-base"
                         >
                             {waitlistButtonLabel}
                         </button>
@@ -61,7 +61,7 @@ export default function WaitlistModal({
                     )}
                 </form>
             </div>
-        </div>, 
+        </div>,
         document.body
     )
 }

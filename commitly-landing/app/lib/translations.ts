@@ -62,7 +62,7 @@ export const translations: Record<Language, Translations> = {
     // heroTitle: 'Don\'t paste sh*tty code—write it.',
     heroTitle: 'Break down. Learn. Build.',
     heroSubtitle: 'Commitly turns a GitHub repo into a structured learning path, with hands-on tasks and tiny hints so you learn by building.',
-    emailPlaceholder: 'johndoe@example.com',
+    emailPlaceholder: 'Enter your email',
     peopleJoined: 'people already joined',
     successMessage: "You're in! 🚀",
     duplicateMessage: "You're already on the list.",
@@ -112,7 +112,7 @@ export const translations: Record<Language, Translations> = {
     // Hero section
     heroTitle: 'Разбирай. Учись. Создавай.',
     heroSubtitle: 'Commitly превращает репозиторий GitHub в структурированный учебный курс с практическими заданиями и небольшими подсказками, чтобы вы учились, создавая.',
-    emailPlaceholder: 'ivan@example.com',
+    emailPlaceholder: 'Введите свой email',
     peopleJoined: 'человек уже записались в очередь',
     successMessage: 'Вы в списке! 🚀',
     duplicateMessage: 'Вы уже в списке.',
@@ -162,7 +162,7 @@ export const translations: Record<Language, Translations> = {
     // Hero section
     heroTitle: '拆解.學習.建構.',
     heroSubtitle: 'Commitly 將 GitHub 儲存庫轉化為結構化的學習路徑，透過實作任務與精簡提示，讓您在建構中學習。',
-    emailPlaceholder: 'example@example.com',
+    emailPlaceholder: '輸入你嘅電郵地址',
     peopleJoined: '人已加入',
     successMessage: '您已加入！🚀',
     duplicateMessage: '您已在名單中。',
@@ -231,7 +231,7 @@ export const translations: Record<Language, Translations> = {
 
     // Modals
     joinWaitlistModalTitle: 'Күту тізіміне қосылу',
-    modalEmailPlaceholder: 'email@domain.com',
+    modalEmailPlaceholder: 'Электрондық поштаңызды енгізіңіз',
     modalSuccessMessage: 'Сіз тізімде! 🚀',
     modalDuplicateMessage: 'Сіз қазірдің өзінде тіркелген сияқтысыз.',
     modalErrorMessage: 'Қате орын алды. Қайталап көріңіз.',

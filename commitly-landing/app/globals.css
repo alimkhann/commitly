@@ -115,9 +115,15 @@ html, body, #__next { height: 100%; }
 .h1-hero {
   font-size: clamp(2.125rem, 1.1250rem + 6.3333vw, 128px);
   line-height: 0.95;
-  letter-spacing: -0.25rem;
+  letter-spacing: -0.05em;
   font-weight: 600;
   text-wrap: balance;
+}
+
+@media (min-width: 640px) {
+  .h1-hero {
+    letter-spacing: -0.25rem;
+  }
 }
 .sub-hero {
   font-size: clamp(1rem, 0.5rem + 2.5vw, 1.5rem);
