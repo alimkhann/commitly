@@ -3,7 +3,6 @@
 import { useAuth } from "@clerk/nextjs";
 import {
   CheckCircle2,
-  ChevronDown,
   CircleDotDashed,
   Clock3,
   RefreshCcw,
@@ -27,16 +26,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+
 import { StarRating } from "@/components/ui/star-rating";
 import type { RepoRecord, RepoTimelineStage } from "@/data/repos";
 import {
@@ -775,234 +769,74 @@ function TimelineNodeCard({
     isSignedIn && stage.status !== "done" ? "default" : "secondary";
 
   return (
-    <Collapsible className="group">
-      <div className="relative">
-        <span
-          className={cn(
-            "pointer-events-none absolute top-1/2 hidden h-px w-10 bg-border/50 md:block",
-            align === "left" ? "-right-10" : "-left-10"
-          )}
-        />
-        <Card
-          className={cn(
-            "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
-            isCurrent && "ring-1 ring-primary/40"
-          )}
-        >
-          <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
-            <div className="flex flex-col gap-1">
-              <div
-                className={cn(
-                  "flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground",
-                  align === "right" && "justify-end"
-                )}
+    <div className="relative group">
+      <span
+        className={cn(
+          "pointer-events-none absolute top-1/2 hidden h-px w-10 bg-border/50 md:block",
+          align === "left" ? "-right-10" : "-left-10"
+        )}
+      />
+      <Card
+        className={cn(
+          "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
+          isCurrent && "ring-1 ring-primary/40"
+        )}
+      >
+        <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
+          <div className="flex flex-col gap-1">
+            <div
+              className={cn(
+                "flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground",
+                align === "right" && "justify-end"
+              )}
+            >
+              <span>Stage {stage.index}</span>
+              <span>·</span>
+              <span>{stage.category}</span>
+              <span>·</span>
+              <span>{stage.difficulty}</span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle
+                className={cn("text-lg", align === "right" && "order-2")}
               >
-                <span>Stage {stage.index}</span>
-                <span>·</span>
-                <span>{stage.category}</span>
-                <span>·</span>
-                <span>{stage.difficulty}</span>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <CardTitle className={cn("text-lg", align === "right" && "order-2")}>
-                  {stage.title}
-                </CardTitle>
-                <Badge
-                  className={cn(
-                    "flex shrink-0 items-center gap-1 text-[10px]",
-                    align === "right" && "order-1"
-                  )}
-                  variant="secondary"
-                >
-                  {statusIcon}
-                  <span className="uppercase">
-                    {stage.status === "not-started" && !isSignedIn
-                      ? "not started"
-                      : stage.status.replace("-", " ")}
-                  </span>
-                </Badge>
-              </div>
-            </div>
-            <CardDescription className="mt-1.5 leading-relaxed">
-              {stage.summary}
-            </CardDescription>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="space-y-6 pt-1">
-              {/* Goals Section */}
-              {stage.goals && stage.goals.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Goals
-                    </h4>
-                    <div className="h-px flex-1 bg-border/40" />
-                  </div>
-                  <ul className="space-y-2">
-                    {stage.goals.map((goal, idx) => (
-                      <li
-                        className="flex items-start gap-2.5 text-sm text-muted-foreground"
-                        key={idx}
-                      >
-                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
-                        <span>{goal}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Tasks Section */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                    {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
-                  </h4>
-                  <div className="h-px flex-1 bg-border/40" />
-                </div>
-                <div className="space-y-3">
-                  {stage.tasks.map((task, idx) => (
-                    <div
-                      className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
-                      key={idx}
-                    >
-                      <p className="font-medium text-sm text-foreground">
-                        {task.label}
-                      </p>
-                      {task.steps.length > 0 && (
-                        <ul className="mt-2.5 space-y-1.5">
-                          {task.steps.map((step, sIdx) => (
-                            <li
-                              className="flex items-start gap-2 text-xs text-muted-foreground"
-                              key={sIdx}
-                            >
-                              <span className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground" />
-                              <span>{step}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {(task.files?.length ?? 0) > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-                          <span className="font-medium text-foreground/80">
-                            Files:
-                          </span>
-                          {task.files?.join(", ")}
-                        </div>
-                      )}
-                      {(task.commands?.length ?? 0) > 0 && (
-                        <div className="mt-2.5 space-y-1">
-                          {task.commands?.map((cmd, cIdx) => (
-                            <div
-                              className="w-fit rounded bg-muted/50 px-2 py-1 font-mono text-[10px] text-foreground/90"
-                              key={cIdx}
-                            >
-                              $ {cmd}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Code Examples Section */}
-              {stage.code_examples && stage.code_examples.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Code Examples
-                    </h4>
-                    <div className="h-px flex-1 bg-border/40" />
-                  </div>
-                  <div className="space-y-3">
-                    {stage.code_examples.map((example, idx) => (
-                      <Collapsible className="group/code" key={idx}>
-                        <div className="rounded-lg border border-border/50 bg-muted/30">
-                          <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-medium">
-                                  {example.file}
-                                </span>
-                                <Badge
-                                  className="h-4 px-1 text-[9px]"
-                                  variant="outline"
-                                >
-                                  {example.language}
-                                </Badge>
-                              </div>
-                              <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                                {example.description}
-                              </p>
-                            </div>
-                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <div className="border-t border-border/50 p-3 pt-0">
-                              <p className="mb-2 text-[11px] text-muted-foreground">
-                                {example.description}
-                              </p>
-                              <pre className="overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
-                                <code>{example.snippet}</code>
-                              </pre>
-                            </div>
-                          </CollapsibleContent>
-                        </div>
-                      </Collapsible>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Resources Section */}
-              {stage.resources.length > 0 && (
-                <div className="pt-2">
-                  <div className="flex flex-wrap gap-2">
-                    {stage.resources.map((resource) => (
-                      <a
-                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                        href={resource.href}
-                        key={resource.label}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        <span>{resource.label}</span>
-                        <span className="opacity-50">↗</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </CollapsibleContent>
-          <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-              <Clock3 className="h-3.5 w-3.5" />
-              <span>{stage.eta}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button asChild size="sm" variant={ctaVariant}>
-                <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
-                  {ctaLabel}
-                </Link>
-              </Button>
-              <CollapsibleTrigger asChild>
-                <Button
-                  className="h-8 w-8 p-0"
-                  size="sm"
-                  variant="ghost"
-                >
-                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                  <span className="sr-only">Toggle details</span>
-                </Button>
-              </CollapsibleTrigger>
+                {stage.title}
+              </CardTitle>
+              <Badge
+                className={cn(
+                  "flex shrink-0 items-center gap-1 text-[10px]",
+                  align === "right" && "order-1"
+                )}
+                variant="secondary"
+              >
+                {statusIcon}
+                <span className="uppercase">
+                  {stage.status === "not-started" && !isSignedIn
+                    ? "not started"
+                    : stage.status.replace("-", " ")}
+                </span>
+              </Badge>
             </div>
           </div>
-        </Card>
-      </div>
-    </Collapsible>
+          <CardDescription className="mt-1.5 leading-relaxed">
+            {stage.summary}
+          </CardDescription>
+        </CardHeader>
+        <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Clock3 className="h-3.5 w-3.5" />
+            <span>{stage.eta}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant={ctaVariant}>
+              <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
+                {ctaLabel}
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 

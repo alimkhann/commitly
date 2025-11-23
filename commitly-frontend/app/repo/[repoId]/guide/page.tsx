@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import {
+  ChevronDown,
   Copy,
   Edit2,
   SendHorizontal,
@@ -19,8 +20,14 @@ import {
   useState,
 } from "react";
 import TabSwitch from "@/components/navigation/tab-switch";
+import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { repoService } from "@/lib/services/repos";
 
@@ -29,24 +36,46 @@ export default function RepoGuidePage() {
   const repoId = params.repoId as string;
   const searchParams = useSearchParams();
   const { isSignedIn } = useAuth();
-  const repo = repoService.findById(repoId);
+  const { getBySlug } = useRoadmapCatalog();
+  
+  const cachedRecord = getBySlug(repoId);
+  const fallbackRecord = repoService.findById(repoId);
+
+  const activeData = useMemo(() => {
+    if (cachedRecord && "repo" in cachedRecord) {
+      return {
+        name: cachedRecord.repo.full_name,
+        timeline: cachedRecord.timeline,
+        guideThread: [], // Generated roadmaps start with empty thread
+      };
+    }
+    if (fallbackRecord) {
+      return {
+        name: fallbackRecord.name,
+        timeline: fallbackRecord.timeline,
+        guideThread: fallbackRecord.guideThread ?? [],
+      };
+    }
+    return null;
+  }, [cachedRecord, fallbackRecord]);
+
   const [message, setMessage] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const thread = useMemo(
-    () => (isSignedIn ? (repo?.guideThread ?? []) : []),
-    [repo, isSignedIn]
+    () => (isSignedIn ? (activeData?.guideThread ?? []) : []),
+    [activeData, isSignedIn]
   );
 
   const stageId = searchParams?.get("stage");
 
   const stageContext = useMemo(() => {
-    if (!(repo && stageId)) {
+    if (!(activeData && stageId)) {
       return null;
     }
-    return repo.timeline.find((stage) => stage.id === stageId) ?? null;
-  }, [repo, stageId]);
+    return activeData.timeline.find((stage) => stage.id === stageId) ?? null;
+  }, [activeData, stageId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,7 +100,7 @@ export default function RepoGuidePage() {
     }
   };
 
-  if (!repo) {
+  if (!activeData) {
     return null;
   }
 
@@ -80,14 +109,14 @@ export default function RepoGuidePage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <p className="text-muted-foreground text-sm">Guide</p>
-          <h1 className="font-semibold text-2xl">{repo.name}</h1>
+          <h1 className="font-semibold text-2xl">{activeData.name}</h1>
         </div>
         <TabSwitch repoId={repoId} />
       </div>
 
       <div className="mt-8 flex flex-1 flex-col items-center">
         {stageContext && (
-          <div className="mb-6 w-full max-w-3xl rounded-3xl border border-border/50 bg-card/70 p-5 shadow-inner">
+          <div className="mb-6 w-full max-w-3xl space-y-6 rounded-3xl border border-border/50 bg-card/70 p-6 shadow-inner">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-2">
                 <Badge variant="outline">Timeline context</Badge>
@@ -104,6 +133,154 @@ export default function RepoGuidePage() {
                 </Link>
               </Button>
             </div>
+
+            {/* Goals Section */}
+            {stageContext.goals && stageContext.goals.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Goals
+                  </h4>
+                  <div className="h-px flex-1 bg-border/40" />
+                </div>
+                <ul className="space-y-2">
+                  {stageContext.goals.map((goal, idx) => (
+                    <li
+                      className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                      key={idx}
+                    >
+                      <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
+                      <span>{goal}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Tasks Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
+                </h4>
+                <div className="h-px flex-1 bg-border/40" />
+              </div>
+              <div className="space-y-3">
+                {stageContext.tasks.map((task, idx) => (
+                  <div
+                    className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
+                    key={idx}
+                  >
+                    <p className="font-medium text-sm text-foreground">
+                      {task.label}
+                    </p>
+                    {task.steps.length > 0 && (
+                      <ul className="mt-2.5 space-y-1.5">
+                        {task.steps.map((step, sIdx) => (
+                          <li
+                            className="flex items-start gap-2 text-xs text-muted-foreground"
+                            key={sIdx}
+                          >
+                            <span className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground" />
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {(task.files?.length ?? 0) > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+                        <span className="font-medium text-foreground/80">
+                          Files:
+                        </span>
+                        {task.files?.join(", ")}
+                      </div>
+                    )}
+                    {(task.commands?.length ?? 0) > 0 && (
+                      <div className="mt-2.5 space-y-1">
+                        {task.commands?.map((cmd, cIdx) => (
+                          <div
+                            className="w-fit rounded bg-muted/50 px-2 py-1 font-mono text-[10px] text-foreground/90"
+                            key={cIdx}
+                          >
+                            $ {cmd}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Code Examples Section */}
+            {stageContext.code_examples &&
+              stageContext.code_examples.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Code Examples
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <div className="space-y-3">
+                    {stageContext.code_examples.map((example, idx) => (
+                      <Collapsible className="group/code" key={idx}>
+                        <div className="rounded-lg border border-border/50 bg-muted/30">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-medium">
+                                  {example.file}
+                                </span>
+                                <Badge
+                                  className="h-4 px-1 text-[9px]"
+                                  variant="outline"
+                                >
+                                  {example.language}
+                                </Badge>
+                              </div>
+                              <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                                {example.description}
+                              </p>
+                            </div>
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="border-t border-border/50 p-3 pt-0">
+                              <p className="mb-2 text-[11px] text-muted-foreground">
+                                {example.description}
+                              </p>
+                              <pre className="overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
+                                <code>{example.snippet}</code>
+                              </pre>
+                            </div>
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Resources Section */}
+            {stageContext.resources.length > 0 && (
+              <div className="pt-2">
+                <div className="flex flex-wrap gap-2">
+                  {stageContext.resources.map((resource) => (
+                    <a
+                      className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      href={resource.href}
+                      key={resource.label}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <span>{resource.label}</span>
+                      <span className="opacity-50">↗</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div className="mt-6 flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 overflow-y-auto pb-6">
