@@ -456,7 +456,9 @@ class GeminiRoadmapGenerator:
         stage_budget: int,
         progress_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> list[TimelineStage]:
-        logger.info(f"Starting Gemini generation for {repo.full_name} with budget {stage_budget}")
+        logger.info(
+            f"Starting Gemini generation for {repo.full_name} with budget {stage_budget}"
+        )
         chunk_list = list(chunks)
         if not chunk_list:
             raise GeminiGenerationError("Repository does not have enough commits")
@@ -466,7 +468,9 @@ class GeminiRoadmapGenerator:
 
         # 1. Group commits (with noise filtering)
         episodes = self._group_commits_into_episodes(chunk_list)
-        logger.info(f"Grouped {len(chunk_list)} commits into {len(episodes)} episodes for {repo.full_name}")
+        logger.info(
+            f"Grouped {len(chunk_list)} commits into {len(episodes)} episodes for {repo.full_name}"
+        )
 
         if progress_callback:
             await progress_callback(
@@ -499,7 +503,9 @@ class GeminiRoadmapGenerator:
             stage_commits = self._find_commits_for_stage(
                 chunk_list, stage_def.get("commit_window", [])
             )
-            logger.debug(f"Expanding stage {i+1}: {stage_def.get('title')} with {len(stage_commits)} commits")
+            logger.debug(
+                f"Expanding stage {i+1}: {stage_def.get('title')} with {len(stage_commits)} commits"
+            )
 
             try:
                 expanded_stage = await self._expand_stage(
@@ -507,7 +513,9 @@ class GeminiRoadmapGenerator:
                 )
                 full_timeline.append(expanded_stage)
             except Exception as e:
-                logger.error(f"Expansion failed for stage {stage_def.get('id')} in {repo.full_name}: {e}")
+                logger.error(
+                    f"Expansion failed for stage {stage_def.get('id')} in {repo.full_name}: {e}"
+                )
                 # Add minimal stage
                 full_timeline.append(
                     TimelineStage(

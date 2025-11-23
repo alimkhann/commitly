@@ -256,11 +256,7 @@ class GitHubService:
                 response = await self._request(
                     "GET",
                     f"/repos/{identity.full_name}/commits",
-                    params={
-                        "sha": branch,
-                        "per_page": per_page,
-                        "page": page
-                    },
+                    params={"sha": branch, "per_page": per_page, "page": page},
                 )
                 batch = response.json()
                 if not batch:
@@ -284,22 +280,22 @@ class GitHubService:
         # 2. Sample commits if we have too many
         # We want to fetch details for at most ~100 commits to respect rate limits
         # but distributed across the range we fetched.
-        DETAIL_LIMIT = 100
+        detail_limit = 100
         commits_to_fetch = []
 
-        if len(all_commits_meta) <= DETAIL_LIMIT:
+        if len(all_commits_meta) <= detail_limit:
             commits_to_fetch = all_commits_meta
         else:
             # Uniform sampling
-            step = len(all_commits_meta) / DETAIL_LIMIT
-            for i in range(DETAIL_LIMIT):
+            step = len(all_commits_meta) / detail_limit
+            for i in range(detail_limit):
                 idx = int(i * step)
                 if idx < len(all_commits_meta):
                     commits_to_fetch.append(all_commits_meta[idx])
 
             # Ensure the very last commit (most recent) is included if not already
             if all_commits_meta[0]["sha"] != commits_to_fetch[0]["sha"]:
-                 commits_to_fetch[0] = all_commits_meta[0]
+                commits_to_fetch[0] = all_commits_meta[0]
 
         # 3. Fetch details in parallel
         # Use a semaphore to limit concurrency
@@ -345,7 +341,8 @@ class GitHubService:
         # Filter out failures and sort by date (newest first, as returned by API)
         snapshots = [r for r in results if r is not None]
 
-        # Since we fetched in parallel, order might be preserved but let's ensure it matches input order
+        # Since we fetched in parallel, order might be preserved but let's
+        # ensure it matches input order
         # Actually asyncio.gather preserves order of results matching tasks.
         # The input `commits_to_fetch` was ordered (newest to oldest).
 

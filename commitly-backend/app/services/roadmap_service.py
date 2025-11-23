@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 import json
-import math
+import logging
 from typing import Any, Callable, Sequence, cast
 
 from fastapi import HTTPException, status
@@ -42,8 +42,6 @@ from app.services.roadmap_repository import (
     UserSyncedRepoStore,
 )
 from app.services.roadmap_view_tracker import RoadmapViewTrackerService
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +97,10 @@ class RoadmapService:
         force_refresh: bool = False,
         actor_id: str | None = None,
     ) -> RoadmapResponse:
-        logger.info(f"Generating roadmap for {repo_url} (force_refresh={force_refresh}, actor={actor_id})")
+        logger.info(
+            f"Generating roadmap for {repo_url} \
+                (force_refresh={force_refresh}, actor={actor_id})"
+        )
         identity = self._parse_identity(repo_url)
         cache_key = f"roadmap:{identity.full_name.lower()}"
         if not force_refresh and self._cache:
@@ -133,7 +134,10 @@ class RoadmapService:
                 and token != self._default_token
                 and self._default_token
             ):
-                logger.warning(f"User token invalid for {identity.full_name}, falling back to default token")
+                logger.warning(
+                    f"User token invalid for {identity.full_name}, \
+                    falling back to default token"
+                )
                 # Fallback to default token if user token is invalid
                 github_client = GitHubService(token=self._default_token)
                 repo = await self._fetch_repo(github_client, identity)
@@ -146,7 +150,9 @@ class RoadmapService:
                 identity, repo.default_branch, self._commit_limit
             )
         except GitHubAuthenticationError as exc:
-            logger.error(f"GitHub auth error fetching commits for {identity.full_name}: {exc}")
+            logger.error(
+                f"GitHub auth error fetching commits for {identity.full_name}: {exc}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
             )
@@ -198,7 +204,9 @@ class RoadmapService:
         try:
             difficulty = await self._generator.classify_difficulty(repo, chunks)
         except Exception as e:
-            logger.warning(f"Difficulty classification failed for {identity.full_name}: {e}")
+            logger.warning(
+                f"Difficulty classification failed for {identity.full_name}: {e}"
+            )
             # If difficulty classification fails, default to medium
             difficulty = "medium"
 
@@ -227,7 +235,10 @@ class RoadmapService:
         Generates a roadmap while yielding progress updates.
         Yields JSON strings: {"type": "progress"|"result"|"error", ...}
         """
-        logger.info(f"Starting stream generation for {repo_url} (force_refresh={force_refresh}, actor={actor_id})")
+        logger.info(
+            f"Starting stream generation for {repo_url} \
+                  (force_refresh={force_refresh}, actor={actor_id})"
+        )
         identity = self._parse_identity(repo_url)
         cache_key = f"roadmap:{identity.full_name.lower()}"
 
@@ -235,7 +246,9 @@ class RoadmapService:
         if not force_refresh and self._cache:
             cached = await self._cache.get(cache_key)
             if cached:
-                logger.info(f"Cache hit for {identity.full_name}, returning cached result")
+                logger.info(
+                    f"Cache hit for {identity.full_name}, returning cached result"
+                )
                 if actor_id:
                     await self._run_db(
                         self._pin_store.pin, actor_id, identity.full_name
@@ -266,12 +279,18 @@ class RoadmapService:
         except Exception as exc:
             # Try fallback token logic if needed, simplified here
             if token != self._default_token and self._default_token:
-                logger.warning(f"User token invalid for {identity.full_name}, falling back to default token")
+                logger.warning(
+                    f"User token invalid for {identity.full_name}, \
+                        falling back to default token"
+                )
                 github_client = GitHubService(token=self._default_token)
                 try:
                     repo = await self._fetch_repo(github_client, identity)
                 except Exception as e:
-                    logger.error(f"Failed to fetch repo {identity.full_name} with default token: {e}")
+                    logger.error(
+                        f"Failed to fetch repo {identity.full_name} \
+                              with default token: {e}"
+                    )
                     yield json.dumps({"type": "error", "message": str(e)})
                     return
             else:
@@ -340,7 +359,10 @@ class RoadmapService:
                 try:
                     difficulty = await self._generator.classify_difficulty(repo, chunks)
                 except Exception as e:
-                    logger.warning(f"Difficulty classification failed for {identity.full_name}: {e}")
+                    logger.warning(
+                        f"Difficulty classification failed \
+                            for {identity.full_name}: {e}"
+                    )
                     difficulty = "medium"
 
                 response = RoadmapResponse(
