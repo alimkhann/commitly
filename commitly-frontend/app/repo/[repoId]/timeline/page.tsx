@@ -625,7 +625,7 @@ export default function RepoTimelinePage() {
                 <span>Progress</span>
                 <span>{syncedState.progress_percent}%</span>
               </div>
-              <div className="h-2 w-full rounded-full bg-border/50">
+              <div className="h-2 w-full rounded-full bg-border/50 ">
                 <div
                   className="h-2 rounded-full bg-primary"
                   style={{
