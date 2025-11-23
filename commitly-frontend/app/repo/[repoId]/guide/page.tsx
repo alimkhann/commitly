@@ -39,21 +39,26 @@ export default function RepoGuidePage() {
   const searchParams = useSearchParams();
   const { isSignedIn, getToken } = useAuth();
   const { getBySlug } = useRoadmapCatalog();
-  
+
   const cachedRecord = getBySlug(repoId);
   const fallbackRecord = repoService.findById(repoId);
 
   const activeData = useMemo(() => {
     if (cachedRecord && "repo" in cachedRecord) {
       return {
-        identity: { owner: cachedRecord.owner, repoName: cachedRecord.repoName },
+        identity: {
+          owner: cachedRecord.owner,
+          repoName: cachedRecord.repoName,
+        },
         name: cachedRecord.repo.full_name,
         timeline: cachedRecord.timeline,
-        guideThread: [], 
+        guideThread: [],
       };
     }
     if (fallbackRecord) {
-      const identity = repoService.buildIdentityFromFullName(fallbackRecord.name);
+      const identity = repoService.buildIdentityFromFullName(
+        fallbackRecord.name
+      );
       return {
         identity,
         name: fallbackRecord.name,
@@ -65,15 +70,26 @@ export default function RepoGuidePage() {
   }, [cachedRecord, fallbackRecord]);
 
   const [message, setMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<Array<{id: string, role: 'user' | 'guide', message: string}>>([]);
+  const [chatHistory, setChatHistory] = useState<
+    Array<{ id: string; role: "user" | "guide"; message: string }>
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Initialize chat history from static data if available and empty
   useEffect(() => {
-    if (activeData?.guideThread && chatHistory.length === 0 && activeData.guideThread.length > 0) {
-       setChatHistory(activeData.guideThread.map(item => ({...item, role: item.role as 'user' | 'guide'})));
+    if (
+      activeData?.guideThread &&
+      chatHistory.length === 0 &&
+      activeData.guideThread.length > 0
+    ) {
+      setChatHistory(
+        activeData.guideThread.map((item) => ({
+          ...item,
+          role: item.role as "user" | "guide",
+        }))
+      );
     }
   }, [activeData, chatHistory.length]);
 
@@ -92,10 +108,10 @@ export default function RepoGuidePage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isSignedIn || !message.trim() || isLoading || !activeData) {
+    if (!(isSignedIn && message.trim()) || isLoading || !activeData) {
       return;
     }
-    
+
     const userMsg = message.trim();
     setMessage("");
     if (textareaRef.current) {
@@ -104,7 +120,7 @@ export default function RepoGuidePage() {
 
     const newHistory = [
       ...chatHistory,
-      { id: Date.now().toString(), role: 'user' as const, message: userMsg }
+      { id: Date.now().toString(), role: "user" as const, message: userMsg },
     ];
     setChatHistory(newHistory);
     setIsLoading(true);
@@ -120,22 +136,34 @@ export default function RepoGuidePage() {
       );
 
       if (response.ok && response.data) {
-        setChatHistory(prev => [
+        setChatHistory((prev) => [
           ...prev,
-          { id: (Date.now() + 1).toString(), role: 'guide', message: response.data!.response }
+          {
+            id: (Date.now() + 1).toString(),
+            role: "guide",
+            message: response.data!.response,
+          },
         ]);
       } else {
         // Fallback error message
-        setChatHistory(prev => [
+        setChatHistory((prev) => [
           ...prev,
-          { id: (Date.now() + 1).toString(), role: 'guide', message: "Sorry, I encountered an error. Please try again." }
+          {
+            id: (Date.now() + 1).toString(),
+            role: "guide",
+            message: "Sorry, I encountered an error. Please try again.",
+          },
         ]);
       }
     } catch (error) {
       console.error("Chat error:", error);
-      setChatHistory(prev => [
+      setChatHistory((prev) => [
         ...prev,
-        { id: (Date.now() + 1).toString(), role: 'guide', message: "Sorry, I encountered an error. Please try again." }
+        {
+          id: (Date.now() + 1).toString(),
+          role: "guide",
+          message: "Sorry, I encountered an error. Please try again.",
+        },
       ]);
     } finally {
       setIsLoading(false);
@@ -188,7 +216,7 @@ export default function RepoGuidePage() {
             {stageContext.goals && stageContext.goals.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
                     Goals
                   </h4>
                   <div className="h-px flex-1 bg-border/40" />
@@ -196,7 +224,7 @@ export default function RepoGuidePage() {
                 <ul className="space-y-2">
                   {stageContext.goals.map((goal, idx) => (
                     <li
-                      className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                      className="flex items-start gap-2.5 text-muted-foreground text-sm"
                       key={idx}
                     >
                       <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
@@ -210,7 +238,7 @@ export default function RepoGuidePage() {
             {/* Tasks Section */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
                   {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
                 </h4>
                 <div className="h-px flex-1 bg-border/40" />
@@ -221,14 +249,14 @@ export default function RepoGuidePage() {
                     className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
                     key={idx}
                   >
-                    <p className="font-medium text-sm text-foreground">
+                    <p className="font-medium text-foreground text-sm">
                       {task.label}
                     </p>
                     {task.steps.length > 0 && (
                       <ul className="mt-2.5 space-y-1.5">
                         {task.steps.map((step, sIdx) => (
                           <li
-                            className="flex items-start gap-2 text-xs text-muted-foreground"
+                            className="flex items-start gap-2 text-muted-foreground text-xs"
                             key={sIdx}
                           >
                             <span className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground" />
@@ -267,7 +295,7 @@ export default function RepoGuidePage() {
               stageContext.code_examples.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
                       Code Examples
                     </h4>
                     <div className="h-px flex-1 bg-border/40" />
@@ -279,7 +307,7 @@ export default function RepoGuidePage() {
                           <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-medium">
+                                <span className="font-medium font-mono text-xs">
                                   {example.file}
                                 </span>
                                 <Badge
@@ -296,7 +324,7 @@ export default function RepoGuidePage() {
                             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
                           </CollapsibleTrigger>
                           <CollapsibleContent>
-                            <div className="border-t border-border/50 p-3 pt-0">
+                            <div className="border-border/50 border-t p-3 pt-0">
                               <p className="mb-2 text-[11px] text-muted-foreground">
                                 {example.description}
                               </p>
@@ -344,19 +372,19 @@ export default function RepoGuidePage() {
               <div className="group flex flex-col gap-1" key={messageItem.id}>
                 {messageItem.role === "guide" ? (
                   <article className="space-y-4 text-base text-foreground leading-7">
-                    <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50">
+                    <div className="prose prose-invert max-w-none prose-pre:border prose-pre:border-border/50 prose-pre:bg-muted/50 prose-p:leading-relaxed">
                       <Markdown
-                        remarkPlugins={[remarkGfm]}
                         components={{
                           a: ({ node, ...props }) => (
                             <a
-                              {...props as any}
-                              target="_blank"
+                              {...(props as any)}
+                              className="font-medium text-primary hover:underline"
                               rel="noopener noreferrer"
-                              className="text-primary hover:underline font-medium"
+                              target="_blank"
                             />
                           ),
                         }}
+                        remarkPlugins={[remarkGfm]}
                       >
                         {messageItem.message}
                       </Markdown>
@@ -407,11 +435,11 @@ export default function RepoGuidePage() {
             ))
           )}
           {isLoading && (
-             <div className="flex items-center gap-2 text-muted-foreground text-sm">
-               <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
-               <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.2s]" />
-               <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.4s]" />
-             </div>
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
+              <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.2s]" />
+              <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.4s]" />
+            </div>
           )}
           <div ref={bottomRef} />
         </div>
@@ -436,7 +464,7 @@ export default function RepoGuidePage() {
             value={message}
           />
           <Button
-            className="h-11 w-11 rounded-full shrink-0 mb-0.5 mr-0.5"
+            className="mr-0.5 mb-0.5 h-11 w-11 shrink-0 rounded-full"
             disabled={!isSignedIn || isLoading || !message.trim()}
             size="icon"
             type="submit"

@@ -620,19 +620,19 @@ export default function RepoTimelinePage() {
 
       {activeRoadmap && (
         <>
-          <div className="sticky top-20 z-10 mb-8 -mx-2 overflow-x-auto px-2 py-2 md:static md:mx-0 md:mb-10 md:overflow-visible md:p-0">
+          <div className="-mx-2 sticky top-20 z-10 mb-8 overflow-x-auto px-2 py-2 md:static md:mx-0 md:mb-10 md:overflow-visible md:p-0">
             <div className="flex flex-nowrap gap-2 md:flex-wrap">
               {timelineStages.map((stage) => (
                 <Button
-                  key={stage.id}
-                  variant="outline"
-                  size="sm"
                   className="h-7 shrink-0 rounded-full text-xs"
+                  key={stage.id}
                   onClick={() =>
                     document
                       .getElementById(stage.id)
                       ?.scrollIntoView({ behavior: "smooth", block: "center" })
                   }
+                  size="sm"
+                  variant="outline"
                 >
                   <span className="mr-1.5 font-mono text-muted-foreground">
                     {stage.index}
@@ -769,7 +769,7 @@ function TimelineNodeCard({
     isSignedIn && stage.status !== "done" ? "default" : "secondary";
 
   return (
-    <div className="relative group">
+    <div className="group relative">
       <span
         className={cn(
           "pointer-events-none absolute top-1/2 hidden h-px w-10 bg-border/50 md:block",
@@ -786,7 +786,7 @@ function TimelineNodeCard({
           <div className="flex flex-col gap-1">
             <div
               className={cn(
-                "flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground",
+                "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
                 align === "right" && "justify-end"
               )}
             >
@@ -822,7 +822,7 @@ function TimelineNodeCard({
             {stage.summary}
           </CardDescription>
         </CardHeader>
-        <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+        <div className="flex items-center justify-between border-border/60 border-t bg-muted/20 px-5 py-3">
           <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
             <Clock3 className="h-3.5 w-3.5" />
             <span>{stage.eta}</span>
