@@ -1,6 +1,7 @@
 from collections.abc import Generator
 import logging
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -37,6 +38,10 @@ def get_db() -> Generator:
     db = SessionLocal()
     try:
         yield db
+    except HTTPException:
+        # HTTPExceptions are normal control flow, just rollback and re-raise
+        db.rollback()
+        raise
     except Exception as e:
         logger.error(f"Database error in get_db: {e}", exc_info=True)
         db.rollback()

@@ -11,7 +11,7 @@ export const releaseNotes: ReleaseEntry[] = [
     date: "2024-09-12",
     channel: "stable",
     highlights: [
-      "New repo timeline builder with stage level hints",
+      "New repo roadmap builder with stage level hints",
       "Guide chat now summarises long answers automatically",
       "Improved GitHub OAuth permissions flow",
     ],

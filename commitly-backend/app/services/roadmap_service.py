@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-import math
+import json
+import logging
 from typing import Any, Callable, Sequence, cast
 
 from fastapi import HTTPException, status
@@ -42,6 +43,8 @@ from app.services.roadmap_repository import (
 )
 from app.services.roadmap_view_tracker import RoadmapViewTrackerService
 
+logger = logging.getLogger(__name__)
+
 BlockingCallable = Callable[..., Any]
 
 
@@ -73,17 +76,37 @@ class RoadmapService:
         self._rating_store = rating_store
         self._view_tracker = view_tracker
 
+    def _calculate_stage_budget(self, commit_count: int) -> int:
+        """
+        Calculate the number of stages based on commit count.
+        We want a curve that gives ~8-10 stages for small repos (40 commits)
+        and scales up to ~25 stages for large repos (500+ commits).
+        """
+        if commit_count < 10:
+            return max(3, commit_count // 2)
+
+        # Base of 7 stages + 1 stage for every 20 commits
+        budget = 7 + int(commit_count / 20)
+
+        # Cap at 25 stages to keep the roadmap manageable
+        return min(25, budget)
+
     async def generate(
         self,
         repo_url: str,
         force_refresh: bool = False,
         actor_id: str | None = None,
     ) -> RoadmapResponse:
+        logger.info(
+            f"Generating roadmap for {repo_url} \
+                (force_refresh={force_refresh}, actor={actor_id})"
+        )
         identity = self._parse_identity(repo_url)
         cache_key = f"roadmap:{identity.full_name.lower()}"
         if not force_refresh and self._cache:
             cached = await self._cache.get(cache_key)
             if cached:
+                logger.info(f"Returning cached roadmap for {identity.full_name}")
                 if actor_id:
                     await self._run_db(
                         self._pin_store.pin, actor_id, identity.full_name
@@ -97,45 +120,75 @@ class RoadmapService:
         if token is None:
             token = self._default_token
         if not token:
+            logger.warning("No GitHub token available for generation")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Connect GitHub to generate a roadmap",
             )
         github_client = GitHubService(token=token)
-        repo = await self._fetch_repo(github_client, identity)
+        try:
+            repo = await self._fetch_repo(github_client, identity)
+        except HTTPException as exc:
+            if (
+                exc.status_code == status.HTTP_401_UNAUTHORIZED
+                and token != self._default_token
+                and self._default_token
+            ):
+                logger.warning(
+                    f"User token invalid for {identity.full_name}, \
+                    falling back to default token"
+                )
+                # Fallback to default token if user token is invalid
+                github_client = GitHubService(token=self._default_token)
+                repo = await self._fetch_repo(github_client, identity)
+            else:
+                logger.error(f"Failed to fetch repo {identity.full_name}: {exc.detail}")
+                raise exc
+
         try:
             commits = await github_client.fetch_commits(
                 identity, repo.default_branch, self._commit_limit
             )
         except GitHubAuthenticationError as exc:
+            logger.error(
+                f"GitHub auth error fetching commits for {identity.full_name}: {exc}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
             )
         except GitHubRateLimitExceeded as exc:
+            logger.error(f"GitHub rate limit exceeded for {identity.full_name}: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)
             )
         except GitHubServiceError as exc:
+            logger.error(f"GitHub service error for {identity.full_name}: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
             )
         if not commits:
+            logger.warning(f"No commits found for {identity.full_name}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Repository does not contain commits",
             )
+
+        logger.info(f"Fetched {len(commits)} commits for {identity.full_name}")
         chunks = self._build_chunks(repo.full_name, commits)
         try:
             await self._run_db(self._chunk_store.persist, chunks)
         except ChunkStorageError as exc:
+            logger.error(f"Failed to persist chunks for {identity.full_name}: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(exc),
             )
-        stage_budget = max(1, math.ceil(len(commits) * self._timeline_fraction))
+        stage_budget = self._calculate_stage_budget(len(commits))
+        logger.info(f"Planning {stage_budget} stages for {identity.full_name}")
         try:
             timeline = await self._generator.generate(repo, chunks, stage_budget)
         except GeminiGenerationError as exc:
+            logger.error(f"Gemini generation failed for {identity.full_name}: {exc}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=str(exc),
@@ -150,7 +203,10 @@ class RoadmapService:
         # Classify difficulty using AI
         try:
             difficulty = await self._generator.classify_difficulty(repo, chunks)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Difficulty classification failed for {identity.full_name}: {e}"
+            )
             # If difficulty classification fails, default to medium
             difficulty = "medium"
 
@@ -166,7 +222,187 @@ class RoadmapService:
             )
         await self._run_db(self._result_store.upsert, response)
         await self._run_db(self._pin_store.pin, actor_id, repo.full_name)
+        logger.info(f"Successfully generated roadmap for {identity.full_name}")
         return response
+
+    async def generate_stream(
+        self,
+        repo_url: str,
+        force_refresh: bool = False,
+        actor_id: str | None = None,
+    ):
+        """
+        Generates a roadmap while yielding progress updates.
+        Yields JSON strings: {"type": "progress"|"result"|"error", ...}
+        """
+        logger.info(
+            f"Starting stream generation for {repo_url} \
+                  (force_refresh={force_refresh}, actor={actor_id})"
+        )
+        identity = self._parse_identity(repo_url)
+        cache_key = f"roadmap:{identity.full_name.lower()}"
+
+        # Check cache first
+        if not force_refresh and self._cache:
+            cached = await self._cache.get(cache_key)
+            if cached:
+                logger.info(
+                    f"Cache hit for {identity.full_name}, returning cached result"
+                )
+                if actor_id:
+                    await self._run_db(
+                        self._pin_store.pin, actor_id, identity.full_name
+                    )
+                yield json.dumps({"type": "result", "data": cached})
+                return
+
+        token = None
+        if actor_id:
+            record = await self._run_db(self._token_store.get_token, actor_id)
+            if record:
+                token = record.access_token
+        if token is None:
+            token = self._default_token
+
+        if not token:
+            logger.warning("No GitHub token available for stream generation")
+            yield json.dumps(
+                {"type": "error", "message": "Connect GitHub to generate a roadmap"}
+            )
+            return
+
+        yield json.dumps({"type": "progress", "message": "Connecting to GitHub..."})
+
+        github_client = GitHubService(token=token)
+        try:
+            repo = await self._fetch_repo(github_client, identity)
+        except Exception as exc:
+            # Try fallback token logic if needed, simplified here
+            if token != self._default_token and self._default_token:
+                logger.warning(
+                    f"User token invalid for {identity.full_name}, \
+                        falling back to default token"
+                )
+                github_client = GitHubService(token=self._default_token)
+                try:
+                    repo = await self._fetch_repo(github_client, identity)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to fetch repo {identity.full_name} \
+                              with default token: {e}"
+                    )
+                    yield json.dumps({"type": "error", "message": str(e)})
+                    return
+            else:
+                logger.error(f"Failed to fetch repo {identity.full_name}: {exc}")
+                yield json.dumps({"type": "error", "message": str(exc)})
+                return
+
+        yield json.dumps(
+            {
+                "type": "progress",
+                "message": f"Fetching commit history for {repo.full_name}...",
+            }
+        )
+
+        try:
+            commits = await github_client.fetch_commits(
+                identity, repo.default_branch, self._commit_limit
+            )
+        except Exception as exc:
+            logger.error(f"Failed to fetch commits for {identity.full_name}: {exc}")
+            yield json.dumps({"type": "error", "message": str(exc)})
+            return
+
+        if not commits:
+            logger.warning(f"No commits found for {identity.full_name}")
+            yield json.dumps(
+                {"type": "error", "message": "Repository does not contain commits"}
+            )
+            return
+
+        logger.info(f"Fetched {len(commits)} commits for {identity.full_name}")
+        chunks = self._build_chunks(repo.full_name, commits)
+        try:
+            await self._run_db(self._chunk_store.persist, chunks)
+        except ChunkStorageError as exc:
+            logger.error(f"Failed to persist chunks for {identity.full_name}: {exc}")
+            yield json.dumps({"type": "error", "message": str(exc)})
+            return
+
+        stage_budget = self._calculate_stage_budget(len(commits))
+        logger.info(f"Planning {stage_budget} stages for {identity.full_name}")
+
+        # Queue for bridging callback to generator
+        queue = asyncio.Queue()
+
+        async def progress_callback(msg: str):
+            logger.debug(f"Progress update for {identity.full_name}: {msg}")
+            await queue.put({"type": "progress", "message": msg})
+
+        async def run_generation():
+            try:
+                timeline = await self._generator.generate(
+                    repo, chunks, stage_budget, progress_callback=progress_callback
+                )
+
+                # Post-processing
+                setup_stage = self._build_setup_stage(repo)
+                timeline.insert(0, setup_stage)
+                for i, stage in enumerate(timeline):
+                    stage.index = i + 1
+
+                # Difficulty
+                await queue.put(
+                    {"type": "progress", "message": "Classifying difficulty..."}
+                )
+                try:
+                    difficulty = await self._generator.classify_difficulty(repo, chunks)
+                except Exception as e:
+                    logger.warning(
+                        f"Difficulty classification failed \
+                            for {identity.full_name}: {e}"
+                    )
+                    difficulty = "medium"
+
+                response = RoadmapResponse(
+                    repo=self._to_summary(repo, difficulty),
+                    timeline=timeline,
+                    cached=False,
+                    generated_at=datetime.now(timezone.utc),
+                )
+
+                # Cache and Store
+                if self._cache:
+                    await self._cache.set(
+                        cache_key, response.model_dump(mode="json"), self._cache_ttl
+                    )
+                await self._run_db(self._result_store.upsert, response)
+                if actor_id:
+                    await self._run_db(self._pin_store.pin, actor_id, repo.full_name)
+
+                logger.info(f"Stream generation completed for {identity.full_name}")
+                await queue.put(
+                    {"type": "result", "data": response.model_dump(mode="json")}
+                )
+            except Exception as e:
+                logger.error(f"Stream generation failed for {identity.full_name}: {e}")
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                await queue.put(None)
+
+        # Start generation task
+        task = asyncio.create_task(run_generation())
+
+        # Yield events
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            yield json.dumps(item)
+
+        # Ensure task is done (should be if None was put)
+        await task
 
     async def get_cached(self, repo_full_name: str) -> RoadmapResponse:
         result = await self._run_db(self._result_store.get, repo_full_name)

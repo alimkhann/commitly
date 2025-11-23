@@ -192,7 +192,7 @@ export default function Sidebar() {
           >
             <Link href="/">
               <Hammer className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
-              {!collapsed && <span>New repo timeline</span>}
+              {!collapsed && <span>New repo roadmap</span>}
             </Link>
           </Button>
           <Button

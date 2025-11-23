@@ -74,7 +74,7 @@ class Settings(BaseSettings):
         "https://api.github.com", validation_alias="GITHUB_API_BASE"
     )
     github_token: Optional[str] = Field(default=None, validation_alias="GITHUB_TOKEN")
-    github_commit_limit: int = Field(40, validation_alias="GITHUB_COMMIT_LIMIT")
+    github_commit_limit: int = Field(20000, validation_alias="GITHUB_COMMIT_LIMIT")
     github_oauth_client_id: Optional[str] = Field(
         default=None, validation_alias="GITHUB_OAUTH_CLIENT_ID"
     )
