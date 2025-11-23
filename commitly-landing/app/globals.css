@@ -212,8 +212,6 @@ html, body, #__next { height: 100%; }
   z-index: 50;
   padding: .75rem 1rem 0;
   background: transparent;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
 }
 .nav-pill {
   margin: 0 auto;
