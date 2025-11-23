@@ -19,6 +19,8 @@ import {
   useRef,
   useState,
 } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import TabSwitch from "@/components/navigation/tab-switch";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
@@ -342,14 +344,22 @@ export default function RepoGuidePage() {
               <div className="group flex flex-col gap-1" key={messageItem.id}>
                 {messageItem.role === "guide" ? (
                   <article className="space-y-4 text-base text-foreground leading-7">
-                    <div className="prose prose-invert max-w-none">
-                      {messageItem.message.split("\n").map((paragraph, idx) => (
-                        <p
-                          key={`${messageItem.id}-${idx}-${paragraph.slice(0, 8)}`}
-                        >
-                          {paragraph}
-                        </p>
-                      ))}
+                    <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50">
+                      <Markdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ node, ...props }) => (
+                            <a
+                              {...props as any}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline font-medium"
+                            />
+                          ),
+                        }}
+                      >
+                        {messageItem.message}
+                      </Markdown>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground text-xs opacity-0 transition-opacity group-hover:opacity-100">
                       <button
