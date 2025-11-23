@@ -4,6 +4,7 @@ import math
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.auth import ClerkClaims, optional_clerk_auth, require_clerk_auth
@@ -105,6 +106,29 @@ async def generate_roadmap(
         repo_url=str(payload.repo_url),
         force_refresh=payload.force_refresh,
         actor_id=user_id,
+    )
+
+
+@router.get("/generate/stream")
+async def generate_roadmap_stream(
+    repo_url: str = Query(..., description="Repository URL"),
+    force_refresh: bool = Query(False, description="Force regeneration"),
+    service: RoadmapService = Depends(get_roadmap_service),
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+) -> StreamingResponse:
+    user_id = get_user_id(current_user)
+
+    async def event_generator():
+        async for event in service.generate_stream(
+            repo_url=repo_url,
+            force_refresh=force_refresh,
+            actor_id=user_id,
+        ):
+            yield f"data: {event}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
     )
 
 

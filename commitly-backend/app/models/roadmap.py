@@ -209,9 +209,18 @@ class TimelineStage(BaseModel):
     summary: str
     status: Literal["not-started", "in-progress", "done"]
     eta: str
-    category: Literal["setup", "feature", "refactor", "testing", "ops", "other"] = (
-        "other"
-    )
+    category: Literal[
+        "setup",
+        "feature",
+        "refactor",
+        "testing",
+        "ops",
+        "perf",
+        "docs",
+        "style",
+        "chore",
+        "other",
+    ] = "other"
     difficulty: Literal["intro", "easy", "medium", "hard"] = "medium"
     goals: List[str] = []
     prerequisites: List[str] = []

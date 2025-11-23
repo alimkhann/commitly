@@ -5,7 +5,7 @@ import base64
 import json
 import logging
 import re
-from typing import Any, Optional, Sequence
+from typing import Any, Awaitable, Callable, Optional, Sequence
 
 import httpx
 
@@ -23,63 +23,67 @@ MAX_OUTPUT_TOKENS = 8192
 MIN_RETRY_CHUNKS = 5
 MAX_GEMINI_ATTEMPTS = 5
 
+NOISE_PATTERNS = [
+    r"^Merge (branch|pull request)",
+    r"^Bump version",
+    r"^Update (README|CHANGELOG|LICENSE)",
+    r"^Fix typo",
+    r"^chore",
+    r"^docs",
+    r"^style",
+    r"^test",
+]
+
 PROMPT_TEMPLATE = """
-You are Commitly, an engineering mentor that reads GitHub commit history and designs
-learning roadmaps for developers who want to REBUILD the project themselves.
+You are an expert software instructor and curriculum designer.
 
-Repository: {name}
-Description: {description}
-Stars: {stars}
-Language: {language}
-Default branch: {branch}
+You are given:
+- A production-grade codebase: {repo_name}
+- A set of commits (oldest → newest) with commit messages, changed files and code snippets
+- High-level metadata: tech stack, main features, and project description
 
-You are given a compressed commit history below.
+GOAL
+Design a PRACTICAL ROADMAP that teaches a motivated developer to REBUILD this project
+FROM SCRATCH in their own NEW repository, using this repo only as a reference.
 
-Your job:
-- Compress the ENTIRE evolution of this repository (from the first commit to the most recent)
-  into {stage_budget} ordered learning stages.
-- Each stage should feel like a self-contained "episode" a learner can complete in 30–90 minutes.
-- The roadmap must help a developer gradually re-implement the project, not just read diffs.
+Important constraints:
 
-Follow these rules:
+1. Assume the learner is starting from an EMPTY folder.
+   - They may look at this repository’s files and commits as examples.
+   - They are NOT allowed to reuse the repo directly.
+   - Do NOT tell them to `git clone`, `cd` into this repo, or run its existing scripts.
 
-1. Coverage
-   - Stages must cover the whole project history, not just early commits.
-   - Group related commits into feature-oriented stages (setup, major features, refactors, ops).
-   - Prefer stages that are pedagogically useful over mechanically covering every tiny change.
+2. The roadmap should cover the entire project lifecycle:
+   - Initial scaffolding and basic architecture
+   - Implementing core features
+   - Integrating data/storage/auth
+   - UX polish and refactors
+   - Ops/observability and maintenance
 
-2. Stage semantics
-   - Use exactly one "setup" stage near the beginning for repository onboarding.
-   - For the remaining stages, choose a mix of:
-     - "feature" (new capability or user-facing behavior)
-     - "refactor" (structural or quality-of-life changes)
-     - "testing" (tests, QA tools)
-     - "ops" (deployment, logging, monitoring)
-     - "other" only if nothing else fits.
-   - Assign difficulty as: "intro", "easy", "medium", or "hard" based on the work required.
+3. For each stage:
+   - Give it a concise title that describes the learner’s outcome.
+   - Write 2–4 clear GOALS (what they will understand / achieve).
+   - Write 3–8 concrete TASKS that describe IMPLEMENTATION steps in a new codebase:
+     - Use verbs like “Create”, “Implement”, “Refactor”, “Design”.
+     - Reference files and modules by name (e.g. `app/(chat)/page.tsx`, `lib/db.ts`).
+     - Prefer wording like “Implement XYZ module” instead of “Review” or “Explore”.
+   - Optionally list 0–3 RESOURCES:
+     - Internal files/commits in this repo that are good examples.
+     - External docs (e.g. framework docs) by name and URL slug.
 
-3. Teaching focus
-   Every stage MUST:
-   - State 1–3 concrete learning GOALS (what the learner will understand after finishing).
-   - Include 1–3 TASKS. For each task:
-     - Give a short label.
-     - Provide 2–5 specific STEPS that a learner can follow ("Open file X", "Create function Y", "Run command Z").
-     - List 1–4 FILES that are central to the task.
-     - Include relevant COMMANDS when setup, running, or building is required.
-   - Optionally include up to 2 CODE EXAMPLES:
-     - Keep each snippet short (3–15 lines).
-     - Show clean final code, not raw diffs or patch markers.
-     - Explain what the snippet demonstrates.
+4. Teaching style:
+   - Assume the learner already knows the language and framework basics.
+   - Emphasise building features step-by-step, not just running the app.
+   - Include small design/architecture insights where relevant
+     (e.g. “Separate streaming API route from UI components to keep concerns clear.”)
 
-4. Stage 0 (setup & tour)
-   - If the repository has any non-trivial setup, create a first stage that:
-     - Helps the learner clone the repo.
-     - Installs dependencies.
-     - Runs the development server or main command.
-     - Gives a quick tour of top-level folders and core technologies.
-   - Mark this stage as category "setup" and difficulty "intro".
+5. Segmenting:
+   - First, mentally plan a full sequence of {intended_total_stages} stages that would
+     rebuild the project from scratch.
+   - For THIS RESPONSE, output ONLY the FIRST {stage_budget} stages of that sequence.
+   - Do NOT summarise later stages; stop after stage {stage_budget}.
 
-5. Output format
+6. Output format
    - Return ONLY JSON, no markdown.
    - The JSON must conform exactly to this schema (field names and allowed values):
 {{
@@ -91,7 +95,7 @@ Follow these rules:
       "summary": "…",
       "status": "not-started",
       "eta": "45m",
-      "category": "setup|feature|refactor|testing|ops|other",
+      "category": "setup|feature|refactor|testing|ops|perf|docs|style|chore|other",
       "difficulty": "intro|easy|medium|hard",
       "goals": ["..."],
       "tasks": [
@@ -125,10 +129,28 @@ Follow these rules:
 Commit history context (oldest to newest):
 {context}
 
+Now, based on the commit history and code snippets you’re given, design the first {stage_budget} stages of such a “rebuild from scratch” roadmap.
+"""
+
+REVIEW_PROMPT = """
+You are a senior engineering lead reviewing a learning roadmap designed for a junior developer.
+
+Repository: {name}
+Roadmap to Review:
+{timeline_json}
+
+Your Goal: Critique and refine this roadmap.
+1. Check for logical flow. Are prerequisites clear?
+2. Ensure tasks are actionable and specific.
+3. Remove any hallucinations or generic fluff.
+4. Verify that the "setup" stage is first and "ops" or advanced topics are later.
+
+Return the IMPROVED roadmap JSON. It must strictly follow the same schema.
 """
 
 PLANNING_PROMPT = """
 You are an expert engineering mentor designing a learning roadmap for a developer who wants to REBUILD this project: {name}.
+The learner has the code but needs to understand how to build it from scratch.
 
 Your goal: Plan a curriculum of {stage_budget} distinct learning stages.
 
@@ -149,7 +171,7 @@ Output Schema:
       "index": 1,
       "title": "Stage Title",
       "summary": "High-level summary of what is built here.",
-      "category": "setup|feature|refactor|testing|ops|other",
+      "category": "setup|feature|refactor|testing|ops|perf|docs|style|chore|other",
       "difficulty": "intro|easy|medium|hard",
       "commit_window": ["start_sha", "end_sha"]
     }}
@@ -169,6 +191,8 @@ Relevant Commits:
 
 Your Task:
 Create a detailed, actionable guide for this stage. The learner should be able to REPLICATE the features in these commits.
+Do NOT ask them to clone the repo. Assume they are building it file-by-file from scratch.
+Focus on: "Install dependencies", "Create file X", "Add function Y".
 
 Requirements:
 1. **Prerequisites**: What must be done/known before this stage?
@@ -226,6 +250,10 @@ TIMELINE_SCHEMA: dict[str, Any] = {
                             "refactor",
                             "testing",
                             "ops",
+                            "perf",
+                            "docs",
+                            "style",
+                            "chore",
                             "other",
                         ],
                     },
@@ -421,28 +449,57 @@ class GeminiRoadmapGenerator:
         repo: RepositoryMetadata,
         chunks: Sequence[CommitChunk],
         stage_budget: int,
+        progress_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> list[TimelineStage]:
+        logger.info(
+            f"Starting Gemini generation for {repo.full_name} with budget {stage_budget}"
+        )
         chunk_list = list(chunks)
         if not chunk_list:
             raise GeminiGenerationError("Repository does not have enough commits")
 
-        # 1. Group commits
+        if progress_callback:
+            await progress_callback("Grouping commits and filtering noise...")
+
+        # 1. Group commits (with noise filtering)
         episodes = self._group_commits_into_episodes(chunk_list)
+        logger.info(
+            f"Grouped {len(chunk_list)} commits into {len(episodes)} episodes for {repo.full_name}"
+        )
+
+        if progress_callback:
+            await progress_callback(
+                f"Identified {len(episodes)} logical episodes. Planning stages..."
+            )
 
         # 2. Plan Stages
         try:
             stages_plan = await self._plan_stages(repo, episodes, stage_budget)
+            logger.info(f"Planned {len(stages_plan)} stages for {repo.full_name}")
         except Exception as e:
-            logger.error(f"Planning failed: {e}")
+            logger.error(f"Planning failed for {repo.full_name}: {e}")
             # Fallback to old method or heuristic
             return self._fallback_timeline(repo, chunk_list, stage_budget)
 
+        if progress_callback:
+            await progress_callback(
+                f"Planned {len(stages_plan)} stages. Expanding details..."
+            )
+
         # 3. Expand Stages
         full_timeline = []
-        for stage_def in stages_plan:
+        for i, stage_def in enumerate(stages_plan):
+            if progress_callback:
+                await progress_callback(
+                    f"Drafting content for stage {i+1}/{len(stages_plan)}: {stage_def.get('title')}..."
+                )
+
             # Find commits for this stage
             stage_commits = self._find_commits_for_stage(
                 chunk_list, stage_def.get("commit_window", [])
+            )
+            logger.debug(
+                f"Expanding stage {i+1}: {stage_def.get('title')} with {len(stage_commits)} commits"
             )
 
             try:
@@ -451,25 +508,43 @@ class GeminiRoadmapGenerator:
                 )
                 full_timeline.append(expanded_stage)
             except Exception as e:
-                logger.error(f"Expansion failed for stage {stage_def.get('id')}: {e}")
+                logger.error(
+                    f"Expansion failed for stage {stage_def.get('id')} in {repo.full_name}: {e}"
+                )
                 # Add minimal stage
                 full_timeline.append(
                     TimelineStage(
-                        id=stage_def.get("id"),
-                        index=stage_def.get("index"),
-                        title=stage_def.get("title"),
-                        summary=stage_def.get("summary"),
+                        id=stage_def.get("id", "unknown-stage"),
+                        index=stage_def.get("index", 0),
+                        title=stage_def.get("title", "Untitled Stage"),
+                        summary=stage_def.get("summary", "No summary available."),
                         status="not-started",
                         eta="45m",
                         category=stage_def.get("category", "feature"),
                         difficulty=stage_def.get("difficulty", "medium"),
                         goals=["Review commits"],
                         tasks=[],
+                        prerequisites=[],
+                        checkpoints=[],
+                        resources=[],
                         commit_window=stage_def.get("commit_window", []),
                     )
                 )
 
-        return full_timeline
+        # 4. Reviewer Step
+        if progress_callback:
+            await progress_callback("Reviewing roadmap for quality and accuracy...")
+
+        try:
+            logger.info(f"Reviewing timeline for {repo.full_name}")
+            reviewed_timeline = await self._review_timeline(repo, full_timeline)
+            if progress_callback:
+                await progress_callback("Roadmap generation complete!")
+            logger.info(f"Completed generation for {repo.full_name}")
+            return reviewed_timeline
+        except Exception as e:
+            logger.error(f"Review failed for {repo.full_name}: {e}")
+            return full_timeline
 
     def _fallback_timeline(
         self, repo: RepositoryMetadata, chunks: list[CommitChunk], stage_budget: int
@@ -499,6 +574,7 @@ class GeminiRoadmapGenerator:
     def _group_commits_into_episodes(self, chunks: Sequence[CommitChunk]) -> list[dict]:
         """
         Group consecutive commits into 'episodes' based on time gaps and size.
+        Filters out noisy commits.
         """
         if not chunks:
             return []
@@ -513,6 +589,14 @@ class GeminiRoadmapGenerator:
         last_time = None
 
         for i, chunk in enumerate(chunks):
+            # Noise Filtering
+            first_line = (chunk.content or "").splitlines()[0] if chunk.content else ""
+            if any(
+                re.search(pattern, first_line, re.IGNORECASE)
+                for pattern in NOISE_PATTERNS
+            ):
+                continue
+
             is_new_episode = False
 
             if last_time and chunk.authored_at:
@@ -919,7 +1003,7 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             "generation_config": {
                 "temperature": 0.3,
                 "topP": 0.8,
-                "maxOutputTokens": 10,
+                "maxOutputTokens": 50,
             },
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
@@ -1038,6 +1122,18 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             logger.error(f"Gemini call failed: {e}")
             raise GeminiGenerationError(f"Gemini call failed: {e}")
 
+    def _parse_json_from_text(self, text: str) -> Any:
+        if not text:
+            raise ValueError("Empty text")
+
+        cleaned_text = text.strip()
+        # Remove markdown code blocks
+        match = re.search(r"^```(?:\w+)?\s*(.*)\s*```$", cleaned_text, re.DOTALL)
+        if match:
+            cleaned_text = match.group(1)
+
+        return json.loads(cleaned_text)
+
     async def _plan_stages(
         self, repo: RepositoryMetadata, episodes: list[dict], stage_budget: int
     ) -> list[dict]:
@@ -1059,9 +1155,10 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
 
         text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
         try:
-            data = json.loads(text)
+            data = self._parse_json_from_text(text)
             return data.get("stages", [])
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to parse planning response: {e}")
             return []
 
     async def _expand_stage(
@@ -1085,7 +1182,7 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             raise GeminiGenerationError("No candidates")
 
         text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
-        data = json.loads(text)
+        data = self._parse_json_from_text(text)
 
         # Merge stage_def and data
         return TimelineStage(
@@ -1105,6 +1202,39 @@ Return ONLY the difficulty level as a single word: intro, easy, medium, or hard.
             resources=[TimelineResource(**r) for r in data.get("resources", [])],
             commit_window=stage_def.get("commit_window", []),
         )
+
+    async def _review_timeline(
+        self, repo: RepositoryMetadata, timeline: list[TimelineStage]
+    ) -> list[TimelineStage]:
+        # Convert timeline to JSON for the prompt
+        timeline_json = json.dumps([t.dict() for t in timeline], default=str)
+
+        prompt = REVIEW_PROMPT.format(name=repo.full_name, timeline_json=timeline_json)
+
+        response = await self._call_gemini_generic(
+            prompt, TIMELINE_SCHEMA, repo.full_name, temperature=0.1
+        )
+
+        candidates = response.get("candidates", [])
+        if not candidates:
+            raise GeminiGenerationError("No candidates in review")
+
+        text = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
+
+        # Parse the reviewed timeline
+        try:
+            parsed = self._parse_json_from_text(text)
+            reviewed_data = parsed.get("timeline", [])
+
+            # Reconstruct TimelineStage objects
+            reviewed_stages = []
+            for item in reviewed_data:
+                reviewed_stages.append(TimelineStage(**item))
+
+            return reviewed_stages
+        except Exception as e:
+            logger.error(f"Failed to parse reviewed timeline: {e}")
+            return timeline
 
     def _find_commits_for_stage(
         self, chunks: list[CommitChunk], window: list[str]

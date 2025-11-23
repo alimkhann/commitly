@@ -109,6 +109,8 @@ export default function RepoTimelinePage() {
   const [isRatingLoading, setIsRatingLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [handledGeneration, setHandledGeneration] = useState(false);
+  const [generationStatus, setGenerationStatus] =
+    useState<string>("Initializing...");
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
@@ -210,37 +212,46 @@ export default function RepoTimelinePage() {
         setError(null);
         setIsAuthError(false);
         const token = await getToken?.();
-        const response = await repoService.generateRoadmap(
+
+        const stream = repoService.generateRoadmapStream(
           repoUrl,
           token ?? undefined,
           { forceRefresh: true }
         );
-        if (cancelled) {
-          return;
-        }
 
-        setHandledGeneration(true);
+        for await (const event of stream) {
+          if (cancelled) break;
 
-        if (response.ok && response.data) {
-          setRoadmap(response.data);
-          upsertRoadmap(response.data, true);
-          setFetchState("idle");
-          router.replace(`/repo/${repoId}/timeline`);
-        } else {
-          if (response.status === 401) {
-            setIsAuthError(true);
-            setError(
-              "GitHub authentication failed. Please reconnect your account."
-            );
-          } else {
-            setError(response.error ?? "Unable to generate roadmap.");
+          if (event.type === "progress") {
+            setGenerationStatus(event.message);
+          } else if (event.type === "result") {
+            const roadmapData = event.data;
+            setRoadmap(roadmapData);
+            upsertRoadmap(roadmapData, true);
+            setFetchState("idle");
+            setHandledGeneration(true);
+            router.replace(`/repo/${repoId}/timeline`);
+            break;
+          } else if (event.type === "error") {
+            throw new Error(event.message);
           }
-          setFetchState("error");
         }
       } catch (err) {
         if (cancelled) return;
         console.error("Generation error:", err);
-        setError("An unexpected error occurred during generation.");
+        // Check if it's an auth error from the stream (might need better error handling in service)
+        if (err instanceof Error && err.message.includes("401")) {
+          setIsAuthError(true);
+          setError(
+            "GitHub authentication failed. Please reconnect your account."
+          );
+        } else {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "An unexpected error occurred during generation."
+          );
+        }
         setFetchState("error");
       } finally {
         if (!cancelled) {
@@ -436,7 +447,10 @@ export default function RepoTimelinePage() {
 
   if (showFullScreenLoading) {
     return (
-      <GenerationLoadingCard repoName={identity?.fullName ?? "Repository"} />
+      <GenerationLoadingCard
+        repoName={identity?.fullName ?? "Repository"}
+        status={generationStatus}
+      />
     );
   }
 
@@ -804,18 +818,265 @@ function TimelineNodeCard({
               </CardTitle>
               <Badge
                 className={cn(
-                  "flex shrink-0 items-center gap-1 text-[10px]",
-                  align === "right" && "order-1"
+                  "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
+                  align === "right" && "justify-end"
                 )}
                 variant="secondary"
               >
-                {statusIcon}
-                <span className="uppercase">
-                  {stage.status === "not-started" && !isSignedIn
-                    ? "not started"
-                    : stage.status.replace("-", " ")}
-                </span>
-              </Badge>
+                <span>Stage {stage.index}</span>
+                <span>·</span>
+                <span>{stage.category}</span>
+                <span>·</span>
+                <span>{stage.difficulty}</span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle
+                  className={cn("text-lg", align === "right" && "order-2")}
+                >
+                  {stage.title}
+                </CardTitle>
+                <Badge
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 text-[10px]",
+                    align === "right" && "order-1"
+                  )}
+                  variant="secondary"
+                >
+                  {statusIcon}
+                  <span className="uppercase">
+                    {stage.status === "not-started" && !isSignedIn
+                      ? "not started"
+                      : stage.status.replace("-", " ")}
+                  </span>
+                </Badge>
+              </div>
+            </div>
+            <CardDescription className="mt-1.5 leading-relaxed">
+              {stage.summary}
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-6 pt-1">
+              {/* Goals Section */}
+              {stage.goals && stage.goals.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                      Goals
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <ul className="space-y-2">
+                    {stage.goals.map((goal, idx) => (
+                      <li
+                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
+                        key={idx}
+                      >
+                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
+                        <span>{goal}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Prerequisites Section */}
+              {stage.prerequisites && stage.prerequisites.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                      Prerequisites
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <ul className="space-y-2">
+                    {stage.prerequisites.map((prereq, idx) => (
+                      <li
+                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
+                        key={idx}
+                      >
+                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-accent/70" />
+                        <span>{prereq}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Checkpoints Section */}
+              {stage.checkpoints && stage.checkpoints.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                      Checkpoints
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <ul className="space-y-2">
+                    {stage.checkpoints.map((checkpoint, idx) => (
+                      <li
+                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
+                        key={idx}
+                      >
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+                        <span>{checkpoint}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Tasks Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                    {isSignedIn ? "Tasks" : "Tasks · Sign in to start"}
+                  </h4>
+                  <div className="h-px flex-1 bg-border/40" />
+                </div>
+                <div className="space-y-3">
+                  {stage.tasks.map((task, idx) => (
+                    <div
+                      className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
+                      key={idx}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-foreground text-sm">
+                          {task.label}
+                        </p>
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        {task.steps.map((step, sIdx) => (
+                          <p
+                            className="text-muted-foreground text-xs leading-relaxed"
+                            key={sIdx}
+                          >
+                            {step}
+                          </p>
+                        ))}
+                      </div>
+                      {task.files && task.files.length > 0 && (
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <span className="font-medium text-foreground/80">
+                            Files:
+                          </span>
+                          {task.files.map((file, fIdx) => (
+                            <code
+                              className="rounded bg-muted/50 px-1 py-0.5 font-mono"
+                              key={fIdx}
+                            >
+                              {file}
+                            </code>
+                          ))}
+                        </div>
+                      )}
+                      {task.commands && task.commands.length > 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <span className="font-medium text-foreground/80">
+                            Run:
+                          </span>
+                          {task.commands.map((cmd, cIdx) => (
+                            <code
+                              className="rounded bg-muted/50 px-1 py-0.5 font-mono"
+                              key={cIdx}
+                            >
+                              {cmd}
+                            </code>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Code Examples Section */}
+              {stage.code_examples && stage.code_examples.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-[11px] text-muted-foreground uppercase tracking-widest">
+                      Code Examples
+                    </h4>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <div className="space-y-3">
+                    {stage.code_examples.map((example, idx) => (
+                      <Collapsible className="group/code" key={idx}>
+                        <div className="rounded-lg border border-border/50 bg-muted/30">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium font-mono text-xs">
+                                  {example.file}
+                                </span>
+                                <Badge
+                                  className="h-4 px-1 text-[9px]"
+                                  variant="outline"
+                                >
+                                  {example.language}
+                                </Badge>
+                              </div>
+                              <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                                {example.description}
+                              </p>
+                            </div>
+                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="border-border/50 border-t p-3 pt-0">
+                              <p className="mb-2 text-[11px] text-muted-foreground">
+                                {example.description}
+                              </p>
+                              <pre className="max-w-full overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
+                                <code>{example.snippet}</code>
+                              </pre>
+                            </div>
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resources Section */}
+              {stage.resources.length > 0 && (
+                <div className="pt-2">
+                  <div className="flex flex-wrap gap-2">
+                    {stage.resources.map((resource) => (
+                      <a
+                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                        href={resource.href}
+                        key={resource.label}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <span>{resource.label}</span>
+                        <span className="opacity-50">↗</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+          <div className="flex items-center justify-between border-border/60 border-t bg-muted/20 px-5 py-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+              <Clock3 className="h-3.5 w-3.5" />
+              <span>{stage.eta}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant={ctaVariant}>
+                <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
+                  {ctaLabel}
+                </Link>
+              </Button>
+              <CollapsibleTrigger asChild>
+                <Button className="h-8 w-8 p-0" size="sm" variant="ghost">
+                  <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                  <span className="sr-only">Toggle details</span>
+                </Button>
+              </CollapsibleTrigger>
             </div>
           </div>
           <CardDescription className="mt-1.5 leading-relaxed">
@@ -840,7 +1101,13 @@ function TimelineNodeCard({
   );
 }
 
-function GenerationLoadingCard({ repoName }: { repoName: string }) {
+function GenerationLoadingCard({
+  repoName,
+  status,
+}: {
+  repoName: string;
+  status?: string;
+}) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
       <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
@@ -852,8 +1119,8 @@ function GenerationLoadingCard({ repoName }: { repoName: string }) {
           Generating roadmap for {repoName}
         </h2>
         <p className="text-muted-foreground">
-          Analyzing commit history, identifying key milestones, and structuring
-          your learning path. This may take up to a minute.
+          {status ||
+            "Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute."}
         </p>
       </div>
     </div>

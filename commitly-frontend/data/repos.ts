@@ -1,10 +1,12 @@
 export type RepoDifficulty = "intro" | "easy" | "medium" | "hard";
 
 export type StageTask = {
-  label: string;
-  steps: string[];
-  files?: string[];
-  commands?: string[];
+  id: string;
+  title: string;
+  description: string;
+  file_path?: string;
+  code_snippet?: string;
+  complexity: "low" | "medium" | "high";
 };
 
 export type CodeExample = {
@@ -16,18 +18,16 @@ export type CodeExample = {
 
 export type RepoTimelineStage = {
   id: string;
-  index?: number;
   title: string;
   summary: string;
   status: "not-started" | "in-progress" | "done";
   eta: string;
-  category?: "setup" | "feature" | "refactor" | "testing" | "ops" | "other";
-  difficulty?: "intro" | "easy" | "medium" | "hard";
-  goals?: string[];
+  goals: string[];
+  prerequisites: string[];
+  checkpoints: string[];
   tasks: StageTask[];
-  code_examples?: CodeExample[];
   resources: { label: string; href: string }[];
-  commit_window?: string[];
+  code_examples: CodeExample[];
 };
 
 export type RepoGuideMessage = {
@@ -71,20 +71,23 @@ export const repos: RepoRecord[] = [
           "Install poetry environment, sync git submodules, and prime dataset caches.",
         status: "done",
         eta: "15m",
+        goals: ["Set up the development environment", "Verify dependencies"],
+        prerequisites: ["Python 3.11", "Poetry"],
+        checkpoints: ["Environment is active", "Dependencies installed"],
         tasks: [
           {
-            label: "Setup Environment",
-            steps: [
-              "Install Python 3.11 + Poetry",
-              "Run `make bootstrap` to pull weights",
-              "Validate CUDA availability",
-            ],
+            id: "t1",
+            title: "Setup Environment",
+            description:
+              "Install Python 3.11 + Poetry. Run `make bootstrap` to pull weights. Validate CUDA availability.",
+            complexity: "medium",
           },
         ],
         resources: [
           { label: "Project README", href: "https://github.com/deepseek" },
           { label: "Bootstrap checklist", href: "#" },
         ],
+        code_examples: [],
       },
       {
         id: "stage-2",
@@ -93,20 +96,23 @@ export const repos: RepoRecord[] = [
           "Understand how planner, critic, and executive agents hand off work during a request.",
         status: "in-progress",
         eta: "40m",
+        goals: ["Understand agent interaction", "Trace request flow"],
+        prerequisites: ["Stage 1 completed"],
+        checkpoints: ["Tracing enabled", "Spans captured"],
         tasks: [
           {
-            label: "Enable Tracing",
-            steps: [
-              "Set `TRACE_AGENTS=1` env variable",
-              "Add request payload from docs/examples",
-              "Capture spans in Jaeger / OpenTelemetry",
-            ],
+            id: "t2",
+            title: "Enable Tracing",
+            description:
+              "Set `TRACE_AGENTS=1` env variable. Add request payload from docs/examples. Capture spans in Jaeger / OpenTelemetry.",
+            complexity: "high",
           },
         ],
         resources: [
           { label: "Tracing guide", href: "#" },
           { label: "Agent glossary", href: "#" },
         ],
+        code_examples: [],
       },
       {
         id: "stage-3",
@@ -115,20 +121,23 @@ export const repos: RepoRecord[] = [
           "Add retry/backoff to SSE bridge and bubble structured errors to clients.",
         status: "not-started",
         eta: "1h",
+        goals: ["Implement retry logic", "Standardize error handling"],
+        prerequisites: ["Stage 2 completed"],
+        checkpoints: ["Retry logic works", "Errors are JSON"],
         tasks: [
           {
-            label: "Implement Retry Logic",
-            steps: [
-              "Wrap SSE writer with reconnect support",
-              "Normalize error payloads to JSON schema",
-              "Add integration test that simulates flaky upstream",
-            ],
+            id: "t3",
+            title: "Implement Retry Logic",
+            description:
+              "Wrap SSE writer with reconnect support. Normalize error payloads to JSON schema. Add integration test that simulates flaky upstream.",
+            complexity: "high",
           },
         ],
         resources: [
           { label: "Streaming RFC", href: "#" },
           { label: "Structured errors spec", href: "#" },
         ],
+        code_examples: [],
       },
     ],
     guideThread: [
@@ -174,20 +183,23 @@ export const repos: RepoRecord[] = [
           "Use the provided `.devcontainer` to get Electron + Chromium dependencies aligned.",
         status: "done",
         eta: "20m",
+        goals: ["Configure devcontainer", "Start development server"],
+        prerequisites: ["Docker", "VS Code"],
+        checkpoints: ["Devcontainer running", "Web UI accessible"],
         tasks: [
           {
-            label: "Configure Devcontainer",
-            steps: [
-              "Install Docker Desktop",
-              "Open repo in Codespaces/devcontainer",
-              "Run `yarn watch` and `yarn web`",
-            ],
+            id: "t1",
+            title: "Configure Devcontainer",
+            description:
+              "Install Docker Desktop. Open repo in Codespaces/devcontainer. Run `yarn watch` and `yarn web`.",
+            complexity: "medium",
           },
         ],
         resources: [
           { label: "Development docs", href: "#" },
           { label: "Devcontainer reference", href: "#" },
         ],
+        code_examples: [],
       },
       {
         id: "stage-2",
@@ -196,20 +208,23 @@ export const repos: RepoRecord[] = [
           "Update the inline kernel picker to show provenance and recommended runtimes.",
         status: "in-progress",
         eta: "35m",
+        goals: ["Modify kernel picker UI", "Add recommendation logic"],
+        prerequisites: ["Stage 1 completed"],
+        checkpoints: ["Badges visible", "Tests pass"],
         tasks: [
           {
-            label: "Update Kernel Picker",
-            steps: [
-              "Audit `notebookKernelQuickPick.ts`",
-              "Add `recommended` badge using codicons",
-              "Write smoke test that asserts quick pick values",
-            ],
+            id: "t2",
+            title: "Update Kernel Picker",
+            description:
+              "Audit `notebookKernelQuickPick.ts`. Add `recommended` badge using codicons. Write smoke test that asserts quick pick values.",
+            complexity: "medium",
           },
         ],
         resources: [
           { label: "Notebook guide", href: "#" },
           { label: "Codicon list", href: "#" },
         ],
+        code_examples: [],
       },
       {
         id: "stage-3",
@@ -218,17 +233,20 @@ export const repos: RepoRecord[] = [
           "Send structured usage data for the new quick pick so product analytics can track adoption.",
         status: "not-started",
         eta: "50m",
+        goals: ["Implement telemetry", "Verify data transmission"],
+        prerequisites: ["Stage 2 completed"],
+        checkpoints: ["Telemetry events firing"],
         tasks: [
           {
-            label: "Add Telemetry",
-            steps: [
-              "Use `standardTelemetryService` with feature flag",
-              "Record kernel id & workspace trust state",
-              "Document payload contract",
-            ],
+            id: "t3",
+            title: "Add Telemetry",
+            description:
+              "Use `standardTelemetryService` with feature flag. Record kernel id & workspace trust state. Document payload contract.",
+            complexity: "medium",
           },
         ],
         resources: [{ label: "Telemetry checklist", href: "#" }],
+        code_examples: [],
       },
     ],
     guideThread: [
@@ -273,17 +291,20 @@ export const repos: RepoRecord[] = [
           "Ensure clang + ninja + Vulkan SDK are aligned before compiling benchmarks.",
         status: "done",
         eta: "25m",
+        goals: ["Validate build tools", "Compile for Android"],
+        prerequisites: ["Vulkan SDK", "Android NDK"],
+        checkpoints: ["Build successful"],
         tasks: [
           {
-            label: "Validate Toolchain",
-            steps: [
-              "Install Vulkan SDK 1.3.290",
-              "Verify `glslc` on PATH",
-              "Run `./build-android-armeabi-v7a.sh`",
-            ],
+            id: "t1",
+            title: "Validate Toolchain",
+            description:
+              "Install Vulkan SDK 1.3.290. Verify `glslc` on PATH. Run `./build-android-armeabi-v7a.sh`.",
+            complexity: "high",
           },
         ],
         resources: [{ label: "Android build doc", href: "#" }],
+        code_examples: [],
       },
       {
         id: "stage-2",
@@ -292,20 +313,23 @@ export const repos: RepoRecord[] = [
           "Profile the int8 path for EfficientNet and surface perf regressions.",
         status: "in-progress",
         eta: "55m",
+        goals: ["Enable quantization", "Profile performance"],
+        prerequisites: ["Stage 1 completed"],
+        checkpoints: ["Profiling data collected"],
         tasks: [
           {
-            label: "Profile Int8 Path",
-            steps: [
-              "Enable `NCNN_INT8=ON`",
-              "Run benchmark with `BENCHMARK_OP=1`",
-              "Capture perfetto trace on Pixel 6",
-            ],
+            id: "t2",
+            title: "Profile Int8 Path",
+            description:
+              "Enable `NCNN_INT8=ON`. Run benchmark with `BENCHMARK_OP=1`. Capture perfetto trace on Pixel 6.",
+            complexity: "high",
           },
         ],
         resources: [
           { label: "Quantization notes", href: "#" },
           { label: "Perfetto template", href: "#" },
         ],
+        code_examples: [],
       },
       {
         id: "stage-3",
@@ -314,17 +338,20 @@ export const repos: RepoRecord[] = [
           "Add artifact filters so nightly builds stay under 200MB compressed.",
         status: "not-started",
         eta: "35m",
+        goals: ["Reduce artifact size", "Update CI workflow"],
+        prerequisites: ["Stage 2 completed"],
+        checkpoints: ["Artifacts < 200MB"],
         tasks: [
           {
-            label: "Optimize CI Artifacts",
-            steps: [
-              "Patch `.github/workflows/nightly.yml`",
-              "Strip symbols after linking",
-              "Upload checksums for release manager",
-            ],
+            id: "t3",
+            title: "Optimize CI Artifacts",
+            description:
+              "Patch `.github/workflows/nightly.yml`. Strip symbols after linking. Upload checksums for release manager.",
+            complexity: "medium",
           },
         ],
         resources: [{ label: "CI storage policy", href: "#" }],
+        code_examples: [],
       },
     ],
     guideThread: [
