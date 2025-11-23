@@ -49,19 +49,21 @@ export default function BottomCTA({
                     </div>
                 </div>
 
-                <footer className="mt-16 flex flex-wrap items-end justify-between gap-6 text-[#999] pb-24">
-                    <div className="flex items-center gap-2 text-base">
-                        <span>{t.copyright}</span>
-                        <span>•</span>
-                        <a className="underline-offset-2 hover:underline" href="https://linkedin.com/in/alimkhan-yergebayev" target="_blank">Contact Us</a>
-                    </div>
-                    <nav className="flex items-center gap-6 text-base">
-                        <a href="/terms" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.terms}</a>
-                        <a href="/privacy" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.privacy}</a>
-                        <div className="sm:hidden">
-                            <LanguageDropdown variant="footer" />
+                <footer className="mt-16 flex flex-col gap-4 text-[#999] pb-24">
+                    <div className="flex flex-wrap items-center justify-between gap-6 text-base">
+                        <div className="flex items-center gap-2">
+                            <span>{t.copyright}</span>
+                            <span>•</span>
+                            <a className="underline-offset-2 hover:underline" href="https://linkedin.com/in/alimkhan-yergebayev" target="_blank">Contact Us</a>
                         </div>
-                    </nav>
+                        <nav className="flex flex-wrap items-center gap-6 text-base">
+                            <a href="/terms" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.terms}</a>
+                            <a href="/privacy" className="text-[#d9d9d9] hover:underline underline-offset-2">{t.privacy}</a>
+                        </nav>
+                    </div>
+                    <div className="flex justify-start sm:justify-end">
+                        <LanguageDropdown variant="footer" />
+                    </div>
                 </footer>
             </div>
         </section>
