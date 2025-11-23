@@ -35,61 +35,55 @@ NOISE_PATTERNS = [
 ]
 
 PROMPT_TEMPLATE = """
-You are Commitly, an engineering mentor that reads GitHub commit history and designs
-learning roadmaps for developers who want to REBUILD the project themselves.
+You are an expert software instructor and curriculum designer.
 
-Repository: {name}
-Description: {description}
-Stars: {stars}
-Language: {language}
-Default branch: {branch}
+You are given:
+- A production-grade codebase: {repo_name}
+- A set of commits (oldest → newest) with commit messages, changed files and code snippets
+- High-level metadata: tech stack, main features, and project description
 
-You are given a compressed commit history below.
+GOAL
+Design a PRACTICAL ROADMAP that teaches a motivated developer to REBUILD this project
+FROM SCRATCH in their own NEW repository, using this repo only as a reference.
 
-Your job:
-- Compress the ENTIRE evolution of this repository (from the first commit to the most recent)
-  into {stage_budget} ordered learning stages.
-- Each stage should feel like a self-contained "episode" a learner can complete in 30–90 minutes.
-- The roadmap must help a developer gradually re-implement the project, not just read diffs.
+Important constraints:
 
-Follow these rules:
+1. Assume the learner is starting from an EMPTY folder.
+   - They may look at this repository’s files and commits as examples.
+   - They are NOT allowed to reuse the repo directly.
+   - Do NOT tell them to `git clone`, `cd` into this repo, or run its existing scripts.
 
-1. Coverage
-   - Stages must cover the whole project history, not just early commits.
-   - Group related commits into feature-oriented stages (setup, major features, refactors, ops).
-   - Prefer stages that are pedagogically useful over mechanically covering every tiny change.
+2. The roadmap should cover the entire project lifecycle:
+   - Initial scaffolding and basic architecture
+   - Implementing core features
+   - Integrating data/storage/auth
+   - UX polish and refactors
+   - Ops/observability and maintenance
 
-2. Stage semantics
-   - Use exactly one "setup" stage near the beginning for repository onboarding.
-   - For the remaining stages, choose a mix of:
-     - "feature" (new capability or user-facing behavior)
-     - "refactor" (structural or quality-of-life changes)
-     - "testing" (tests, QA tools)
-     - "ops" (deployment, logging, monitoring)
-     - "other" only if nothing else fits.
-   - Assign difficulty as: "intro", "easy", "medium", or "hard" based on the work required.
+3. For each stage:
+   - Give it a concise title that describes the learner’s outcome.
+   - Write 2–4 clear GOALS (what they will understand / achieve).
+   - Write 3–8 concrete TASKS that describe IMPLEMENTATION steps in a new codebase:
+     - Use verbs like “Create”, “Implement”, “Refactor”, “Design”.
+     - Reference files and modules by name (e.g. `app/(chat)/page.tsx`, `lib/db.ts`).
+     - Prefer wording like “Implement XYZ module” instead of “Review” or “Explore”.
+   - Optionally list 0–3 RESOURCES:
+     - Internal files/commits in this repo that are good examples.
+     - External docs (e.g. framework docs) by name and URL slug.
 
-3. Teaching focus
-   Every stage MUST:
-   - State 1–3 concrete learning GOALS (what the learner will understand after finishing).
-   - Include 1–3 TASKS. For each task:
-     - Give a short label.
-     - Provide 2–5 specific STEPS that a learner can follow ("Open file X", "Create function Y", "Run command Z").
-     - List 1–4 FILES that are central to the task.
-     - Include relevant COMMANDS when setup, running, or building is required.
-   - Optionally include up to 2 CODE EXAMPLES:
-     - Keep each snippet short (3–15 lines).
-     - Show clean final code, not raw diffs or patch markers.
-     - Explain what the snippet demonstrates.
+4. Teaching style:
+   - Assume the learner already knows the language and framework basics.
+   - Emphasise building features step-by-step, not just running the app.
+   - Include small design/architecture insights where relevant
+     (e.g. “Separate streaming API route from UI components to keep concerns clear.”)
 
-4. Stage 0 (setup & tour)
-   - If the repository has any non-trivial setup, create a first stage that:
-     - Helps the learner install dependencies (for them to start rebuilding the project from scratch).
-     - Runs the development server or main command.
-     - Gives a quick tour of top-level folders and core technologies.
-   - Mark this stage as category "setup" and difficulty "intro".
+5. Segmenting:
+   - First, mentally plan a full sequence of {intended_total_stages} stages that would
+     rebuild the project from scratch.
+   - For THIS RESPONSE, output ONLY the FIRST {stage_budget} stages of that sequence.
+   - Do NOT summarise later stages; stop after stage {stage_budget}.
 
-5. Output format
+6. Output format
    - Return ONLY JSON, no markdown.
    - The JSON must conform exactly to this schema (field names and allowed values):
 {{
@@ -135,6 +129,7 @@ Follow these rules:
 Commit history context (oldest to newest):
 {context}
 
+Now, based on the commit history and code snippets you’re given, design the first {stage_budget} stages of such a “rebuild from scratch” roadmap.
 """
 
 REVIEW_PROMPT = """
