@@ -25,7 +25,6 @@ export default function Page() {
         waitlistButtonLabel,
         handleHeroSubmit,
         handleWaitlistModalSubmit,
-        donate,
     } = useWaitlistAndDonate()
 
     useEffect(() => {
@@ -51,7 +50,6 @@ export default function Page() {
         <div className="min-h-screen w-full bg-background">
             <Navbar
                 isScrolled={isScrolled}
-                onDonateClick={donate}
                 onWaitlistClick={() => setShowWaitlistModal(true)}
             />
 

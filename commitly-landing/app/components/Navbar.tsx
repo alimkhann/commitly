@@ -2,15 +2,13 @@
 
 import Image from 'next/image'
 import { useLanguage } from '../contexts/LanguageContext'
-import LanguageDropdown from './LanguageDropdown'
 
 interface NavbarProps {
     isScrolled: boolean
-    onDonateClick: () => void
     onWaitlistClick: () => void
 }
 
-export default function Navbar({ isScrolled, onDonateClick, onWaitlistClick }: NavbarProps) {
+export default function Navbar({ isScrolled, onWaitlistClick }: NavbarProps) {
     const { t } = useLanguage()
 
     return (
@@ -30,16 +28,7 @@ export default function Navbar({ isScrolled, onDonateClick, onWaitlistClick }: N
                         />
                         <div className="text-lg sm:text-2xl font-semibold tracking-[-0.02em]">commitly</div>
                     </div>
-                    <div className="flex items-center gap-1.5 sm:gap-3">
-                        <div className="hidden sm:block">
-                            <LanguageDropdown />
-                        </div>
-                        <button
-                            onClick={onDonateClick}
-                            className="border border-white/20 rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm"
-                        >
-                            ♥️ Buy us a coffee
-                        </button>
+                    <div className="flex items-center">
                         <button
                             onClick={onWaitlistClick}
                             className="btn-white text-xs sm:text-sm rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2"
