@@ -39,12 +39,15 @@
     "postprocessing": "^6.38.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.171.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.5",
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^22.10.1",
     "@types/react": "^19.2.4",
     "@types/react-dom": "^19.2.3",

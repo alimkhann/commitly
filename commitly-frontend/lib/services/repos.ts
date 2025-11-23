@@ -26,6 +26,8 @@ const API_ROUTES = {
     `/api/v1/roadmap/${owner}/${repo}/rating`,
   recordView: (owner: string, repo: string) =>
     `/api/v1/roadmap/${owner}/${repo}/view`,
+  chat: (owner: string, repo: string) =>
+    `/api/v1/roadmap/${owner}/${repo}/chat`,
 };
 
 export type RepoIdentity = {
@@ -571,6 +573,28 @@ export const repoService = {
     return apiClient<void>(env.apiBaseUrl, {
       path: API_ROUTES.recordView(owner, repo),
       method: "POST",
+      authToken,
+    });
+  },
+
+  chat(
+    owner: string,
+    repo: string,
+    message: string,
+    stageId?: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<{ response: string }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<{ response: string }>(env.apiBaseUrl, {
+      path: API_ROUTES.chat(owner, repo),
+      method: "POST",
+      body: { message, stage_id: stageId },
       authToken,
     });
   },

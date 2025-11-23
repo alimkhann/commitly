@@ -301,3 +301,12 @@ class RatingResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChatRequest(BaseModel):
+    message: str
+    stage_id: Optional[str] = None
+
+
+class ChatResponse(BaseModel):
+    response: str

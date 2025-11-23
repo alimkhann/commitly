@@ -3,7 +3,6 @@
 import { useAuth } from "@clerk/nextjs";
 import {
   CheckCircle2,
-  ChevronDown,
   CircleDotDashed,
   Clock3,
   RefreshCcw,
@@ -27,16 +26,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+
 import { StarRating } from "@/components/ui/star-rating";
 import type { RepoRecord, RepoTimelineStage } from "@/data/repos";
 import {
@@ -789,27 +783,45 @@ function TimelineNodeCard({
     isSignedIn && stage.status !== "done" ? "default" : "secondary";
 
   return (
-    <Collapsible className="group">
-      <div className="relative">
-        <span
-          className={cn(
-            "pointer-events-none absolute top-1/2 hidden h-px w-10 bg-border/50 md:block",
-            align === "left" ? "-right-10" : "-left-10"
-          )}
-        />
-        <Card
-          className={cn(
-            "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
-            isCurrent && "ring-1 ring-primary/40"
-          )}
-        >
-          <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
-            <div className="flex flex-col gap-1">
-              <div
+    <div className="group relative">
+      <span
+        className={cn(
+          "pointer-events-none absolute top-1/2 hidden h-px w-10 bg-border/50 md:block",
+          align === "left" ? "-right-10" : "-left-10"
+        )}
+      />
+      <Card
+        className={cn(
+          "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
+          isCurrent && "ring-1 ring-primary/40"
+        )}
+      >
+        <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
+          <div className="flex flex-col gap-1">
+            <div
+              className={cn(
+                "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
+                align === "right" && "justify-end"
+              )}
+            >
+              <span>Stage {stage.index}</span>
+              <span>·</span>
+              <span>{stage.category}</span>
+              <span>·</span>
+              <span>{stage.difficulty}</span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle
+                className={cn("text-lg", align === "right" && "order-2")}
+              >
+                {stage.title}
+              </CardTitle>
+              <Badge
                 className={cn(
                   "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
                   align === "right" && "justify-end"
                 )}
+                variant="secondary"
               >
                 <span>Stage {stage.index}</span>
                 <span>·</span>
@@ -1067,9 +1079,25 @@ function TimelineNodeCard({
               </CollapsibleTrigger>
             </div>
           </div>
-        </Card>
-      </div>
-    </Collapsible>
+          <CardDescription className="mt-1.5 leading-relaxed">
+            {stage.summary}
+          </CardDescription>
+        </CardHeader>
+        <div className="flex items-center justify-between border-border/60 border-t bg-muted/20 px-5 py-3">
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Clock3 className="h-3.5 w-3.5" />
+            <span>{stage.eta}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant={ctaVariant}>
+              <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
+                {ctaLabel}
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 
