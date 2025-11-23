@@ -35,7 +35,7 @@ export default function RepoGuidePage() {
   const params = useParams();
   const repoId = params.repoId as string;
   const searchParams = useSearchParams();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
   const { getBySlug } = useRoadmapCatalog();
   
   const cachedRecord = getBySlug(repoId);
@@ -44,13 +44,16 @@ export default function RepoGuidePage() {
   const activeData = useMemo(() => {
     if (cachedRecord && "repo" in cachedRecord) {
       return {
+        identity: { owner: cachedRecord.owner, repoName: cachedRecord.repoName },
         name: cachedRecord.repo.full_name,
         timeline: cachedRecord.timeline,
-        guideThread: [], // Generated roadmaps start with empty thread
+        guideThread: [], 
       };
     }
     if (fallbackRecord) {
+      const identity = repoService.buildIdentityFromFullName(fallbackRecord.name);
       return {
+        identity,
         name: fallbackRecord.name,
         timeline: fallbackRecord.timeline,
         guideThread: fallbackRecord.guideThread ?? [],
@@ -60,13 +63,17 @@ export default function RepoGuidePage() {
   }, [cachedRecord, fallbackRecord]);
 
   const [message, setMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<Array<{id: string, role: 'user' | 'guide', message: string}>>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const thread = useMemo(
-    () => (isSignedIn ? (activeData?.guideThread ?? []) : []),
-    [activeData, isSignedIn]
-  );
+  // Initialize chat history from static data if available and empty
+  useEffect(() => {
+    if (activeData?.guideThread && chatHistory.length === 0 && activeData.guideThread.length > 0) {
+       setChatHistory(activeData.guideThread.map(item => ({...item, role: item.role as 'user' | 'guide'})));
+    }
+  }, [activeData, chatHistory.length]);
 
   const stageId = searchParams?.get("stage");
 
@@ -81,14 +88,55 @@ export default function RepoGuidePage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isSignedIn) {
+    if (!isSignedIn || !message.trim() || isLoading || !activeData) {
       return;
     }
+    
+    const userMsg = message.trim();
     setMessage("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+    }
+
+    const newHistory = [
+      ...chatHistory,
+      { id: Date.now().toString(), role: 'user' as const, message: userMsg }
+    ];
+    setChatHistory(newHistory);
+    setIsLoading(true);
+
+    try {
+      const token = await getToken();
+      const response = await repoService.chat(
+        activeData.identity.owner,
+        activeData.identity.repoName,
+        userMsg,
+        stageId ?? undefined,
+        token ?? undefined
+      );
+
+      if (response.ok && response.data) {
+        setChatHistory(prev => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: 'guide', message: response.data!.response }
+        ]);
+      } else {
+        // Fallback error message
+        setChatHistory(prev => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: 'guide', message: "Sorry, I encountered an error. Please try again." }
+        ]);
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setChatHistory(prev => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), role: 'guide', message: "Sorry, I encountered an error. Please try again." }
+      ]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -284,13 +332,13 @@ export default function RepoGuidePage() {
           </div>
         )}
         <div className="mt-6 flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 overflow-y-auto pb-6">
-          {thread.length === 0 ? (
+          {chatHistory.length === 0 ? (
             <div className="rounded-2xl border border-border/60 border-dashed bg-card/40 p-6 text-center text-muted-foreground text-sm">
               No guide activity yet. Ask for a walkthrough to start the
               conversation.
             </div>
           ) : (
-            [...thread].reverse().map((messageItem) => (
+            chatHistory.map((messageItem) => (
               <div className="group flex flex-col gap-1" key={messageItem.id}>
                 {messageItem.role === "guide" ? (
                   <article className="space-y-4 text-base text-foreground leading-7">
@@ -325,7 +373,7 @@ export default function RepoGuidePage() {
                     </div>
                   </article>
                 ) : (
-                  <div className="group ml-auto flex max-w-[65%] flex-col items-end gap-1">
+                  <div className="group ml-auto flex max-w-[85%] flex-col items-end gap-1">
                     <p className="rounded-3xl bg-primary px-4 py-3 text-base text-primary-foreground leading-relaxed shadow-sm">
                       {messageItem.message}
                     </p>
@@ -348,36 +396,45 @@ export default function RepoGuidePage() {
               </div>
             ))
           )}
+          {isLoading && (
+             <div className="flex items-center gap-2 text-muted-foreground text-sm">
+               <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
+               <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.2s]" />
+               <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.4s]" />
+             </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
 
-      <form
-        className="sticky bottom-0 mt-auto flex w-full max-w-4xl items-end gap-3 self-center rounded-full border border-border/60 bg-card/80 px-4 py-2 shadow-2xl"
-        onSubmit={handleSubmit}
-      >
-        <Textarea
-          className="max-h-40 min-h-[48px] flex-1 resize-none border-none bg-transparent focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!isSignedIn}
-          onChange={handleInputChange}
-          placeholder={
-            isSignedIn
-              ? "Ask for context, code walkthroughs, or compare approaches..."
-              : "Sign in to start working with the AI guide."
-          }
-          ref={textareaRef}
-          rows={1}
-          value={message}
-        />
-        <Button
-          className="rounded-full"
-          disabled={!isSignedIn}
-          size="icon"
-          type="submit"
+      <div className="sticky bottom-6 mt-auto flex w-full justify-center px-4">
+        <form
+          className="flex w-full max-w-4xl items-end gap-3 rounded-3xl border border-border/60 bg-card/80 p-2 shadow-2xl backdrop-blur-md"
+          onSubmit={handleSubmit}
         >
-          <SendHorizontal className="h-4 w-4" />
-        </Button>
-      </form>
+          <Textarea
+            className="max-h-40 min-h-[44px] flex-1 resize-none border-none bg-transparent px-4 py-3 focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!isSignedIn || isLoading}
+            onChange={handleInputChange}
+            placeholder={
+              isSignedIn
+                ? "Ask for context, code walkthroughs, or compare approaches..."
+                : "Sign in to start working with the AI guide."
+            }
+            ref={textareaRef}
+            rows={1}
+            value={message}
+          />
+          <Button
+            className="h-11 w-11 rounded-full shrink-0 mb-0.5 mr-0.5"
+            disabled={!isSignedIn || isLoading || !message.trim()}
+            size="icon"
+            type="submit"
+          >
+            <SendHorizontal className="h-5 w-5" />
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -7,15 +7,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import ClerkClaims, optional_clerk_auth, require_clerk_auth
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.roadmap import (
     CatalogPage,
+    ChatRequest,
+    ChatResponse,
     RatingRequest,
     RatingResponse,
     RoadmapRequest,
     RoadmapResponse,
     UserRepoStateResponse,
 )
+from app.services.ai.chat import GeminiChatService
 from app.services.roadmap_service import RoadmapService, build_roadmap_service
 
 router = APIRouter()
@@ -221,3 +225,29 @@ async def record_roadmap_view(
     user_id = current_user.get("sub") if current_user else None
     await service.record_roadmap_view(f"{owner}/{repo}", user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{owner}/{repo}/chat", response_model=ChatResponse)
+async def chat_with_guide(
+    owner: str,
+    repo: str,
+    payload: ChatRequest,
+    session: Session = Depends(get_db),
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+) -> ChatResponse:
+    """
+    Chat with the AI guide about the repository or a specific stage.
+    """
+    chat_service = GeminiChatService(
+        session=session,
+        api_key=settings.gemini_api_key,
+        model=settings.gemini_model,
+    )
+
+    response = await chat_service.chat(
+        repo_full_name=f"{owner}/{repo}",
+        message=payload.message,
+        stage_id=payload.stage_id,
+    )
+
+    return ChatResponse(response=response)
