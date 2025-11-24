@@ -304,9 +304,10 @@ class RatingResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: Optional[str] = None
     repo_full_name: str
     stage_id: Optional[str] = None
+    messages: Optional[List[dict]] = None  # For full chat history context
 
 
 class ChatResponse(BaseModel):

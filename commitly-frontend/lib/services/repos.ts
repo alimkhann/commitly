@@ -1,7 +1,4 @@
-import {
-  type RepoRecord,
-  type RepoTimelineStage,
-} from "@/data/repos";
+import type { RepoTimelineStage } from "@/data/repos";
 
 import { type ApiClientResponse, apiClient } from "@/lib/api/client";
 import { env } from "@/lib/config/env";

@@ -3,10 +3,10 @@
 import { useAuth } from "@clerk/nextjs";
 import {
   CheckCircle2,
+  ChevronDown,
   CircleDotDashed,
   Clock3,
   RefreshCcw,
-  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/collapsible";
 
 import { StarRating } from "@/components/ui/star-rating";
-import type { RepoRecord, RepoTimelineStage } from "@/data/repos";
+import type { RepoTimelineStage } from "@/data/repos";
 import {
   type RepoIdentity,
   type RoadmapResponseBody,
@@ -713,11 +713,11 @@ function TimelineCanvas({
               >
                 <TimelineNodeCard
                   align={align}
+                  index={index + 1}
                   isCurrent={isCurrent}
                   isSignedIn={isSignedIn}
                   repoSlug={repoSlug}
                   stage={stage}
-                  index={index + 1}
                   statusIcon={statusIcon[stage.status]}
                 />
               </div>
@@ -732,7 +732,6 @@ function TimelineCanvas({
     </section>
   );
 }
-
 
 function TimelineNodeCard({
   stage,
@@ -878,15 +877,17 @@ function TimelineNodeCard({
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <ul className="space-y-2">
-                    {stage.checkpoints.map((checkpoint: string, idx: number) => (
-                      <li
-                        className="flex items-start gap-2.5 text-muted-foreground text-sm"
-                        key={idx}
-                      >
-                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
-                        <span>{checkpoint}</span>
-                      </li>
-                    ))}
+                    {stage.checkpoints.map(
+                      (checkpoint: string, idx: number) => (
+                        <li
+                          className="flex items-start gap-2.5 text-muted-foreground text-sm"
+                          key={idx}
+                        >
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/60" />
+                          <span>{checkpoint}</span>
+                        </li>
+                      )
+                    )}
                   </ul>
                 </div>
               )}
@@ -993,18 +994,20 @@ function TimelineNodeCard({
               {stage.resources.length > 0 && (
                 <div className="pt-2">
                   <div className="flex flex-wrap gap-2">
-                    {stage.resources.map((resource: { label: string; href: string }) => (
-                      <a
-                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                        href={resource.href}
-                        key={resource.label}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        <span>{resource.label}</span>
-                        <span className="opacity-50">↗</span>
-                      </a>
-                    ))}
+                    {stage.resources.map(
+                      (resource: { label: string; href: string }) => (
+                        <a
+                          className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                          href={resource.href}
+                          key={resource.label}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <span>{resource.label}</span>
+                          <span className="opacity-50">↗</span>
+                        </a>
+                      )
+                    )}
                   </div>
                 </div>
               )}

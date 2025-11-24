@@ -13,7 +13,6 @@ from app.core.database import get_db
 from app.models.roadmap import (
     CatalogPage,
     ChatRequest,
-    ChatResponse,
     RatingRequest,
     RatingResponse,
     RoadmapRequest,
@@ -251,12 +250,12 @@ async def record_roadmap_view(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat")
 async def chat_with_guide(
     payload: ChatRequest,
     session: Session = Depends(get_db),
     current_user: ClerkClaims = Depends(require_clerk_auth),
-) -> ChatResponse:
+) -> StreamingResponse:
     """
     Chat with the AI guide about the repository or a specific stage.
     """
@@ -266,10 +265,27 @@ async def chat_with_guide(
         model=settings.gemini_model,
     )
 
-    response = await chat_service.chat(
-        repo_full_name=payload.repo_full_name,
-        message=payload.message,
-        stage_id=payload.stage_id,
-    )
+    # If messages are provided (from useChat), use them.
+    # Otherwise, construct a single message list from payload.message.
+    messages = payload.messages
+    if not messages:
+        if not payload.message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either 'messages' or 'message' must be provided.",
+            )
+        messages = [{"role": "user", "content": payload.message}]
 
-    return ChatResponse(response=response)
+    return StreamingResponse(
+        chat_service.chat_stream(
+            repo_full_name=payload.repo_full_name,
+            messages=messages,
+            stage_id=payload.stage_id,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "x-vercel-ai-ui-message-stream": "v1",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )

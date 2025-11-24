@@ -3,6 +3,8 @@
 import { useAuth } from "@clerk/nextjs";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Edit2,
   SendHorizontal,
@@ -31,7 +33,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
-import { repoService } from "@/lib/services/repos";
+import { env } from "@/lib/config/env";
+import { useChatTree } from "@/lib/hooks/useChatTree";
 
 export default function RepoGuidePage() {
   const params = useParams();
@@ -61,30 +64,6 @@ export default function RepoGuidePage() {
     return null;
   }, [cachedRecord]);
 
-  const [message, setMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<
-    Array<{ id: string; role: "user" | "guide"; message: string }>
-  >([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // Initialize chat history from static data if available and empty
-  useEffect(() => {
-    if (
-      activeData?.guideThread &&
-      chatHistory.length === 0 &&
-      activeData.guideThread.length > 0
-    ) {
-      setChatHistory(
-        activeData.guideThread.map((item) => ({
-          ...item,
-          role: item.role as "user" | "guide",
-        }))
-      );
-    }
-  }, [activeData, chatHistory.length]);
-
   const stageId = searchParams?.get("stage");
 
   const stageContext = useMemo(() => {
@@ -94,80 +73,71 @@ export default function RepoGuidePage() {
     return activeData.timeline.find((stage) => stage.id === stageId) ?? null;
   }, [activeData, stageId]);
 
+  const {
+    messages,
+    treeState,
+    sendMessage,
+    editMessage,
+    navigateBranch,
+    isLoading,
+    input,
+    setInput,
+  } = useChatTree({
+    api: `${env.apiBaseUrl}/api/v1/roadmap/chat`,
+  });
+
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+  }, [messages]);
+
+  const getRequestOptions = async () => {
+    const token = await getToken();
+    return {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: {
+        repo_full_name: `${activeData?.identity.owner}/${activeData?.identity.repoName}`,
+        stage_id: stageId ?? undefined,
+      },
+    };
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!(isSignedIn && message.trim()) || isLoading || !activeData) {
+    if (!(isSignedIn && input.trim()) || isLoading || !activeData) {
       return;
     }
 
-    const userMsg = message.trim();
-    setMessage("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
 
-    const newHistory = [
-      ...chatHistory,
-      { id: Date.now().toString(), role: "user" as const, message: userMsg },
-    ];
-    setChatHistory(newHistory);
-    setIsLoading(true);
-
-    try {
-      const token = await getToken();
-      const response = await repoService.chat(
-        activeData.identity.owner,
-        activeData.identity.repoName,
-        userMsg,
-        stageId ?? undefined,
-        token ?? undefined
-      );
-
-      if (response.ok && response.data) {
-        setChatHistory((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            role: "guide",
-            message: response.data!.response,
-          },
-        ]);
-      } else {
-        // Fallback error message
-        setChatHistory((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            role: "guide",
-            message: "Sorry, I encountered an error. Please try again.",
-          },
-        ]);
-      }
-    } catch (error) {
-      console.error("Chat error:", error);
-      setChatHistory((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "guide",
-          message: "Sorry, I encountered an error. Please try again.",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
+    const options = await getRequestOptions();
+    await sendMessage(input, options);
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(event.target.value);
+    setInput(event.target.value);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
+  };
+
+  const handleEditStart = (messageId: string, currentContent: string) => {
+    setEditingMessageId(messageId);
+    setEditContent(currentContent);
+  };
+
+  const handleEditSubmit = async (messageId: string) => {
+    if (!editContent.trim()) return;
+    setEditingMessageId(null);
+    const options = await getRequestOptions();
+    await editMessage(messageId, editContent, options);
   };
 
   if (!activeData) {
@@ -280,41 +250,43 @@ export default function RepoGuidePage() {
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <div className="space-y-3">
-                    {stageContext.code_examples.map((example: any, idx: number) => (
-                      <Collapsible className="group/code" key={idx}>
-                        <div className="rounded-lg border border-border/50 bg-muted/30">
-                          <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium font-mono text-xs">
-                                  {example.file}
-                                </span>
-                                <Badge
-                                  className="h-4 px-1 text-[9px]"
-                                  variant="outline"
-                                >
-                                  {example.language}
-                                </Badge>
+                    {stageContext.code_examples.map(
+                      (example: any, idx: number) => (
+                        <Collapsible className="group/code" key={idx}>
+                          <div className="rounded-lg border border-border/50 bg-muted/30">
+                            <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium font-mono text-xs">
+                                    {example.file}
+                                  </span>
+                                  <Badge
+                                    className="h-4 px-1 text-[9px]"
+                                    variant="outline"
+                                  >
+                                    {example.language}
+                                  </Badge>
+                                </div>
+                                <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                                  {example.description}
+                                </p>
                               </div>
-                              <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                                {example.description}
-                              </p>
-                            </div>
-                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <div className="border-border/50 border-t p-3 pt-0">
-                              <p className="mb-2 text-[11px] text-muted-foreground">
-                                {example.description}
-                              </p>
-                              <pre className="overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
-                                <code>{example.snippet}</code>
-                              </pre>
-                            </div>
-                          </CollapsibleContent>
-                        </div>
-                      </Collapsible>
-                    ))}
+                              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]/code:rotate-180" />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="border-border/50 border-t p-3 pt-0">
+                                <p className="mb-2 text-[11px] text-muted-foreground">
+                                  {example.description}
+                                </p>
+                                <pre className="overflow-x-auto rounded-md bg-background p-3 font-mono text-[10px] leading-relaxed">
+                                  <code>{example.snippet}</code>
+                                </pre>
+                              </div>
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+                      )
+                    )}
                   </div>
                 </div>
               )}
@@ -323,95 +295,169 @@ export default function RepoGuidePage() {
             {stageContext.resources.length > 0 && (
               <div className="pt-2">
                 <div className="flex flex-wrap gap-2">
-                  {stageContext.resources.map((resource: { label: string; href: string }) => (
-                    <a
-                      className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                      href={resource.href}
-                      key={resource.label}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <span>{resource.label}</span>
-                      <span className="opacity-50">↗</span>
-                    </a>
-                  ))}
+                  {stageContext.resources.map(
+                    (resource: { label: string; href: string }) => (
+                      <a
+                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                        href={resource.href}
+                        key={resource.label}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <span>{resource.label}</span>
+                        <span className="opacity-50">↗</span>
+                      </a>
+                    )
+                  )}
                 </div>
               </div>
             )}
           </div>
         )}
         <div className="mt-6 flex w-full max-w-3xl flex-1 flex-col justify-end gap-5 overflow-y-auto pb-6">
-          {chatHistory.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="rounded-2xl border border-border/60 border-dashed bg-card/40 p-6 text-center text-muted-foreground text-sm">
               No guide activity yet. Ask for a walkthrough to start the
               conversation.
             </div>
           ) : (
-            chatHistory.map((messageItem) => (
-              <div className="group flex flex-col gap-1" key={messageItem.id}>
-                {messageItem.role === "guide" ? (
-                  <article className="space-y-4 text-base text-foreground leading-7">
-                    <div className="prose prose-invert max-w-none prose-pre:border prose-pre:border-border/50 prose-pre:bg-muted/50 prose-p:leading-relaxed">
-                      <Markdown
-                        components={{
-                          a: ({ node, ...props }) => (
-                            <a
-                              {...(props as any)}
-                              className="font-medium text-primary hover:underline"
-                              rel="noopener noreferrer"
-                              target="_blank"
-                            />
-                          ),
-                        }}
-                        remarkPlugins={[remarkGfm]}
-                      >
-                        {messageItem.message}
-                      </Markdown>
+            (messages as any[]).map((messageItem) => {
+              const node = treeState.messages[messageItem.id];
+              const parentNode = node?.parentId
+                ? treeState.messages[node.parentId]
+                : null;
+              const siblingCount = parentNode?.childrenIds.length ?? 0;
+              const currentSiblingIndex =
+                parentNode?.childrenIds.indexOf(messageItem.id) ?? 0;
+
+              return (
+                <div className="group flex flex-col gap-1" key={messageItem.id}>
+                  {messageItem.role !== "user" ? (
+                    <article className="space-y-4 text-base text-foreground leading-7">
+                      <div className="prose prose-invert max-w-none prose-pre:border prose-pre:border-border/50 prose-pre:bg-muted/50 prose-p:leading-relaxed">
+                        <Markdown
+                          components={{
+                            a: ({ node, ...props }) => (
+                              <a
+                                {...(props as any)}
+                                className="font-medium text-primary hover:underline"
+                                rel="noopener noreferrer"
+                                target="_blank"
+                              />
+                            ),
+                          }}
+                          remarkPlugins={[remarkGfm]}
+                        >
+                          {messageItem.content}
+                        </Markdown>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground text-xs opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                          type="button"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                          type="button"
+                        >
+                          <ThumbsUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                          type="button"
+                        >
+                          <ThumbsDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </article>
+                  ) : (
+                    <div className="group ml-auto flex max-w-[85%] flex-col items-end gap-1">
+                      {editingMessageId === messageItem.id ? (
+                        <div className="flex w-full flex-col gap-2 rounded-3xl bg-card p-2 shadow-sm">
+                          <Textarea
+                            className="min-h-[60px] resize-none border-none bg-transparent focus-visible:ring-0"
+                            onChange={(e) => setEditContent(e.target.value)}
+                            value={editContent}
+                          />
+                          <div className="flex justify-end gap-2 px-2 pb-1">
+                            <Button
+                              onClick={() => setEditingMessageId(null)}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={() => handleEditSubmit(messageItem.id)}
+                              size="sm"
+                            >
+                              Save & Submit
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            {siblingCount > 1 && (
+                              <div className="flex items-center gap-1 text-muted-foreground text-xs">
+                                <button
+                                  className="p-1 hover:text-foreground disabled:opacity-30"
+                                  disabled={currentSiblingIndex === 0}
+                                  onClick={() =>
+                                    navigateBranch(messageItem.id, "prev")
+                                  }
+                                >
+                                  <ChevronLeft className="h-3 w-3" />
+                                </button>
+                                <span>
+                                  {currentSiblingIndex + 1} / {siblingCount}
+                                </span>
+                                <button
+                                  className="p-1 hover:text-foreground disabled:opacity-30"
+                                  disabled={
+                                    currentSiblingIndex === siblingCount - 1
+                                  }
+                                  onClick={() =>
+                                    navigateBranch(messageItem.id, "next")
+                                  }
+                                >
+                                  <ChevronRight className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
+                            <p className="rounded-3xl bg-primary px-4 py-3 text-base text-primary-foreground leading-relaxed shadow-sm">
+                              {messageItem.content}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground text-xs opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                              type="button"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                              onClick={() =>
+                                handleEditStart(
+                                  messageItem.id,
+                                  messageItem.content
+                                )
+                              }
+                              type="button"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 text-muted-foreground text-xs opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
-                        type="button"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
-                        type="button"
-                      >
-                        <ThumbsUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
-                        type="button"
-                      >
-                        <ThumbsDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </article>
-                ) : (
-                  <div className="group ml-auto flex max-w-[85%] flex-col items-end gap-1">
-                    <p className="rounded-3xl bg-primary px-4 py-3 text-base text-primary-foreground leading-relaxed shadow-sm">
-                      {messageItem.message}
-                    </p>
-                    <div className="flex items-center gap-2 text-muted-foreground text-xs opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
-                        type="button"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
-                        type="button"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
+                  )}
+                </div>
+              );
+            })
           )}
           {isLoading && (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -440,11 +486,11 @@ export default function RepoGuidePage() {
             }
             ref={textareaRef}
             rows={1}
-            value={message}
+            value={input}
           />
           <Button
             className="mr-0.5 mb-0.5 h-11 w-11 shrink-0 rounded-full"
-            disabled={!isSignedIn || isLoading || !message.trim()}
+            disabled={!isSignedIn || isLoading || !input.trim()}
             size="icon"
             type="submit"
           >
