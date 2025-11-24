@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from app.models.github_token import GitHubCredential
 from sqlalchemy.orm import Session
+
+from app.models.github_token import GitHubCredential
 
 
 class GitHubTokenStore:

@@ -5,9 +5,10 @@ import logging
 from typing import Optional
 
 import httpx
+from sqlalchemy.orm import Session
+
 from app.models.roadmap import GeneratedRoadmap, RepoCommitChunk
 from app.services.ai.gemini import GeminiGenerationError
-from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 

@@ -3,6 +3,10 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
 from app.core.auth import ClerkClaims, optional_clerk_auth, require_clerk_auth
 from app.core.config import settings
 from app.core.database import get_db
@@ -17,9 +21,6 @@ from app.models.roadmap import (
 )
 from app.services.ai.chat import GeminiChatService
 from app.services.roadmap_service import RoadmapService, build_roadmap_service
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 
 router = APIRouter()
 

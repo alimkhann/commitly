@@ -5,8 +5,8 @@ Revises: 20241115_add_user_synced_repos
 Create Date: 2025-11-16 10:00:00.000000
 """
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20241116_upgrade_roadmaps_and_user_repo_state"

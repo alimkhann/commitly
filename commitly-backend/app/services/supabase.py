@@ -1,10 +1,11 @@
-import logging
 from dataclasses import dataclass
+import logging
 
-from app.models.waitlist import Waitlist, WaitlistCreate
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from app.models.waitlist import Waitlist, WaitlistCreate
 
 
 class ServiceError(Exception):

@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import time
 from threading import RLock
+import time
 from typing import Any, Dict, List, Optional, TypedDict, cast
 from urllib.parse import urlparse
 
-import httpx
-from app.core.config import Settings, settings
 from fastapi import HTTPException, Request, status
+import httpx
 from jose import jwk, jwt
 from jose.exceptions import JWTError
 from jose.utils import base64url_decode
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
+
+from app.core.config import Settings, settings
 
 
 def _normalize_party(value: str) -> str:

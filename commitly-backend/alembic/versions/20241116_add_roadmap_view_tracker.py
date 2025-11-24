@@ -8,8 +8,8 @@ Create Date: 2024-11-16 14:00:00.000000
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "add_view_tracker"

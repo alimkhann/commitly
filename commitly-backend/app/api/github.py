@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Optional
 from urllib.parse import urlencode
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel, HttpUrl
+from sqlalchemy.orm import Session
+
 from app.core.auth import ClerkClaims, require_clerk_auth
 from app.core.config import settings
 from app.core.database import get_db
@@ -15,10 +20,6 @@ from app.services.github_oauth import (
     load_state,
 )
 from app.services.github_tokens import GitHubTokenStore
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, HttpUrl
-from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/github", tags=["github"])
 

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.models.roadmap import GeneratedRoadmap, RoadmapRating
-from app.services.roadmap_repository import RoadmapResultStore
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
+
+from app.models.roadmap import GeneratedRoadmap, RoadmapRating
+from app.services.roadmap_repository import RoadmapResultStore
 
 
 class RoadmapRatingStore:

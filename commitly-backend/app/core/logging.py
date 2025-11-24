@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import contextvars
+from datetime import datetime, timezone
 import json
 import logging
-import time
-from datetime import datetime, timezone
 from logging.config import dictConfig
+import time
 from typing import Any, Dict, MutableMapping, Optional
 from uuid import uuid4
 
-from app.core.config import settings
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
+
+from app.core.config import settings
 
 RequestContext = Dict[str, Any]
 

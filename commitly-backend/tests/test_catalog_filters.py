@@ -1,6 +1,7 @@
 """Tests for catalog filtering, sorting, and pagination functionality."""
 
 import pytest
+
 from app.models.roadmap import RoadmapResponse
 from app.services.roadmap_service import RoadmapService
 

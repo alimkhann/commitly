@@ -8,8 +8,8 @@ Create Date: 2025-11-14 18:40:00.000000
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 
 revision: str = "20241114_add_github_creds"
 down_revision: Union[str, Sequence[str], None] = "20241114_add_repo_chunks"

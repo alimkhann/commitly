@@ -1,8 +1,9 @@
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.models.waitlist import WaitlistCountResponse, WaitlistCreate, WaitlistResponse
 from app.services.supabase import DuplicateEntryError, PersistenceError, SupabaseService
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
 
 router = APIRouter()
 

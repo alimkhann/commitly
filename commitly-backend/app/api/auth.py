@@ -1,5 +1,6 @@
-from app.core.auth import ClerkClaims, require_clerk_auth
 from fastapi import APIRouter, Depends
+
+from app.core.auth import ClerkClaims, require_clerk_auth
 
 router = APIRouter()
 

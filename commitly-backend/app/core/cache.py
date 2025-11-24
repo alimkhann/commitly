@@ -6,9 +6,10 @@ import json
 import logging
 from typing import Any, Optional
 
-from app.core.config import settings
 from redis import asyncio as redis_async
 from redis.exceptions import RedisError
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
