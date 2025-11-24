@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,13 +36,14 @@ import {
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { useChatTree } from "@/lib/hooks/useChatTree";
+import { cn } from "@/lib/utils";
 
 export default function RepoGuidePage() {
   const params = useParams();
   const repoId = params.repoId as string;
   const searchParams = useSearchParams();
   const { isSignedIn, getToken } = useAuth();
-  const { getBySlug } = useRoadmapCatalog();
+  const { getBySlug, yourRepos } = useRoadmapCatalog();
 
   const cachedRecord = getBySlug(repoId);
 
@@ -64,11 +66,20 @@ export default function RepoGuidePage() {
     return null;
   }, [cachedRecord]);
 
+  const isSynced = useMemo(() => {
+    if (!activeData) return false;
+    return yourRepos.some((r) => r.repo_full_name === activeData.name);
+  }, [activeData, yourRepos]);
+
   const stageId = searchParams?.get("stage");
 
   const authHeaders = useCallback(async () => {
     const token = await getToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
   }, [getToken]);
 
   const stageContext = useMemo(() => {
@@ -87,12 +98,14 @@ export default function RepoGuidePage() {
     isLoading,
     input,
     setInput,
+    setFeedback,
   } = useChatTree({
     api: "/api/chat",
     historyApi: "/api/chat/history",
     repo_full_name: activeData?.name ?? repoId,
     stage_id: stageId ?? null,
     authHeaders,
+    persistEnabled: isSynced,
   });
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -100,6 +113,7 @@ export default function RepoGuidePage() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [isStageOpen, setIsStageOpen] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -156,6 +170,12 @@ export default function RepoGuidePage() {
     await editMessage(messageId, editContent, options);
   };
 
+  const handleCopy = (content: string, id: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   if (!activeData) {
     return null;
   }
@@ -176,11 +196,11 @@ export default function RepoGuidePage() {
         className={
           hasStage
             ? "mt-8 grid w-full gap-8 lg:grid-cols-[minmax(0,1fr)_auto]"
-            : "mt-8 flex w-full flex-col items-center"
+            : "mt-8 flex w-full flex-col"
         }
       >
         <div className="flex flex-col items-center">
-          {hasStage && (
+          {stageContext && (
             <div className="mb-6 w-full max-w-3xl space-y-6 rounded-3xl border border-border/50 bg-card/70 p-6 shadow-inner lg:hidden">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-2">
@@ -209,12 +229,16 @@ export default function RepoGuidePage() {
             ) : (
               (messages as any[]).map((messageItem) => {
                 const node = treeState.messages[messageItem.id];
-                const parentNode = node?.parentId
-                  ? treeState.messages[node.parentId]
-                  : null;
-                const siblingCount = parentNode?.childrenIds.length ?? 0;
-                const currentSiblingIndex =
-                  parentNode?.childrenIds.indexOf(messageItem.id) ?? 0;
+                let siblings: string[] = [];
+                if (node?.parentId) {
+                  const parent = treeState.messages[node.parentId];
+                  if (parent) siblings = parent.childrenIds;
+                } else if (node) {
+                  siblings = treeState.rootIds || [];
+                }
+
+                const siblingCount = siblings.length;
+                const currentSiblingIndex = siblings.indexOf(messageItem.id);
 
                 return (
                   <div className="group flex flex-col gap-1" key={messageItem.id}>
@@ -241,25 +265,39 @@ export default function RepoGuidePage() {
                           <button
                             className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
                             type="button"
+                            onClick={() => handleCopy(messageItem.content, messageItem.id)}
                           >
-                            <Copy className="h-3.5 w-3.5" />
+                            {copiedId === messageItem.id ? (
+                              <Check className="h-3.5 w-3.5 text-green-500" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
                           </button>
                           <button
-                            className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                            className={`rounded-full border px-2 py-1 hover:border-border ${messageItem.feedback === "up" ? "bg-primary/10 border-primary text-primary" : "border-border/60"}`}
                             type="button"
+                            onClick={() => setFeedback(messageItem.id, "up")}
                           >
                             <ThumbsUp className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
+                            className={`rounded-full border px-2 py-1 hover:border-border ${messageItem.feedback === "down" ? "bg-destructive/10 border-destructive text-destructive" : "border-border/60"}`}
                             type="button"
+                            onClick={() => setFeedback(messageItem.id, "down")}
                           >
                             <ThumbsDown className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </article>
                     ) : (
-                      <div className="group ml-auto flex max-w-[85%] flex-col items-end gap-1">
+                      <div
+                        className={cn(
+                          "group flex flex-col gap-1",
+                          editingMessageId === messageItem.id
+                            ? "w-full"
+                            : "ml-auto max-w-[85%] items-end"
+                        )}
+                      >
                         {editingMessageId === messageItem.id ? (
                           <div className="flex w-full flex-col gap-2 rounded-3xl bg-card p-2 shadow-sm">
                             <Textarea
@@ -287,9 +325,9 @@ export default function RepoGuidePage() {
                           <>
                             <div className="flex items-center gap-2">
                               {siblingCount > 1 && (
-                                <div className="flex items-center gap-1 text-muted-foreground text-xs">
+                                <div className="flex items-center gap-1 text-muted-foreground text-xs font-medium select-none">
                                   <button
-                                    className="p-1 hover:text-foreground disabled:opacity-30"
+                                    className="p-1 hover:text-foreground disabled:opacity-30 transition-colors"
                                     disabled={currentSiblingIndex === 0}
                                     onClick={() =>
                                       navigateBranch(messageItem.id, "prev")
@@ -297,11 +335,11 @@ export default function RepoGuidePage() {
                                   >
                                     <ChevronLeft className="h-3 w-3" />
                                   </button>
-                                  <span>
+                                  <span className="min-w-[2rem] text-center">
                                     {currentSiblingIndex + 1} / {siblingCount}
                                   </span>
                                   <button
-                                    className="p-1 hover:text-foreground disabled:opacity-30"
+                                    className="p-1 hover:text-foreground disabled:opacity-30 transition-colors"
                                     disabled={
                                       currentSiblingIndex === siblingCount - 1
                                     }
@@ -321,8 +359,15 @@ export default function RepoGuidePage() {
                               <button
                                 className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
                                 type="button"
+                                onClick={() =>
+                                  handleCopy(messageItem.content, messageItem.id)
+                                }
                               >
-                                <Copy className="h-3.5 w-3.5" />
+                                {copiedId === messageItem.id ? (
+                                  <Check className="h-3.5 w-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
                               </button>
                               <button
                                 className="rounded-full border border-border/60 px-2 py-1 hover:border-border"
@@ -356,7 +401,7 @@ export default function RepoGuidePage() {
         </div>
       </div>
 
-      {hasStage && (
+      {stageContext && (
         <aside className="hidden lg:block">
             <Collapsible
               className={`sticky top-20 overflow-hidden rounded-3xl border border-border/60 bg-card/70 shadow-inner transition-all duration-200 ${

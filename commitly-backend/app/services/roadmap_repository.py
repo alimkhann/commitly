@@ -11,6 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.roadmap import (
     GeneratedRoadmap,
+    GuideChatSession,
     RoadmapRepoSummary,
     RoadmapResponse,
     TimelineStage,
@@ -365,6 +366,21 @@ class UserSyncedRepoStore:
         def operation() -> None:
             try:
                 self._session.query(UserSyncedRepo).filter_by(
+                    user_id=user_id, repo_full_name=full_name
+                ).delete()
+                self._session.commit()
+            except SQLAlchemyError:
+                self._session.rollback()
+                raise
+
+        self._run_with_schema_guard(operation)
+
+    def clear_chat_history(self, user_id: str, full_name: str) -> None:
+        """Delete all chat sessions for a user and repository."""
+
+        def operation() -> None:
+            try:
+                self._session.query(GuideChatSession).filter_by(
                     user_id=user_id, repo_full_name=full_name
                 ).delete()
                 self._session.commit()
