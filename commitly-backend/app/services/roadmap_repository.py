@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
+from datetime import datetime, timezone
 from typing import Callable, Iterable, Literal, TypeVar
-
-from sqlalchemy import case
-from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
-from sqlalchemy.orm import Session
-from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.roadmap import (
     GeneratedRoadmap,
@@ -17,6 +12,10 @@ from app.models.roadmap import (
     UserRepoStateResponse,
     UserSyncedRepo,
 )
+from sqlalchemy import case
+from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 # Type alias for sort options
 SortOption = Literal[

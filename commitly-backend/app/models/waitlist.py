@@ -1,10 +1,9 @@
 from datetime import datetime
 
+from app.core.database import Base
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
-
-from app.core.database import Base
 
 
 class Waitlist(Base):

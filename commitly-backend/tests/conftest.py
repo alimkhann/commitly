@@ -1,7 +1,7 @@
 import base64
-from collections.abc import Generator
 import os
 import time
+from collections.abc import Generator
 from typing import Any, Dict
 
 # Ensure required env vars are set before importing the app/settings
@@ -16,19 +16,18 @@ os.environ.setdefault("CLERK_AUDIENCE", "commitly-api")
 os.environ["CLERK_AUTHORIZED_PARTIES"] = '["https://app.commitly.dev"]'
 os.environ.setdefault("GEMINI_API_KEY", "test-key")
 
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from jose import jwt  # noqa: E402
 import pytest  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
-
 from app.core.auth import jwks_cache  # noqa: E402
 from app.core.config import Settings, settings  # noqa: E402
 from app.core.database import Base, SessionLocal, engine, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.roadmap import GeneratedRoadmap, UserSyncedRepo  # noqa: E402
 from app.models.waitlist import Waitlist  # noqa: E402
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from jose import jwt  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
 # Reset schema to reflect latest models (avoids stale columns in sqlite test DB)
 Base.metadata.drop_all(bind=engine)

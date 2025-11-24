@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from datetime import datetime
-import re
 from typing import List, Optional
 from urllib.parse import urlparse
 
 import httpx
-
 from app.core.config import settings
 
 

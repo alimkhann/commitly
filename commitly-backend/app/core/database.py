@@ -1,12 +1,11 @@
-from collections.abc import Generator
 import logging
+from collections.abc import Generator
 
+from app.core.config import settings
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-
-from app.core.config import settings
 
 
 class Base(DeclarativeBase):

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 import hashlib
 import logging
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Iterable
 
+from app.models.roadmap import RepoCommitChunk
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-
-from app.models.roadmap import RepoCommitChunk
 
 logger = logging.getLogger(__name__)
 

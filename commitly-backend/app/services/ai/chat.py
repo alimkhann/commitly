@@ -3,13 +3,11 @@ from __future__ import annotations
 import json
 import logging
 from typing import Optional
-import uuid
 
 import httpx
-from sqlalchemy.orm import Session
-
 from app.models.roadmap import GeneratedRoadmap, RepoCommitChunk
 from app.services.ai.gemini import GeminiGenerationError
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 

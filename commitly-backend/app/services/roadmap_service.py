@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, Sequence, cast
-
-from fastapi import HTTPException, status
 
 from app.core.cache import RedisJSONCache, redis_cache
 from app.core.config import settings
@@ -42,6 +40,7 @@ from app.services.roadmap_repository import (
     UserSyncedRepoStore,
 )
 from app.services.roadmap_view_tracker import RoadmapViewTrackerService
+from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
 

@@ -4,12 +4,11 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
 from app.models.roadmap import GeneratedRoadmap, RoadmapViewTracker
 from app.services.roadmap_repository import RoadmapResultStore
 from app.services.roadmap_view_tracker import RoadmapViewTrackerService
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture

@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.services.roadmap_service import RoadmapService
 
 

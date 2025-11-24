@@ -3,20 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
+from app.core.database import Base
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
-    JSON,
     Boolean,
     DateTime,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-
-from app.core.database import Base
 
 
 class RepoCommitChunk(Base):

@@ -8,7 +8,6 @@ import re
 from typing import Any, Awaitable, Callable, Optional, Sequence
 
 import httpx
-
 from app.models.roadmap import StageTask, TimelineResource, TimelineStage
 from app.services.github import RepositoryMetadata
 from app.services.rag import CommitChunk

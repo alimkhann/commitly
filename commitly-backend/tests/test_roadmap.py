@@ -1,10 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 
-from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import inspect
-
 from app.api.roadmap import get_roadmap_service
 from app.models.roadmap import (
     RoadmapRepoSummary,
@@ -17,6 +14,8 @@ from app.services.github_tokens import GitHubTokenStore
 from app.services.rag import CommitChunkStore
 from app.services.roadmap_repository import RoadmapResultStore, UserSyncedRepoStore
 from app.services.roadmap_service import RoadmapService
+from fastapi.testclient import TestClient
+from sqlalchemy import inspect
 
 
 @pytest.fixture()

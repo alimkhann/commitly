@@ -1,6 +1,11 @@
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 
+from app.api import auth, github, roadmap, waitlist
+from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
+from app.core.config import settings
+from app.core.database import SessionLocal
+from app.core.logging import StructuredLoggingMiddleware, configure_logging
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,12 +13,6 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-
-from app.api import auth, github, roadmap, waitlist
-from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
-from app.core.config import settings
-from app.core.database import SessionLocal
-from app.core.logging import StructuredLoggingMiddleware, configure_logging
 
 configure_logging()
 logger = logging.getLogger(__name__)

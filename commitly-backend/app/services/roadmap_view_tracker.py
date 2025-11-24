@@ -2,10 +2,9 @@
 
 from datetime import datetime, timedelta, timezone
 
+from app.models.roadmap import RoadmapViewTracker
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
-
-from app.models.roadmap import RoadmapViewTracker
 
 
 class RoadmapViewTrackerService:
