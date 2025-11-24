@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 export interface MessageNode {
@@ -25,7 +25,13 @@ function parseDataStreamLine(line: string): string {
   }
 }
 
-export function useChatTree(options: any) {
+export function useChatTree(options: {
+  api?: string;
+  repo_full_name: string;
+  stage_id?: string | null;
+  historyApi?: string;
+  authHeaders?: () => Promise<Record<string, string>>;
+}) {
   const [treeState, setTreeState] = useState<ChatTreeState>({
     messages: {},
     headId: null,
@@ -108,6 +114,77 @@ export function useChatTree(options: any) {
     });
   }, []);
 
+  const storageKey = `guideChat:${options.repo_full_name}:${options.stage_id || "__all"}`;
+
+  const persistMessages = useCallback(
+    (msgs: any[]) => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(msgs));
+      } catch (err) {
+        console.warn("[useChatTree] persist failed", err);
+      }
+    },
+    [storageKey]
+  );
+
+  const restoreMessages = useCallback(
+    (saved: any[]) => {
+      // rebuild tree from linear history
+      let parentId: string | null = null;
+      saved.forEach((m) => {
+        const id = m.id || uuidv4();
+        addNode(m.content, m.role, id, parentId);
+        parentId = id;
+      });
+      setMessages(saved);
+    },
+    [addNode]
+  );
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        // 1) try server history if available
+        const historyEndpoint = options.historyApi || "/api/chat/history";
+        const headers = options.authHeaders ? await options.authHeaders() : {};
+        const res = await fetch(
+          `${historyEndpoint}?repo_full_name=${encodeURIComponent(options.repo_full_name)}${options.stage_id ? `&stage_id=${encodeURIComponent(options.stage_id)}` : ""}`,
+          { headers, cache: "no-store" }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.messages)) {
+            restoreMessages(data.messages);
+            persistMessages(data.messages);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("[useChatTree] server history fetch failed", err);
+      }
+
+      // 2) fall back to localStorage
+      try {
+        const raw = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            restoreMessages(parsed);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("[useChatTree] restore failed", err);
+      }
+
+      // reset state when switching repo/stage
+      setMessages([]);
+      setTreeState({ messages: {}, headId: null });
+    };
+
+    load();
+  }, [storageKey, restoreMessages, options.historyApi, options.authHeaders, options.repo_full_name, options.stage_id]);
+
   const reload = () => {};
   const stop = () => {
     if (abortRef.current) {
@@ -123,16 +200,27 @@ export function useChatTree(options: any) {
     const userMsgId = uuidv4();
     addNode(content, "user", userMsgId);
     setInput("");
-    setMessages((prev) => [...prev, { id: userMsgId, role: "user", content }]);
+    const nextUser = { id: userMsgId, role: "user", content };
+    let finalMessages: any[] | null = null;
+
+    setMessages((prev) => {
+      const next = [...prev, nextUser];
+      finalMessages = next;
+      persistMessages(next);
+      return next;
+    });
     setStatus("loading");
 
     // Prepare an empty assistant message to stream into
     const assistantId = uuidv4();
     addNode("", "assistant", assistantId);
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantId, role: "assistant", content: "" },
-    ]);
+    const assistantMsg = { id: assistantId, role: "assistant", content: "" };
+    setMessages((prev) => {
+      const next = [...prev, assistantMsg];
+      finalMessages = next;
+      persistMessages(next);
+      return next;
+    });
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -159,9 +247,14 @@ export function useChatTree(options: any) {
       if (!res.body) {
         const raw = await res.text();
         updateNodeContent(assistantId, raw);
-        setMessages((prev) =>
-          prev.map((m) => (m.id === assistantId ? { ...m, content: raw } : m))
-        );
+        setMessages((prev) => {
+          const next = prev.map((m) =>
+            m.id === assistantId ? { ...m, content: raw } : m
+          );
+          finalMessages = next;
+          persistMessages(next);
+          return next;
+        });
         return;
       }
 
@@ -184,11 +277,14 @@ export function useChatTree(options: any) {
           if (!chunk) continue;
           fullText += chunk;
           updateNodeContent(assistantId, fullText);
-          setMessages((prev) =>
-            prev.map((m) =>
+          setMessages((prev) => {
+            const next = prev.map((m) =>
               m.id === assistantId ? { ...m, content: fullText } : m
-            )
-          );
+            );
+            finalMessages = next;
+            persistMessages(next);
+            return next;
+          });
         }
       }
     } catch (error) {
@@ -197,6 +293,27 @@ export function useChatTree(options: any) {
       setStatus("idle");
       if (abortRef.current === controller) {
         abortRef.current = null;
+      }
+      // Persist remotely (best-effort)
+      try {
+        const historyEndpoint = options.historyApi || "/api/chat/history";
+        const headers = options.authHeaders ? await options.authHeaders() : {};
+        if (headers.Authorization) {
+          await fetch(historyEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...headers,
+            },
+            body: JSON.stringify({
+              repo_full_name: options.repo_full_name,
+              stage_id: options.stage_id ?? null,
+              messages: finalMessages ?? messages,
+            }),
+          });
+        }
+      } catch (err) {
+        console.warn("[useChatTree] persist remote failed", err);
       }
     }
   };
