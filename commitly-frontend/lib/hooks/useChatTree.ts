@@ -1,5 +1,4 @@
-import { useChat } from "@ai-sdk/react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 export interface MessageNode {
@@ -16,13 +15,25 @@ export interface ChatTreeState {
   headId: string | null;
 }
 
+function parseDataStreamLine(line: string): string {
+  // Vercel AI data stream v1: lines like `0:"text"`
+  if (!line.startsWith("0:")) return "";
+  try {
+    return JSON.parse(line.slice(2));
+  } catch {
+    return "";
+  }
+}
+
 export function useChatTree(options: any) {
-  // console.log("useChatTree options:", options);
   const [treeState, setTreeState] = useState<ChatTreeState>({
     messages: {},
     headId: null,
   });
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
+  const [status, setStatus] = useState<"idle" | "loading">("idle");
+  const abortRef = useRef<AbortController | null>(null);
 
   // Helper to reconstruct the linear thread from the current head
   const getThread = useCallback(
@@ -83,45 +94,111 @@ export function useChatTree(options: any) {
     []
   );
 
-  // Initialize useChat
-  // console.log("useChatTree options passed to useChat:", options);
-  const chat = useChat({
-    ...options,
-    onFinish: (result: any) => {
-      // Handle different versions of AI SDK
-      const message = result.message || result;
-      if (message && message.content) {
-        addNode(message.content, message.role, message.id);
-      }
-      options.onFinish?.(result);
-    },
-  });
+  const updateNodeContent = useCallback((id: string, content: string) => {
+    setTreeState((prev) => {
+      const node = prev.messages[id];
+      if (!node) return prev;
+      return {
+        ...prev,
+        messages: {
+          ...prev.messages,
+          [id]: { ...node, content },
+        },
+      };
+    });
+  }, []);
 
-  const {
-    messages,
-    setMessages,
-    sendMessage: append,
-    reload,
-    status,
-    stop,
-  } = chat as any;
-
-  const isLoading = status === "streaming" || status === "submitted";
+  const reload = () => {};
+  const stop = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+      setStatus("idle");
+    }
+  };
+  const isLoading = status === "loading";
 
   // Send message (User)
   const sendMessage = async (content: string, requestOptions?: any) => {
     const userMsgId = uuidv4();
     addNode(content, "user", userMsgId);
     setInput("");
+    setMessages((prev) => [...prev, { id: userMsgId, role: "user", content }]);
+    setStatus("loading");
 
-    await append(
-      {
-        id: userMsgId,
-        role: "user",
-        content,
-      },
-      requestOptions
-    );
+    // Prepare an empty assistant message to stream into
+    const assistantId = uuidv4();
+    addNode("", "assistant", assistantId);
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: "assistant", content: "" },
+    ]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const apiUrl = options?.api ?? "/api/chat";
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(requestOptions?.headers || {}),
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content }],
+          ...(requestOptions?.body || {}),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      if (!res.body) {
+        const raw = await res.text();
+        updateNodeContent(assistantId, raw);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, content: raw } : m))
+        );
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          const chunk = parseDataStreamLine(line);
+          if (!chunk) continue;
+          fullText += chunk;
+          updateNodeContent(assistantId, fullText);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, content: fullText } : m
+            )
+          );
+        }
+      }
+    } catch (error) {
+      console.error("[useChatTree] streaming error", error);
+    } finally {
+      setStatus("idle");
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
+    }
   };
 
   // Edit message (Branching)
@@ -130,26 +207,16 @@ export function useChatTree(options: any) {
     newContent: string,
     requestOptions?: any
   ) => {
+    // Simplified: treat edit as new branch starting from parent, then stream response
     const node = treeState.messages[nodeId];
-    if (!node) return;
-
-    const parentId = node.parentId;
-
+    const parentId = node?.parentId ?? null;
     const newMessageId = uuidv4();
     addNode(newContent, "user", newMessageId, parentId);
-
-    const history = getThread(parentId, treeState.messages);
-
-    setMessages(history);
-
-    await append(
-      {
-        id: newMessageId,
-        role: "user",
-        content: newContent,
-      },
-      requestOptions
-    );
+    setMessages((prev) => [
+      ...prev,
+      { id: newMessageId, role: "user", content: newContent },
+    ]);
+    await sendMessage(newContent, requestOptions);
   };
 
   // Navigate branches

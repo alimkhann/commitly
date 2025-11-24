@@ -1,14 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
+  console.log("Chat API route hit");
   try {
     const body = await req.json();
     const { messages, ...rest } = body;
 
     // Get the backend URL from environment
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    const apiBaseUrl =
+      process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
     const backendUrl = `${apiBaseUrl}/api/v1/roadmap/chat`;
 
     // Forward the request to the backend
@@ -23,6 +25,9 @@ export async function POST(req: NextRequest) {
         messages,
         ...rest,
       }),
+      cache: "no-store",
+      // @ts-expect-error - duplex is needed for some node environments but might not be strictly needed for edge, adding for safety if runtime changes
+      duplex: "half",
     });
 
     if (!response.ok) {
@@ -39,7 +44,8 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
+        "X-Vercel-AI-Data-Stream": "v1",
       },
     });
   } catch (error) {

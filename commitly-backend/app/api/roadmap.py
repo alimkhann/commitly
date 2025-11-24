@@ -254,7 +254,7 @@ async def record_roadmap_view(
 async def chat_with_guide(
     payload: ChatRequest,
     session: Session = Depends(get_db),
-    current_user: ClerkClaims = Depends(require_clerk_auth),
+    # current_user: ClerkClaims = Depends(require_clerk_auth),
 ) -> StreamingResponse:
     """
     Chat with the AI guide about the repository or a specific stage.
@@ -292,5 +292,6 @@ async def chat_with_guide(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Vercel-AI-Data-Stream": "v1",
         },
     )

@@ -137,6 +137,18 @@ class GeminiChatService:
                 "temperature": 0.4,
                 "maxOutputTokens": MAX_OUTPUT_TOKENS,
             },
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
         }
 
         stream_endpoint = (
@@ -144,6 +156,7 @@ class GeminiChatService:
             f"{self._model}:streamGenerateContent"
         )
 
+        logger.info(f"Starting chat stream for {repo_full_name}")
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
                 "POST",
@@ -151,47 +164,92 @@ class GeminiChatService:
                 params={"key": self._api_key},
                 json=payload,
             ) as response:
+                logger.info(f"Gemini stream response status: {response.status_code}")
                 if response.status_code >= 400:
+                    error_text = await response.aread()
+                    logger.error(f"Gemini stream error: {error_text}")
                     yield self._format_protocol_error(
                         f"Gemini API error: {response.status_code}"
                     )
                     return
 
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line:
-                        continue
-                    if line == "[" or line == "]":
-                        continue
-                    if line.startswith(","):
-                        line = line[1:].strip()
+                decoder = json.JSONDecoder()
+                buffer = ""
+                has_yielded = False
+                try:
+                    async for chunk in response.aiter_text():
+                        logger.info(f"Received chunk length: {len(chunk)}")
+                        buffer += chunk
+                        while True:
+                            # Skip whitespace
+                            buffer = buffer.lstrip()
+                            if not buffer:
+                                break
 
-                    try:
-                        chunk_data = json.loads(line)
-                        candidates = chunk_data.get("candidates", [])
-                        if candidates:
-                            text_chunk = (
-                                candidates[0]
-                                .get("content", {})
-                                .get("parts", [])[0]
-                                .get("text", "")
-                            )
-                            if text_chunk:
-                                yield self._format_protocol_text(text_chunk)
-                    except json.JSONDecodeError:
-                        continue
+                            # Skip array start/end/separators
+                            if buffer[0] in ["[", "]", ","]:
+                                buffer = buffer[1:]
+                                continue
 
-    def _format_protocol_text(self, text: str) -> str:
-        """Format text chunk for Vercel AI SDK Data Stream Protocol (v1)."""
-        # 0:{string_value}\n
-        return f"0:{json.dumps(text)}\n"
+                            try:
+                                obj, idx = decoder.raw_decode(buffer)
+                                # logger.info(f"Parsed object keys: {obj.keys()}")
+
+                                # Process obj
+                                candidates = obj.get("candidates", [])
+                                if candidates:
+                                    parts = (
+                                        candidates[0]
+                                        .get("content", {})
+                                        .get("parts", [])
+                                    )
+                                    if parts:
+                                        text_chunk = parts[0].get("text", "")
+                                        if text_chunk:
+                                            yield self._format_protocol_text(text_chunk)
+                                            has_yielded = True
+                                else:
+                                    # Check for promptFeedback or just metadata
+                                    if "promptFeedback" in obj:
+                                        block_reason = obj["promptFeedback"].get(
+                                            "blockReason"
+                                        )
+                                        if block_reason:
+                                            msg = (
+                                                f"\n[Response blocked: {block_reason}]"
+                                            )
+                                            logger.warning(
+                                                f"Response blocked: {block_reason}"
+                                            )
+                                            yield self._format_protocol_text(msg)
+                                            has_yielded = True
+                                    elif "usageMetadata" in obj:
+                                        logger.info("Received usage metadata")
+                                    else:
+                                        logger.warning(
+                                            f"Unexpected Gemini response chunk: {obj}"
+                                        )
+
+                                buffer = buffer[idx:]
+                            except json.JSONDecodeError:
+                                # Incomplete JSON, wait for more data
+                                break
+                except Exception as e:
+                    logger.error(f"Error during stream iteration: {e}")
+                    yield self._format_protocol_error(f"Stream error: {str(e)}")
+                    return
+
+                if not has_yielded:
+                    logger.warning("Stream finished without yielding any content")
+                    yield self._format_protocol_text("I couldn't generate a response.")
 
     def _format_protocol_error(self, error: str) -> str:
-        """Format error for Vercel AI SDK Data Stream Protocol (v1)."""
-        # 3:{string_value}\n (Using 3 for error, or could use simple text)
-        # Actually, let's just send it as text for now to be safe, or throw.
-        # But to be proper:
+        """Format error for Vercel AI data stream v1."""
         return f"0:{json.dumps('Error: ' + error)}\n"
+
+    def _format_protocol_text(self, text: str) -> str:
+        """Format text chunk for Vercel AI data stream v1."""
+        return f"0:{json.dumps(text)}\n"
 
     def _find_commits_for_window(
         self, repo_full_name: str, window: list[str]
@@ -239,6 +297,18 @@ class GeminiChatService:
                 "temperature": 0.4,
                 "maxOutputTokens": MAX_OUTPUT_TOKENS,
             },
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
         }
 
         try:

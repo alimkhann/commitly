@@ -33,7 +33,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
-import { env } from "@/lib/config/env";
 import { useChatTree } from "@/lib/hooks/useChatTree";
 
 export default function RepoGuidePage() {
@@ -83,7 +82,7 @@ export default function RepoGuidePage() {
     input,
     setInput,
   } = useChatTree({
-    api: `${env.apiBaseUrl || "https://commitly-pr-65.onrender.com"}/api/v1/roadmap/chat`,
+    api: "/api/chat",
   });
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -108,6 +107,12 @@ export default function RepoGuidePage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    console.log("[GuidePage] submit", {
+      isSignedIn,
+      inputLength: input.trim().length,
+      isLoading,
+      hasActiveData: !!activeData,
+    });
     if (!(isSignedIn && input.trim()) || isLoading || !activeData) {
       return;
     }
