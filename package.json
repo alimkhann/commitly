@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "react-resizable-panels": "^3.0.6"
+  }
+}

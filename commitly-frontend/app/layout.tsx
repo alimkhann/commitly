@@ -8,7 +8,10 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { type ReactNode, Suspense } from "react";
 import HomeBackground from "@/components/layout/home-background";
+import { ResizableLayout } from "@/components/layout/resizable-layout";
+import RightSidebar from "@/components/layout/right-sidebar";
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper";
+import { LayoutProvider } from "@/components/providers/layout-provider";
 import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider";
 
 const inter = Inter({
@@ -65,15 +68,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           className={`${inter.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
         >
           <RoadmapCatalogProvider>
-            <div className="relative flex h-screen bg-background">
+            <LayoutProvider>
               <HomeBackground />
-              <Suspense fallback={null}>
-                <SidebarWrapper />
-              </Suspense>
-              <main className="relative z-10 flex h-screen flex-1 flex-col overflow-y-auto overflow-x-hidden bg-transparent">
-                {children}
-              </main>
-            </div>
+              <div className="flex h-screen w-full overflow-hidden">
+                <Suspense fallback={null}>
+                  <SidebarWrapper />
+                </Suspense>
+                <main className="relative flex h-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
+                  {children}
+                </main>
+              </div>
+            </LayoutProvider>
           </RoadmapCatalogProvider>
           <Analytics />
           <SpeedInsights />

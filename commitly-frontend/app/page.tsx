@@ -89,15 +89,11 @@ export default function Home() {
     const canonicalUrl = `https://github.com/${identity.fullName}`;
     markPending(identity);
 
-    const params = new URLSearchParams({
-      repoUrl: canonicalUrl,
-      fullName: identity.fullName,
-      intent: "generate",
-    });
-
-    router.push(`/repo/${identity.slug}/timeline?${params.toString()}`);
-    setRepoLink("");
-    setIsSubmitting(false);
+    const params = new URLSearchParams();
+    if (identity.fullName) params.set("fullName", identity.fullName);
+    if (canonicalUrl) params.set("repoUrl", canonicalUrl);
+    params.set("intent", "generate");
+    router.push(`/repo/${identity.slug}?view=timeline&${params.toString()}`);
   };
 
   const handleConnectGithub = async () => {

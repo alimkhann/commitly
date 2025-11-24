@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
 type FetchState = "idle" | "loading" | "error";
 
 /* biome-ignore lint/complexity/noExcessiveCognitiveComplexity: central page coordinator */
-export default function RepoTimelinePage() {
+export default function TimelineView() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -236,7 +236,7 @@ export default function RepoTimelinePage() {
             upsertRoadmap(roadmapData, true);
             setFetchState("idle");
             setHandledGeneration(true);
-            router.replace(`/repo/${repoId}/timeline`);
+            router.replace(`/repo/${repoId}?view=timeline`);
             break;
           } else if (event.type === "error") {
             throw new Error(event.message);
@@ -1021,7 +1021,7 @@ function TimelineNodeCard({
             </div>
             <div className="flex items-center gap-2">
               <Button asChild size="sm" variant={ctaVariant}>
-                <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
+                <Link href={`/repo/${repoSlug}?view=guide&stage=${stage.id}`}>
                   {ctaLabel}
                 </Link>
               </Button>

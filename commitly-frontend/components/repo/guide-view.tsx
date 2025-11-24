@@ -38,7 +38,7 @@ import {
 } from "react-resizable-panels";
 import { useLayout } from "@/components/providers/layout-provider";
 
-export default function RepoGuidePage() {
+export default function GuideView() {
   const params = useParams();
   const repoId = params.repoId as string;
   const searchParams = useSearchParams();
@@ -486,7 +486,7 @@ export default function RepoGuidePage() {
                 ) : null}
 
                 <Button asChild variant="outline" className="w-full">
-                  <Link href={`/repo/${repoId}/timeline#${stageContext.id}`}>
+                  <Link href={`/repo/${repoId}?view=timeline#${stageContext.id}`}>
                     View full stage details
                   </Link>
                 </Button>
@@ -508,7 +508,7 @@ export default function RepoGuidePage() {
         <TabSwitch repoId={repoId} />
       </div>
 
-      <div className="mt-2 flex flex-1 flex-col min-h-0 w-full items-center opacity-0">
+      <div className="mt-2 flex flex-1 flex-col min-h-0 w-full items-center">
         <div className="flex w-full max-w-3xl flex-1 flex-col overflow-hidden">
           {renderChatInterface()}
         </div>

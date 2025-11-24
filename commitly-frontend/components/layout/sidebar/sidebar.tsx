@@ -15,6 +15,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import { useLayout } from "@/components/providers/layout-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import {
   AlertDialog,
@@ -58,10 +59,11 @@ export default function Sidebar() {
     archive,
     refreshUserRepos,
   } = useRoadmapCatalog();
-  const [collapsed, setCollapsed] = useState(false);
+
+  const { isLeftSidebarCollapsed: collapsed, toggleLeftSidebar: toggleCollapse } = useLayout();
+
   const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
   const [archivingRepo, setArchivingRepo] = useState<string | null>(null);
-  const toggleCollapse = () => setCollapsed((prev) => !prev);
 
   const activeRepoId = useMemo(() => {
     if (!pathname) {
@@ -128,8 +130,7 @@ export default function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-screen flex-col overflow-y-auto border border-white/10 bg-card/25 backdrop-blur-2xl",
-        collapsed ? "w-[96px]" : "w-[320px]"
+        "flex h-full w-full flex-col overflow-y-auto bg-card/25 backdrop-blur-2xl"
       )}
     >
       <div className="flex flex-1 flex-col gap-6 p-4">
@@ -145,7 +146,7 @@ export default function Sidebar() {
               className="group relative flex h-14 w-14 items-center justify-center rounded-xl transition-colors hover:bg-muted/30"
               onClick={() => {
                 if (collapsed) {
-                  setCollapsed(false);
+                  toggleCollapse();
                 } else {
                   window.location.href = "/";
                 }
@@ -385,7 +386,7 @@ function SidebarRepoRow({
           size="icon"
           variant="ghost"
         >
-          <Link href={`/repo/${slug}/timeline`} title={fullName}>
+          <Link href={`/repo/${slug}?view=timeline`} title={fullName}>
             <span className="font-bold text-xs">
               {fullName.substring(0, 2).toUpperCase()}
             </span>
@@ -406,7 +407,7 @@ function SidebarRepoRow({
     >
       <Link
         className="flex-1 truncate pr-2"
-        href={`/repo/${slug}/timeline`}
+        href={`/repo/${slug}?view=timeline`}
         title={fullName}
       >
         {fullName}

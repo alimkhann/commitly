@@ -183,9 +183,8 @@ export const repoService = {
     return parsePath(value);
   },
 
-  buildTimelinePath(fullName: string) {
-    const identity = toIdentity(fullName);
-    return `/repo/${identity.slug}/timeline`;
+  getRepoUrl(identity: RepoIdentity): string {
+    return `/repo/${identity.slug}?view=timeline`;
   },
 
   isBackendConfigured(): boolean {
