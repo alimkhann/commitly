@@ -41,7 +41,6 @@ export default function RepoGuidePage() {
   const { getBySlug } = useRoadmapCatalog();
 
   const cachedRecord = getBySlug(repoId);
-  const fallbackRecord = repoService.findById(repoId);
 
   const activeData = useMemo(() => {
     if (cachedRecord && "repo" in cachedRecord) {
@@ -52,22 +51,15 @@ export default function RepoGuidePage() {
         },
         name: cachedRecord.repo.full_name,
         timeline: cachedRecord.timeline,
-        guideThread: [],
-      };
-    }
-    if (fallbackRecord) {
-      const identity = repoService.buildIdentityFromFullName(
-        fallbackRecord.name
-      );
-      return {
-        identity,
-        name: fallbackRecord.name,
-        timeline: fallbackRecord.timeline,
-        guideThread: fallbackRecord.guideThread ?? [],
+        guideThread: [] as Array<{
+          id: string;
+          role: "user" | "guide";
+          message: string;
+        }>,
       };
     }
     return null;
-  }, [cachedRecord, fallbackRecord]);
+  }, [cachedRecord]);
 
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<
@@ -222,7 +214,7 @@ export default function RepoGuidePage() {
                   <div className="h-px flex-1 bg-border/40" />
                 </div>
                 <ul className="space-y-2">
-                  {stageContext.goals.map((goal, idx) => (
+                  {stageContext.goals.map((goal: string, idx: number) => (
                     <li
                       className="flex items-start gap-2.5 text-muted-foreground text-sm"
                       key={idx}
@@ -250,39 +242,26 @@ export default function RepoGuidePage() {
                     key={idx}
                   >
                     <p className="font-medium text-foreground text-sm">
-                      {task.label}
+                      {task.title}
                     </p>
-                    {task.steps.length > 0 && (
-                      <ul className="mt-2.5 space-y-1.5">
-                        {task.steps.map((step, sIdx) => (
-                          <li
-                            className="flex items-start gap-2 text-muted-foreground text-xs"
-                            key={sIdx}
-                          >
-                            <span className="mt-1.5 h-0.5 w-0.5 shrink-0 rounded-full bg-muted-foreground" />
-                            <span>{step}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {(task.files?.length ?? 0) > 0 && (
+                    <div className="mt-2.5 space-y-1.5">
+                      <p className="text-muted-foreground text-xs">
+                        {task.description}
+                      </p>
+                    </div>
+                    {task.file_path && (
                       <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
                         <span className="font-medium text-foreground/80">
-                          Files:
+                          File:
                         </span>
-                        {task.files?.join(", ")}
+                        {task.file_path}
                       </div>
                     )}
-                    {(task.commands?.length ?? 0) > 0 && (
+                    {task.code_snippet && (
                       <div className="mt-2.5 space-y-1">
-                        {task.commands?.map((cmd, cIdx) => (
-                          <div
-                            className="w-fit rounded bg-muted/50 px-2 py-1 font-mono text-[10px] text-foreground/90"
-                            key={cIdx}
-                          >
-                            $ {cmd}
-                          </div>
-                        ))}
+                        <div className="w-fit rounded bg-muted/50 px-2 py-1 font-mono text-[10px] text-foreground/90">
+                          $ {task.code_snippet}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -301,7 +280,7 @@ export default function RepoGuidePage() {
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <div className="space-y-3">
-                    {stageContext.code_examples.map((example, idx) => (
+                    {stageContext.code_examples.map((example: any, idx: number) => (
                       <Collapsible className="group/code" key={idx}>
                         <div className="rounded-lg border border-border/50 bg-muted/30">
                           <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
@@ -344,7 +323,7 @@ export default function RepoGuidePage() {
             {stageContext.resources.length > 0 && (
               <div className="pt-2">
                 <div className="flex flex-wrap gap-2">
-                  {stageContext.resources.map((resource) => (
+                  {stageContext.resources.map((resource: { label: string; href: string }) => (
                     <a
                       className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                       href={resource.href}

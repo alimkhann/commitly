@@ -1,8 +1,6 @@
 import {
-  getRepoById as getRepoByIdFromStatic,
   type RepoRecord,
   type RepoTimelineStage,
-  repos,
 } from "@/data/repos";
 
 import { type ApiClientResponse, apiClient } from "@/lib/api/client";
@@ -26,8 +24,7 @@ const API_ROUTES = {
     `/api/v1/roadmap/${owner}/${repo}/rating`,
   recordView: (owner: string, repo: string) =>
     `/api/v1/roadmap/${owner}/${repo}/view`,
-  chat: (owner: string, repo: string) =>
-    `/api/v1/roadmap/${owner}/${repo}/chat`,
+  chat: "/api/v1/roadmap/chat",
 };
 
 export type RepoIdentity = {
@@ -181,18 +178,6 @@ const parsePath = (value: string): RepoIdentity | null => {
 };
 
 export const repoService = {
-  list(): RepoRecord[] {
-    return repos;
-  },
-
-  listExamples(limit = 3): RepoRecord[] {
-    return repos.slice(0, limit);
-  },
-
-  findById(id: string) {
-    return getRepoByIdFromStatic(id);
-  },
-
   buildIdentityFromFullName(fullName: string): RepoIdentity {
     return toIdentity(fullName);
   },
@@ -592,9 +577,13 @@ export const repoService = {
       });
     }
     return apiClient<{ response: string }>(env.apiBaseUrl, {
-      path: API_ROUTES.chat(owner, repo),
+      path: API_ROUTES.chat,
       method: "POST",
-      body: { message, stage_id: stageId },
+      body: {
+        message,
+        repo_full_name: `${owner}/${repo}`,
+        stage_id: stageId,
+      },
       authToken,
     });
   },

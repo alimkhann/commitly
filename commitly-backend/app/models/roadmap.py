@@ -305,6 +305,7 @@ class RatingResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    repo_full_name: str
     stage_id: Optional[str] = None
 
 

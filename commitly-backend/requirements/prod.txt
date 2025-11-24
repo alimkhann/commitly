@@ -19,7 +19,6 @@ psycopg[binary]==3.2.2
 
 # External services
 supabase==2.24.0
-polar-sdk==0.24.0
 python-jose[cryptography]==3.3.0
 
 # Caching

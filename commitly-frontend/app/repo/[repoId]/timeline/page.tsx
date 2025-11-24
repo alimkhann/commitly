@@ -6,6 +6,7 @@ import {
   CircleDotDashed,
   Clock3,
   RefreshCcw,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -26,10 +27,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 import { StarRating } from "@/components/ui/star-rating";
 import type { RepoRecord, RepoTimelineStage } from "@/data/repos";
@@ -60,7 +67,6 @@ export default function RepoTimelinePage() {
   } = useRoadmapCatalog();
   const repoId = params.repoId as string;
   const cachedRecord = getBySlug(repoId);
-  const fallbackRecord = repoService.findById(repoId);
   const fullNameParam = searchParams?.get("fullName") ?? null;
   const repoUrlParam = searchParams?.get("repoUrl") ?? null;
   const identity: RepoIdentity | null = useMemo(() => {
@@ -99,7 +105,7 @@ export default function RepoTimelinePage() {
       : null
   );
   const [fetchState, setFetchState] = useState<FetchState>(
-    roadmap || fallbackRecord ? "idle" : "loading"
+    roadmap ? "idle" : "loading"
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -277,12 +283,7 @@ export default function RepoTimelinePage() {
     handledGeneration,
   ]);
 
-  const fallbackRoadmap = useMemo(
-    () => (fallbackRecord ? mapStaticRecordToRoadmap(fallbackRecord) : null),
-    [fallbackRecord]
-  );
-
-  const activeRoadmap = roadmap ?? fallbackRoadmap;
+  const activeRoadmap = roadmap;
 
   const [desyncOpen, setDesyncOpen] = useState(false);
 
@@ -435,7 +436,6 @@ export default function RepoTimelinePage() {
   const headerTitle =
     activeRoadmap?.repo.full_name ??
     identity?.fullName ??
-    fallbackRecord?.name ??
     "Repository timeline";
 
   const showLoadingState =
@@ -717,6 +717,7 @@ function TimelineCanvas({
                   isSignedIn={isSignedIn}
                   repoSlug={repoSlug}
                   stage={stage}
+                  index={index + 1}
                   statusIcon={statusIcon[stage.status]}
                 />
               </div>
@@ -732,23 +733,6 @@ function TimelineCanvas({
   );
 }
 
-function mapStaticRecordToRoadmap(record: RepoRecord): RoadmapResponseBody {
-  const numericStars = Number.parseInt(record.stars.replace(/[^0-9]/g, ""), 10);
-  return {
-    repo: {
-      full_name: record.name,
-      description: record.description,
-      language: record.language,
-      stars: Number.isNaN(numericStars) ? 0 : numericStars,
-      default_branch: "main",
-      html_url: undefined,
-      owner_avatar_url: undefined,
-    },
-    timeline: record.timeline,
-    cached: true,
-    generated_at: new Date().toISOString(),
-  };
-}
 
 function TimelineNodeCard({
   stage,
@@ -757,6 +741,7 @@ function TimelineNodeCard({
   isCurrent,
   isSignedIn,
   repoSlug,
+  index,
 }: {
   stage: RepoTimelineStage;
   align: "left" | "right";
@@ -764,6 +749,7 @@ function TimelineNodeCard({
   isCurrent: boolean;
   isSignedIn: boolean;
   repoSlug: string;
+  index: number;
 }) {
   const ctaLabel = useMemo(() => {
     if (!isSignedIn) return "Details";
@@ -790,44 +776,22 @@ function TimelineNodeCard({
           align === "left" ? "-right-10" : "-left-10"
         )}
       />
-      <Card
-        className={cn(
-          "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
-          isCurrent && "ring-1 ring-primary/40"
-        )}
-      >
-        <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
-          <div className="flex flex-col gap-1">
-            <div
-              className={cn(
-                "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
-                align === "right" && "justify-end"
-              )}
-            >
-              <span>Stage {stage.index}</span>
-              <span>·</span>
-              <span>{stage.category}</span>
-              <span>·</span>
-              <span>{stage.difficulty}</span>
-            </div>
-            <div className="flex items-start justify-between gap-3">
-              <CardTitle
-                className={cn("text-lg", align === "right" && "order-2")}
-              >
-                {stage.title}
-              </CardTitle>
-              <Badge
+      <Collapsible>
+        <Card
+          className={cn(
+            "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
+            isCurrent && "ring-1 ring-primary/40"
+          )}
+        >
+          <CardHeader className={cn("pb-3", align === "right" && "text-right")}>
+            <div className="flex flex-col gap-1">
+              <div
                 className={cn(
                   "flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wider",
                   align === "right" && "justify-end"
                 )}
-                variant="secondary"
               >
-                <span>Stage {stage.index}</span>
-                <span>·</span>
-                <span>{stage.category}</span>
-                <span>·</span>
-                <span>{stage.difficulty}</span>
+                <span>Stage {index}</span>
               </div>
               <div className="flex items-start justify-between gap-3">
                 <CardTitle
@@ -855,6 +819,7 @@ function TimelineNodeCard({
               {stage.summary}
             </CardDescription>
           </CardHeader>
+
           <CollapsibleContent>
             <CardContent className="space-y-6 pt-1">
               {/* Goals Section */}
@@ -867,7 +832,7 @@ function TimelineNodeCard({
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <ul className="space-y-2">
-                    {stage.goals.map((goal, idx) => (
+                    {stage.goals.map((goal: string, idx: number) => (
                       <li
                         className="flex items-start gap-2.5 text-muted-foreground text-sm"
                         key={idx}
@@ -890,7 +855,7 @@ function TimelineNodeCard({
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <ul className="space-y-2">
-                    {stage.prerequisites.map((prereq, idx) => (
+                    {stage.prerequisites.map((prereq: string, idx: number) => (
                       <li
                         className="flex items-start gap-2.5 text-muted-foreground text-sm"
                         key={idx}
@@ -913,7 +878,7 @@ function TimelineNodeCard({
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <ul className="space-y-2">
-                    {stage.checkpoints.map((checkpoint, idx) => (
+                    {stage.checkpoints.map((checkpoint: string, idx: number) => (
                       <li
                         className="flex items-start gap-2.5 text-muted-foreground text-sm"
                         key={idx}
@@ -935,54 +900,39 @@ function TimelineNodeCard({
                   <div className="h-px flex-1 bg-border/40" />
                 </div>
                 <div className="space-y-3">
-                  {stage.tasks.map((task, idx) => (
+                  {stage.tasks.map((task: any, idx: number) => (
                     <div
                       className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
                       key={idx}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-foreground text-sm">
-                          {task.label}
+                          {task.title}
                         </p>
                       </div>
                       <div className="mt-1.5 space-y-1">
-                        {task.steps.map((step, sIdx) => (
-                          <p
-                            className="text-muted-foreground text-xs leading-relaxed"
-                            key={sIdx}
-                          >
-                            {step}
-                          </p>
-                        ))}
+                        <p className="text-muted-foreground text-xs leading-relaxed">
+                          {task.description}
+                        </p>
                       </div>
-                      {task.files && task.files.length > 0 && (
+                      {task.file_path && (
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                           <span className="font-medium text-foreground/80">
                             Files:
                           </span>
-                          {task.files.map((file, fIdx) => (
-                            <code
-                              className="rounded bg-muted/50 px-1 py-0.5 font-mono"
-                              key={fIdx}
-                            >
-                              {file}
-                            </code>
-                          ))}
+                          <code className="rounded bg-muted/50 px-1 py-0.5 font-mono">
+                            {task.file_path}
+                          </code>
                         </div>
                       )}
-                      {task.commands && task.commands.length > 0 && (
+                      {task.code_snippet && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                           <span className="font-medium text-foreground/80">
                             Run:
                           </span>
-                          {task.commands.map((cmd, cIdx) => (
-                            <code
-                              className="rounded bg-muted/50 px-1 py-0.5 font-mono"
-                              key={cIdx}
-                            >
-                              {cmd}
-                            </code>
-                          ))}
+                          <code className="rounded bg-muted/50 px-1 py-0.5 font-mono">
+                            {task.code_snippet}
+                          </code>
                         </div>
                       )}
                     </div>
@@ -1000,7 +950,7 @@ function TimelineNodeCard({
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <div className="space-y-3">
-                    {stage.code_examples.map((example, idx) => (
+                    {stage.code_examples.map((example: any, idx: number) => (
                       <Collapsible className="group/code" key={idx}>
                         <div className="rounded-lg border border-border/50 bg-muted/30">
                           <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
@@ -1043,7 +993,7 @@ function TimelineNodeCard({
               {stage.resources.length > 0 && (
                 <div className="pt-2">
                   <div className="flex flex-wrap gap-2">
-                    {stage.resources.map((resource) => (
+                    {stage.resources.map((resource: { label: string; href: string }) => (
                       <a
                         className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/50 px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                         href={resource.href}
@@ -1060,6 +1010,7 @@ function TimelineNodeCard({
               )}
             </CardContent>
           </CollapsibleContent>
+
           <div className="flex items-center justify-between border-border/60 border-t bg-muted/20 px-5 py-3">
             <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
               <Clock3 className="h-3.5 w-3.5" />
@@ -1079,24 +1030,8 @@ function TimelineNodeCard({
               </CollapsibleTrigger>
             </div>
           </div>
-          <CardDescription className="mt-1.5 leading-relaxed">
-            {stage.summary}
-          </CardDescription>
-        </CardHeader>
-        <div className="flex items-center justify-between border-border/60 border-t bg-muted/20 px-5 py-3">
-          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Clock3 className="h-3.5 w-3.5" />
-            <span>{stage.eta}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild size="sm" variant={ctaVariant}>
-              <Link href={`/repo/${repoSlug}/guide?stage=${stage.id}`}>
-                {ctaLabel}
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </Collapsible>
     </div>
   );
 }

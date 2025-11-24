@@ -6,7 +6,7 @@ import Hero from './components/Hero'
 import Features from './components/Features'
 import BottomCTA from './components/BottomCTA'
 import WaitlistModal from './components/WaitlistModal'
-import { useWaitlistAndDonate } from './hooks/useWaitlistAndDonate'
+import { useWaitlist } from './hooks/useWaitlist'
 
 export default function Page() {
     const [isScrolled, setIsScrolled] = useState(false)
@@ -25,7 +25,7 @@ export default function Page() {
         waitlistButtonLabel,
         handleHeroSubmit,
         handleWaitlistModalSubmit,
-    } = useWaitlistAndDonate()
+    } = useWaitlist()
 
     useEffect(() => {
         const setVar = () => {

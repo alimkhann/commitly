@@ -34,32 +34,6 @@ class Settings(BaseSettings):
         300, validation_alias="CLERK_JWKS_CACHE_SECONDS"
     )
 
-    # Polar (donations) configuration
-    polar_access_token: Optional[str] = Field(
-        default=None, validation_alias="POLAR_ACCESS_TOKEN"
-    )
-    polar_success_url: Optional[HttpUrl] = Field(
-        default=None, validation_alias="POLAR_SUCCESS_URL"
-    )
-    polar_server: str = Field(
-        "production", validation_alias="POLAR_SERVER"
-    )  # "production" | "sandbox" | truthy for sandbox
-    polar_product_id: Optional[str] = Field(
-        default=None, validation_alias="POLAR_PRODUCT_ID"
-    )
-
-    # Sandbox-specific overrides
-    polar_sandbox_access_token: Optional[str] = Field(
-        default=None, validation_alias="POLAR_SANDBOX_ACCESS_TOKEN"
-    )
-    polar_sandbox_success_url: Optional[HttpUrl] = Field(
-        default=None, validation_alias="POLAR_SANDBOX_SUCCESS_URL"
-    )
-    polar_sandbox_product_id: Optional[str] = Field(
-        default=None, validation_alias="POLAR_SANDBOX_PRODUCT_ID"
-    )
-    polar_sandbox_enabled: bool = Field(False, validation_alias="POLAR_SANDBOX_SERVER")
-
     allowed_origins: Union[str, List[str]] = Field(
         default="*",
         validation_alias="ALLOWED_ORIGINS",

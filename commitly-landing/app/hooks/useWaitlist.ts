@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_COMMITLY_API_BASE ?? 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000'
 
 type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 
-export function useWaitlistAndDonate() {
+export function useWaitlist() {
     const { t } = useLanguage()
     const [heroEmail, setHeroEmail] = useState('')
     const [waitlistEmail, setWaitlistEmail] = useState('')
@@ -20,7 +20,7 @@ export function useWaitlistAndDonate() {
 
     const fetchWaitlistCount = useCallback(async () => {
         if (!API_BASE) {
-            console.error('Missing NEXT_PUBLIC_COMMITLY_API_BASE environment variable')
+            console.error('Missing NEXT_PUBLIC_API_BASE_URL environment variable')
             return
         }
         try {
@@ -106,22 +106,6 @@ export function useWaitlistAndDonate() {
         [submitWaitlist, waitlistEmail]
     )
 
-    const donate = useCallback(async () => {
-        if (!API_BASE) return
-        try {
-            const res = await fetch(`${API_BASE}/api/v1/donate/checkout`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}), // pay-what-you-want by default
-            })
-            if (!res.ok) throw new Error('Failed to create checkout')
-            const data = (await res.json()) as { url: string }
-            if (data.url) window.location.href = data.url
-        } catch (err) {
-            console.error('Donation checkout failed', err)
-        }
-    }, [])
-
     return {
         // emails
         heroEmail,
@@ -144,8 +128,5 @@ export function useWaitlistAndDonate() {
         // handlers
         handleHeroSubmit,
         handleWaitlistModalSubmit,
-
-        // donations
-        donate,
     }
 }

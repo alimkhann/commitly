@@ -21,26 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { RepoRecord } from "@/data/repos";
 import { type RoadmapResponseBody, repoService } from "@/lib/services/repos";
-
-const mapStaticRecordToRoadmap = (record: RepoRecord): RoadmapResponseBody => {
-  const numericStars = Number.parseInt(record.stars.replace(/[^0-9]/g, ""), 10);
-  return {
-    repo: {
-      full_name: record.name,
-      description: record.description,
-      language: record.language,
-      stars: Number.isNaN(numericStars) ? 0 : numericStars,
-      default_branch: "main",
-      html_url: undefined,
-      owner_avatar_url: undefined,
-    },
-    timeline: record.timeline,
-    cached: true,
-    generated_at: new Date().toISOString(),
-  };
-};
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -50,7 +31,6 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState<
     "newest" | "most_viewed" | "most_synced" | "highest_rated" | "trending"
   >("newest");
-  const repoList = useMemo(() => repoService.list(), []);
   const { synced, yourRepos, loading } = useRoadmapCatalog();
   const [publicRepos, setPublicRepos] = useState<RoadmapResponseBody[]>([]);
   const [publicMeta, setPublicMeta] = useState<{
@@ -134,25 +114,12 @@ export default function SearchPage() {
     });
   }, [userRepoList, query]);
 
-  const filteredRepos = useMemo(
-    () =>
-      repoList.filter((repo) => {
-        const matchesQuery =
-          repo.name.toLowerCase().includes(query.toLowerCase()) ||
-          repo.description.toLowerCase().includes(query.toLowerCase());
-        const matchesDifficulty =
-          difficulty === "all" || repo.difficulty === difficulty;
-        return matchesQuery && matchesDifficulty;
-      }),
-    [query, difficulty, repoList]
-  );
-
   const publicRepoList = useMemo(() => {
     if (!backendConfigured) {
-      return filteredRepos.map(mapStaticRecordToRoadmap);
+      return [];
     }
     return publicRepos;
-  }, [backendConfigured, filteredRepos, publicRepos]);
+  }, [backendConfigured, publicRepos]);
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">
@@ -196,7 +163,7 @@ export default function SearchPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Filter className="h-4 w-4" />
-            Showing {filteredRepos.length} public repositories
+            Showing {publicRepoList.length} public repositories
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground text-sm">Sort by:</span>

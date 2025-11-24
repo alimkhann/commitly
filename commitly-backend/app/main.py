@@ -9,7 +9,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api import auth, donate, github, roadmap, waitlist
+from app.api import auth, github, roadmap, waitlist
 from app.core.auth import ClerkAuthMiddleware, ClerkClaims, require_clerk_auth
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -114,13 +114,6 @@ app.include_router(
     waitlist.router,
     prefix=f"{settings.api_v1_str}/waitlist",
     tags=["waitlist"],
-)
-
-app.include_router(
-    donate.router,
-    prefix=f"{settings.api_v1_str}/donate",
-    tags=["donate"],
-    dependencies=protected,
 )
 
 app.include_router(auth.router, prefix=f"{settings.api_v1_str}/auth", tags=["auth"])

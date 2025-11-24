@@ -251,10 +251,8 @@ async def record_roadmap_view(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/{owner}/{repo}/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def chat_with_guide(
-    owner: str,
-    repo: str,
     payload: ChatRequest,
     session: Session = Depends(get_db),
     current_user: ClerkClaims = Depends(require_clerk_auth),
@@ -269,7 +267,7 @@ async def chat_with_guide(
     )
 
     response = await chat_service.chat(
-        repo_full_name=f"{owner}/{repo}",
+        repo_full_name=payload.repo_full_name,
         message=payload.message,
         stage_id=payload.stage_id,
     )

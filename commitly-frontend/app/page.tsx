@@ -187,14 +187,7 @@ export default function Home() {
         <div className="space-y-4">
           <p className="text-sm font-medium">Examples</p>
           <div className="flex flex-wrap justify-center gap-3">
-            {repoService.listExamples(3).map((example) => (
-              <Button key={example.id} variant="outline" className="gap-2" asChild>
-                <Link href={`/repo/${example.id}/timeline`}>
-                  {example.name}
-                  <GitBranch className="h-4 w-4" />
-                </Link>
-              </Button>
-            ))}
+            {/* Examples removed as mock data is deleted
           </div>
         </div>
         */}
