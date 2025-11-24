@@ -17,10 +17,12 @@ export interface ChatTreeState {
 }
 
 export function useChatTree(options: any) {
+  // console.log("useChatTree options:", options);
   const [treeState, setTreeState] = useState<ChatTreeState>({
     messages: {},
     headId: null,
   });
+  const [input, setInput] = useState("");
 
   // Helper to reconstruct the linear thread from the current head
   const getThread = useCallback(
@@ -82,6 +84,7 @@ export function useChatTree(options: any) {
   );
 
   // Initialize useChat
+  // console.log("useChatTree options passed to useChat:", options);
   const chat = useChat({
     ...options,
     onFinish: (result: any) => {
@@ -97,18 +100,19 @@ export function useChatTree(options: any) {
   const {
     messages,
     setMessages,
-    append,
+    sendMessage: append,
     reload,
-    isLoading,
+    status,
     stop,
-    input,
-    setInput,
   } = chat as any;
+
+  const isLoading = status === "streaming" || status === "submitted";
 
   // Send message (User)
   const sendMessage = async (content: string, requestOptions?: any) => {
     const userMsgId = uuidv4();
     addNode(content, "user", userMsgId);
+    setInput("");
 
     await append(
       {

@@ -83,7 +83,7 @@ export default function RepoGuidePage() {
     input,
     setInput,
   } = useChatTree({
-    api: `${env.apiBaseUrl}/api/v1/roadmap/chat`,
+    api: `${env.apiBaseUrl || "https://commitly-pr-65.onrender.com"}/api/v1/roadmap/chat`,
   });
 
   const bottomRef = useRef<HTMLDivElement | null>(null);

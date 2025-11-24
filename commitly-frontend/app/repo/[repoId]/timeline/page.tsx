@@ -649,7 +649,7 @@ export default function RepoTimelinePage() {
                   variant="outline"
                 >
                   <span className="mr-1.5 font-mono text-muted-foreground">
-                    {stage.index}
+                    {stage.id}
                   </span>
                   {stage.title.length > 20
                     ? `${stage.title.slice(0, 20)}…`

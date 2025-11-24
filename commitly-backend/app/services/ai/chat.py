@@ -120,7 +120,7 @@ class GeminiChatService:
     ):
         context = self._build_context(repo_full_name, stage_id)
         if not context:
-            yield self._format_sse_error(
+            yield self._format_protocol_text(
                 "I don't have a roadmap for this repository yet."
                 " Please generate one first."
             )
@@ -153,17 +153,10 @@ class GeminiChatService:
                 json=payload,
             ) as response:
                 if response.status_code >= 400:
-                    yield self._format_sse_error(
+                    yield self._format_protocol_error(
                         f"Gemini API error: {response.status_code}"
                     )
                     return
-
-                # Vercel AI SDK Data Stream Protocol
-                message_id = f"msg-{uuid.uuid4().hex}"
-                yield self._format_sse({"type": "start", "messageId": message_id})
-
-                text_stream_id = "text-1"
-                yield self._format_sse({"type": "text-start", "id": text_stream_id})
 
                 async for line in response.aiter_lines():
                     line = line.strip()
@@ -185,27 +178,21 @@ class GeminiChatService:
                                 .get("text", "")
                             )
                             if text_chunk:
-                                yield self._format_sse(
-                                    {
-                                        "type": "text-delta",
-                                        "id": text_stream_id,
-                                        "delta": text_chunk,
-                                    }
-                                )
+                                yield self._format_protocol_text(text_chunk)
                     except json.JSONDecodeError:
                         continue
 
-                yield self._format_sse({"type": "text-end", "id": text_stream_id})
-                yield self._format_sse({"type": "finish"})
-                yield "data: [DONE]\n\n"
+    def _format_protocol_text(self, text: str) -> str:
+        """Format text chunk for Vercel AI SDK Data Stream Protocol (v1)."""
+        # 0:{string_value}\n
+        return f"0:{json.dumps(text)}\n"
 
-    def _format_sse(self, payload: dict) -> str:
-        return f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
-
-    def _format_sse_error(self, error: str) -> str:
-        return self._format_sse(
-            {"type": "text-delta", "id": "error", "delta": f"Error: {error}"}
-        )
+    def _format_protocol_error(self, error: str) -> str:
+        """Format error for Vercel AI SDK Data Stream Protocol (v1)."""
+        # 3:{string_value}\n (Using 3 for error, or could use simple text)
+        # Actually, let's just send it as text for now to be safe, or throw.
+        # But to be proper:
+        return f"0:{json.dumps('Error: ' + error)}\n"
 
     def _find_commits_for_window(
         self, repo_full_name: str, window: list[str]

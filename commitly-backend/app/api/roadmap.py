@@ -259,6 +259,12 @@ async def chat_with_guide(
     """
     Chat with the AI guide about the repository or a specific stage.
     """
+    if not settings.gemini_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gemini API key not configured.",
+        )
+
     chat_service = GeminiChatService(
         session=session,
         api_key=settings.gemini_api_key,
@@ -282,9 +288,8 @@ async def chat_with_guide(
             messages=messages,
             stage_id=payload.stage_id,
         ),
-        media_type="text/event-stream",
+        media_type="text/plain",
         headers={
-            "x-vercel-ai-ui-message-stream": "v1",
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
         },

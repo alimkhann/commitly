@@ -224,7 +224,7 @@ export default function Sidebar() {
               )}
             </div>
             <ScrollArea className="h-full max-h-[45vh]">
-              <div className="flex flex-col gap-2 pr-3">
+              <div className="flex flex-col gap-2">
                 {aggregatedRows.length === 0 && !loading ? (
                   <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-muted-foreground text-sm">
                     Generate a roadmap to pin it here.
