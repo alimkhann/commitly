@@ -219,7 +219,11 @@ export const repoService = {
       force_refresh: String(options?.forceRefresh ?? false),
     });
 
-    const url = new URL(API_ROUTES.generateRoadmapStream, env.apiBaseUrl);
+    const normalizedBase = env.apiBaseUrl.endsWith("/")
+      ? env.apiBaseUrl
+      : `${env.apiBaseUrl}/`;
+    const normalizedPath = API_ROUTES.generateRoadmapStream.replace(/^\/+/, "");
+    const url = new URL(normalizedPath, normalizedBase);
     url.search = params.toString();
 
     const response = await fetch(url.toString(), {

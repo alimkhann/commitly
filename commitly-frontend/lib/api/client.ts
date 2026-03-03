@@ -42,7 +42,9 @@ const resolveUrl = (path: string, baseUrl: string) => {
   if (path.startsWith("http")) {
     return path;
   }
-  return new URL(path, baseUrl).toString();
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const normalizedPath = path.replace(/^\/+/, "");
+  return new URL(normalizedPath, normalizedBase).toString();
 };
 
 export async function apiClient<TResponse, TBody = unknown>(
