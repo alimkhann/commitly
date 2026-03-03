@@ -8,9 +8,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { messages, ...rest } = body;
 
-    // Get the backend URL from environment
-    const apiBaseUrl =
-      process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    const apiBaseUrl = process.env.NEXT_PUBLIC_EDGE_API_BASE_URL;
+    if (!apiBaseUrl) {
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_EDGE_API_BASE_URL" },
+        { status: 500 }
+      );
+    }
     const backendUrl = `${apiBaseUrl}/api/v1/roadmap/chat`;
 
     // Forward the request to the backend

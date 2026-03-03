@@ -22,7 +22,7 @@ import {
   useRef,
   useState,
 } from "react";
-import Markdown from "react-markdown";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import TabSwitch from "@/components/navigation/tab-switch";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useChatTree } from "@/lib/hooks/useChatTree";
+import { normalizeTask } from "@/lib/roadmap/tasks";
 import { cn } from "@/lib/utils";
 import {
   Panel,
@@ -114,6 +115,19 @@ export default function GuideView() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const markdownComponents = useMemo<Components>(
+    () => ({
+      a: (props) => (
+        <a
+          {...props}
+          className="font-medium text-primary hover:underline"
+          rel="noopener noreferrer"
+          target="_blank"
+        />
+      ),
+    }),
+    []
+  );
 
   useEffect(() => {
     if (stageId) {
@@ -129,8 +143,12 @@ export default function GuideView() {
 
   const getRequestOptions = async () => {
     const token = await getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     return {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers,
       body: {
         repo_full_name: `${activeData?.identity.owner}/${activeData?.identity.repoName}`,
         stage_id: stageId ?? undefined,
@@ -187,7 +205,7 @@ export default function GuideView() {
   if (!activeData) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent" />
         <p className="text-muted-foreground text-sm">Loading guide...</p>
       </div>
     );
@@ -207,7 +225,7 @@ export default function GuideView() {
             </div>
           </div>
         ) : (
-          (messages as any[]).map((messageItem) => {
+          messages.map((messageItem) => {
             const node = treeState.messages[messageItem.id];
             let siblings: string[] = [];
             if (node?.parentId) {
@@ -225,19 +243,7 @@ export default function GuideView() {
                 {messageItem.role !== "user" ? (
                   <article className="max-w-3xl space-y-4 text-base text-foreground leading-7">
                     <div className="prose prose-invert max-w-none prose-pre:border prose-pre:border-border/50 prose-pre:bg-muted/50 prose-p:leading-relaxed">
-                      <Markdown
-                        components={{
-                          a: ({ node, ...props }) => (
-                            <a
-                              {...(props as any)}
-                              className="font-medium text-primary hover:underline"
-                              rel="noopener noreferrer"
-                              target="_blank"
-                            />
-                          ),
-                        }}
-                        remarkPlugins={[remarkGfm]}
-                      >
+                      <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                         {messageItem.content}
                       </Markdown>
                     </div>
@@ -372,9 +378,10 @@ export default function GuideView() {
         )}
         {isLoading && (
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
-            <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.2s]" />
-            <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.4s]" />
+            <div className="h-2 w-2 rounded-full bg-current" />
+            <div className="h-2 w-2 rounded-full bg-current" />
+            <div className="h-2 w-2 rounded-full bg-current" />
+            <span>Thinking...</span>
           </div>
         )}
         <div ref={bottomRef} />
@@ -463,24 +470,51 @@ export default function GuideView() {
                       Tasks
                     </p>
                     <div className="space-y-3">
-                      {stageContext.tasks.map((task: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="rounded-xl border border-border/50 bg-background/40 p-4"
-                        >
-                          <p className="font-medium text-sm">{task.title}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {task.description}
-                          </p>
-                          {task.file_path && (
-                            <div className="mt-3 flex items-center gap-2">
-                              <code className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-                                {task.file_path}
-                              </code>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                      {stageContext.tasks.map((rawTask: unknown, idx: number) => {
+                        const task = normalizeTask(rawTask, idx);
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-xl border border-border/50 bg-background/40 p-4"
+                          >
+                            <p className="font-medium text-sm">{task.label}</p>
+                            {task.steps.length > 0 && (
+                              <ol className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                                {task.steps.map((step, stepIndex) => (
+                                  <li className="flex items-start gap-2" key={stepIndex}>
+                                    <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                                    <span>{step}</span>
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                            {task.files.length > 0 && (
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {task.files.map((filePath) => (
+                                  <code
+                                    className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground"
+                                    key={filePath}
+                                  >
+                                    {filePath}
+                                  </code>
+                                ))}
+                              </div>
+                            )}
+                            {task.commands.length > 0 && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                {task.commands.map((command) => (
+                                  <code
+                                    className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-foreground"
+                                    key={command}
+                                  >
+                                    {command}
+                                  </code>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}

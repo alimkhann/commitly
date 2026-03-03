@@ -267,9 +267,6 @@ export default function SearchPage() {
             const identity = repoService.buildIdentityFromFullName(
               repo.repo.full_name
             );
-            const isSynced = yourRepos.some(
-              (item) => item.repo_full_name === repo.repo.full_name
-            );
             return (
               <Card
                 className="flex flex-col border-border/60 bg-card/70 shadow-black/20 shadow-lg"

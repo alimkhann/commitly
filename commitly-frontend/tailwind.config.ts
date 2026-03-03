@@ -1,3 +1,4 @@
+import tailwindcssTypography from "@tailwindcss/typography";
 import type { Config } from "tailwindcss";
 import { fontFamily } from "tailwindcss/defaultTheme";
 import tailwindcssAnimate from "tailwindcss-animate";
@@ -94,7 +95,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [tailwindcssAnimate, require("@tailwindcss/typography")],
+  plugins: [tailwindcssAnimate, tailwindcssTypography],
 };
 
 export default config;

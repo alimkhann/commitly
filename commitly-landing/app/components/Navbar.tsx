@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useLanguage } from '../contexts/LanguageContext'
 
 interface NavbarProps {
@@ -28,7 +29,15 @@ export default function Navbar({ isScrolled, onWaitlistClick }: NavbarProps) {
                         />
                         <div className="text-lg sm:text-2xl font-semibold tracking-[-0.02em]">commitly</div>
                     </div>
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="https://app.commitly.one"
+                            className="btn-white text-xs sm:text-sm rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2"
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            Dashboard
+                        </Link>
                         <button
                             onClick={onWaitlistClick}
                             className="btn-white text-xs sm:text-sm rounded-md px-2 sm:px-3.5 py-1.5 sm:py-2"

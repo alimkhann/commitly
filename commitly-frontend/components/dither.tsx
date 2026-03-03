@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
 import {
   Canvas,
   type ThreeEvent,
@@ -6,7 +7,7 @@ import {
 } from "@react-three/fiber";
 import { EffectComposer, wrapEffect } from "@react-three/postprocessing";
 import { Effect } from "postprocessing";
-import { forwardRef, useEffect, useRef } from "react";
+import { forwardRef, useEffect, useMemo, useRef } from "react";
 import { Color, type Mesh, Uniform, Vector2 } from "three";
 
 const waveVertexShader = `
@@ -166,12 +167,13 @@ class RetroEffectImpl extends Effect {
   }
 }
 
+const WrappedRetroEffect = wrapEffect(RetroEffectImpl);
+
 const RetroEffect = forwardRef<
   RetroEffectImpl,
   { colorNum: number; pixelSize: number }
 >((props, ref) => {
   const { colorNum, pixelSize } = props;
-  const WrappedRetroEffect = wrapEffect(RetroEffectImpl);
   return (
     <WrappedRetroEffect colorNum={colorNum} pixelSize={pixelSize} ref={ref} />
   );
@@ -221,31 +223,31 @@ function DitheredWaves({
   const mouseRef = useRef(new Vector2());
   const { viewport, size, gl } = useThree();
 
-  const waveUniformsRef = useRef<WaveUniforms>({
+  const waveUniforms = useMemo<WaveUniforms>(() => ({
     time: new Uniform(0),
     resolution: new Uniform(new Vector2(0, 0)),
-    waveSpeed: new Uniform(waveSpeed),
-    waveFrequency: new Uniform(waveFrequency),
-    waveAmplitude: new Uniform(waveAmplitude),
-    waveColor: new Uniform(new Color(...waveColor)),
+    waveSpeed: new Uniform(0.05),
+    waveFrequency: new Uniform(3),
+    waveAmplitude: new Uniform(0.3),
+    waveColor: new Uniform(new Color(0.5, 0.5, 0.5)),
     mousePos: new Uniform(new Vector2(0, 0)),
-    enableMouseInteraction: new Uniform(enableMouseInteraction ? 1 : 0),
-    mouseRadius: new Uniform(mouseRadius),
-  });
+    enableMouseInteraction: new Uniform(1),
+    mouseRadius: new Uniform(1),
+  }), []);
 
   useEffect(() => {
     const dpr = gl.getPixelRatio();
     const newWidth = Math.floor(size.width * dpr);
     const newHeight = Math.floor(size.height * dpr);
-    const currentRes = waveUniformsRef.current.resolution.value;
+    const currentRes = waveUniforms.resolution.value;
     if (currentRes.x !== newWidth || currentRes.y !== newHeight) {
       currentRes.set(newWidth, newHeight);
     }
-  }, [size, gl]);
+  }, [gl, size, waveUniforms]);
 
   const prevColor = useRef([...waveColor]);
   useFrame(({ clock }) => {
-    const u = waveUniformsRef.current;
+    const u = waveUniforms;
 
     if (!disableAnimation) {
       u.time.value = clock.getElapsedTime();
@@ -311,7 +313,7 @@ function DitheredWaves({
         <planeGeometry args={[1, 1]} />
         <shaderMaterial
           fragmentShader={waveFragmentShader}
-          uniforms={waveUniformsRef.current}
+          uniforms={waveUniforms}
           vertexShader={waveVertexShader}
         />
       </mesh>

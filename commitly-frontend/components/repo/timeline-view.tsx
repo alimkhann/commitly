@@ -39,12 +39,13 @@ import {
 } from "@/components/ui/collapsible";
 
 import { StarRating } from "@/components/ui/star-rating";
-import type { RepoTimelineStage } from "@/data/repos";
+import type { CodeExample, RepoTimelineStage } from "@/data/repos";
 import {
   type RepoIdentity,
   type RoadmapResponseBody,
   repoService,
 } from "@/lib/services/repos";
+import { normalizeTask } from "@/lib/roadmap/tasks";
 import { cn } from "@/lib/utils";
 
 type FetchState = "idle" | "loading" | "error";
@@ -516,7 +517,7 @@ export default function TimelineView() {
         <section className="rounded-2xl border border-border/60 border-dashed bg-card/60 p-6 text-muted-foreground text-sm">
           {showLoadingState && (
             <p className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 animate-spin" /> Generating timeline…
+              <Clock3 className="h-4 w-4" /> Generating timeline…
               this can take a few moments.
             </p>
           )}
@@ -901,43 +902,61 @@ function TimelineNodeCard({
                   <div className="h-px flex-1 bg-border/40" />
                 </div>
                 <div className="space-y-3">
-                  {stage.tasks.map((task: any, idx: number) => (
-                    <div
-                      className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
-                      key={idx}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-medium text-foreground text-sm">
-                          {task.title}
-                        </p>
-                      </div>
-                      <div className="mt-1.5 space-y-1">
-                        <p className="text-muted-foreground text-xs leading-relaxed">
-                          {task.description}
-                        </p>
-                      </div>
-                      {task.file_path && (
-                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                          <span className="font-medium text-foreground/80">
-                            Files:
-                          </span>
-                          <code className="rounded bg-muted/50 px-1 py-0.5 font-mono">
-                            {task.file_path}
-                          </code>
+                  {stage.tasks.map((rawTask: unknown, idx: number) => {
+                    const task = normalizeTask(rawTask, idx);
+                    return (
+                      <div
+                        className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
+                        key={idx}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-foreground text-sm">
+                            {task.label}
+                          </p>
                         </div>
-                      )}
-                      {task.code_snippet && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                          <span className="font-medium text-foreground/80">
-                            Run:
-                          </span>
-                          <code className="rounded bg-muted/50 px-1 py-0.5 font-mono">
-                            {task.code_snippet}
-                          </code>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        {task.steps.length > 0 && (
+                          <ol className="mt-2 space-y-1.5 text-muted-foreground text-xs leading-relaxed">
+                            {task.steps.map((step, stepIndex) => (
+                              <li className="flex items-start gap-2" key={stepIndex}>
+                                <span className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                                <span>{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                        {task.files.length > 0 && (
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <span className="font-medium text-foreground/80">
+                              Files:
+                            </span>
+                            {task.files.map((file) => (
+                              <code
+                                className="rounded bg-muted/50 px-1 py-0.5 font-mono"
+                                key={file}
+                              >
+                                {file}
+                              </code>
+                            ))}
+                          </div>
+                        )}
+                        {task.commands.length > 0 && (
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <span className="font-medium text-foreground/80">
+                              Commands:
+                            </span>
+                            {task.commands.map((command) => (
+                              <code
+                                className="rounded bg-muted/50 px-1 py-0.5 font-mono"
+                                key={command}
+                              >
+                                {command}
+                              </code>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -951,7 +970,7 @@ function TimelineNodeCard({
                     <div className="h-px flex-1 bg-border/40" />
                   </div>
                   <div className="space-y-3">
-                    {stage.code_examples.map((example: any, idx: number) => (
+                    {stage.code_examples.map((example: CodeExample, idx: number) => (
                       <Collapsible className="group/code" key={idx}>
                         <div className="rounded-lg border border-border/50 bg-muted/30">
                           <CollapsibleTrigger className="flex w-full items-center justify-between p-3 text-left">
@@ -1049,8 +1068,8 @@ function GenerationLoadingCard({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
       <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
-        <div className="absolute inset-0 animate-ping rounded-full bg-primary/20 duration-1000" />
-        <Clock3 className="h-10 w-10 animate-spin text-primary duration-3000" />
+        <div className="absolute inset-0 rounded-full border border-primary/20" />
+        <Clock3 className="h-10 w-10 text-primary" />
       </div>
       <div className="max-w-md space-y-2">
         <h2 className="font-semibold text-2xl">

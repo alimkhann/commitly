@@ -1,12 +1,15 @@
 export type RepoDifficulty = "intro" | "easy" | "medium" | "hard";
 
 export type StageTask = {
-  id: string;
-  title: string;
-  description: string;
+  label: string;
+  steps: string[];
+  files: string[];
+  commands: string[];
+  // Legacy fields kept optional for backward compatibility with older rows.
+  title?: string;
+  description?: string;
   file_path?: string;
   code_snippet?: string;
-  complexity: "low" | "medium" | "high";
 };
 
 export type CodeExample = {

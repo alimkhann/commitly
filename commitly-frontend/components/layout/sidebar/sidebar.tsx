@@ -57,7 +57,6 @@ export default function Sidebar() {
     loading,
     desync,
     archive,
-    refreshUserRepos,
   } = useRoadmapCatalog();
 
   const { isLeftSidebarCollapsed: collapsed, toggleLeftSidebar: toggleCollapse } = useLayout();
@@ -237,7 +236,6 @@ export default function Sidebar() {
                       collapsed={collapsed}
                       desyncingRepo={desyncingRepo}
                       isActive={activeRepoId === row.slug}
-                      isSignedIn={isSignedIn}
                       key={row.slug}
                       onArchive={handleArchive}
                       onDesync={handleDesync}
@@ -356,7 +354,6 @@ function SidebarRepoRow({
   onArchive,
   desyncingRepo,
   archivingRepo,
-  isSignedIn,
 }: {
   row: AggregatedSidebarRow;
   isActive: boolean;
@@ -365,7 +362,6 @@ function SidebarRepoRow({
   onArchive: (fullName: string) => void | Promise<void>;
   desyncingRepo: string | null;
   archivingRepo: string | null;
-  isSignedIn: boolean;
 }) {
   const { slug, fullName, pending, repoFullName } = row;
   const isDesyncing = desyncingRepo === repoFullName;
@@ -414,7 +410,7 @@ function SidebarRepoRow({
       </Link>
 
       {pending ? (
-        <Loader2 className="h-3 w-3 animate-spin opacity-50" />
+        <Loader2 className="h-3 w-3 opacity-50" />
       ) : (
         <div
           className={cn(
@@ -423,7 +419,7 @@ function SidebarRepoRow({
           )}
         >
           {isLoading ? (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            <Loader2 className="h-3 w-3 text-muted-foreground" />
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
+export type MessageFeedback = "up" | "down";
+
+export interface ChatMessage {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: Date;
+  feedback?: MessageFeedback;
+}
+
 export interface MessageNode {
   id: string;
   role: string;
@@ -8,7 +18,7 @@ export interface MessageNode {
   parentId: string | null;
   childrenIds: string[];
   createdAt: Date;
-  feedback?: "up" | "down";
+  feedback?: MessageFeedback;
 }
 
 export interface ChatTreeState {
@@ -17,9 +27,25 @@ export interface ChatTreeState {
   rootIds: string[];
 }
 
+type UseChatTreeOptions = {
+  api?: string;
+  repo_full_name: string;
+  stage_id?: string | null;
+  historyApi?: string;
+  authHeaders?: () => Promise<Record<string, string>>;
+  persistEnabled?: boolean;
+};
+
+type ChatRequestOptions = {
+  headers?: Record<string, string>;
+  body?: Record<string, unknown>;
+};
+
 function parseDataStreamLine(line: string): string {
   // Vercel AI data stream v1: lines like `0:"text"`
-  if (!line.startsWith("0:")) return "";
+  if (!line.startsWith("0:")) {
+    return "";
+  }
   try {
     return JSON.parse(line.slice(2));
   } catch {
@@ -27,32 +53,109 @@ function parseDataStreamLine(line: string): string {
   }
 }
 
-export function useChatTree(options: {
-  api?: string;
-  repo_full_name: string;
-  stage_id?: string | null;
-  historyApi?: string;
-  authHeaders?: () => Promise<Record<string, string>>;
-  persistEnabled?: boolean;
-}) {
+function toDate(value: unknown): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return new Date();
+}
+
+function normalizeMessage(value: unknown): ChatMessage | null {
+  if (!(value && typeof value === "object")) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.content !== "string") {
+    return null;
+  }
+
+  const feedback: MessageFeedback | undefined =
+    raw.feedback === "up" || raw.feedback === "down" ? raw.feedback : undefined;
+
+  return {
+    id: typeof raw.id === "string" && raw.id.length > 0 ? raw.id : uuidv4(),
+    role: typeof raw.role === "string" && raw.role.length > 0 ? raw.role : "assistant",
+    content: raw.content,
+    createdAt: toDate(raw.createdAt),
+    feedback,
+  };
+}
+
+function buildTreeFromMessages(history: ChatMessage[]): ChatTreeState {
+  const messages: Record<string, MessageNode> = {};
+  const rootIds: string[] = [];
+  let parentId: string | null = null;
+
+  history.forEach((message) => {
+    const node: MessageNode = {
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      parentId,
+      childrenIds: [],
+      createdAt: message.createdAt,
+      feedback: message.feedback,
+    };
+
+    messages[node.id] = node;
+
+    if (parentId && messages[parentId]) {
+      messages[parentId] = {
+        ...messages[parentId],
+        childrenIds: [...messages[parentId].childrenIds, node.id],
+      };
+    } else {
+      rootIds.push(node.id);
+    }
+
+    parentId = node.id;
+  });
+
+  return {
+    messages,
+    rootIds,
+    headId: parentId,
+  };
+}
+
+export function useChatTree(options: UseChatTreeOptions) {
+  const {
+    api = "/api/chat",
+    repo_full_name,
+    stage_id,
+    historyApi = "/api/chat/history",
+    authHeaders,
+    persistEnabled,
+  } = options;
+
   const [treeState, setTreeState] = useState<ChatTreeState>({
     messages: {},
     headId: null,
     rootIds: [],
   });
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<"idle" | "loading">("idle");
   const abortRef = useRef<AbortController | null>(null);
 
-  // Helper to reconstruct the linear thread from the current head
   const getThread = useCallback(
-    (headId: string | null, nodes: Record<string, MessageNode>): any[] => {
-      const thread: any[] = [];
+    (headId: string | null, nodes: Record<string, MessageNode>): ChatMessage[] => {
+      const thread: ChatMessage[] = [];
       let currentId = headId;
       while (currentId) {
         const node = nodes[currentId];
-        if (!node) break;
+        if (!node) {
+          break;
+        }
         thread.unshift({
           id: node.id,
           role: node.role,
@@ -67,7 +170,6 @@ export function useChatTree(options: {
     []
   );
 
-  // Add a node to the tree
   const addNode = useCallback(
     (content: string, role: string, id: string, parentId?: string | null) => {
       setTreeState((prev) => {
@@ -75,8 +177,7 @@ export function useChatTree(options: {
           return prev;
         }
 
-        const effectiveParentId =
-          parentId !== undefined ? parentId : prev.headId;
+        const effectiveParentId = parentId !== undefined ? parentId : prev.headId;
 
         const newNode: MessageNode = {
           id,
@@ -112,7 +213,9 @@ export function useChatTree(options: {
   const updateNodeContent = useCallback((id: string, content: string) => {
     setTreeState((prev) => {
       const node = prev.messages[id];
-      if (!node) return prev;
+      if (!node) {
+        return prev;
+      }
       return {
         ...prev,
         messages: {
@@ -123,10 +226,12 @@ export function useChatTree(options: {
     });
   }, []);
 
-  const setFeedback = useCallback((id: string, feedback: "up" | "down") => {
+  const setFeedback = useCallback((id: string, feedback: MessageFeedback) => {
     setTreeState((prev) => {
       const node = prev.messages[id];
-      if (!node) return prev;
+      if (!node) {
+        return prev;
+      }
 
       const newFeedback = node.feedback === feedback ? undefined : feedback;
 
@@ -138,127 +243,106 @@ export function useChatTree(options: {
         },
       };
     });
-    // Also update linear messages if visible
+
     setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, feedback: m.feedback === feedback ? undefined : feedback }
-          : m
+      prev.map((message) =>
+        message.id === id
+          ? {
+              ...message,
+              feedback: message.feedback === feedback ? undefined : feedback,
+            }
+          : message
       )
     );
   }, []);
 
-  const storageKey = `guideChat:${options.repo_full_name}:${options.stage_id || "__all"}`;
+  const storageKey = `guideChat:${repo_full_name}:${stage_id || "__all"}`;
 
   const persistMessages = useCallback(
-    (msgs: any[]) => {
-      if (options.persistEnabled === false) return;
+    (savedMessages: ChatMessage[]) => {
+      if (persistEnabled === false) {
+        return;
+      }
       try {
-        localStorage.setItem(storageKey, JSON.stringify(msgs));
-      } catch (err) {
-        console.warn("[useChatTree] persist failed", err);
+        localStorage.setItem(storageKey, JSON.stringify(savedMessages));
+      } catch (error) {
+        console.warn("[useChatTree] persist failed", error);
       }
     },
-    [storageKey, options.persistEnabled]
+    [persistEnabled, storageKey]
   );
 
-  const restoreMessages = useCallback(
-    (saved: any[]) => {
-      // rebuild tree from linear history
-      let parentId: string | null = null;
-      saved.forEach((m) => {
-        const id = m.id || uuidv4();
-        addNode(m.content, m.role, id, parentId);
-        // Restore feedback if present
-        if (m.feedback) {
-            // We need to set feedback after adding node, but addNode is async-ish in state updates.
-            // However, since we are rebuilding, we can just assume addNode will handle it if we passed it.
-            // But addNode doesn't take feedback.
-            // Let's just update the state directly in a separate effect or modify addNode?
-            // For now, let's just rely on setMessages having it.
-            // But if we navigate away and back, we lose feedback if not in tree.
-            // We should update the tree node with feedback.
-            // Since we can't easily modify addNode signature right now without breaking things,
-            // we will do a second pass or just accept it might be lost on full reload if not persisted in tree.
-            // Actually, let's just use setFeedback logic but we can't call it here easily.
-            // Let's modify addNode to accept optional props? No.
-        }
-        parentId = id;
-      });
+  const restoreMessages = useCallback((saved: unknown[]) => {
+    const normalized = saved
+      .map(normalizeMessage)
+      .filter(
+        (message: ChatMessage | null): message is ChatMessage =>
+          message !== null
+      );
 
-      // Fix: Update tree nodes with feedback after adding them
-      setTreeState(prev => {
-          const newMessages = { ...prev.messages };
-          saved.forEach(m => {
-              if (m.feedback && newMessages[m.id]) {
-                  newMessages[m.id] = { ...newMessages[m.id], feedback: m.feedback };
-              }
-          });
-          return { ...prev, messages: newMessages };
-      });
-
-      setMessages(saved);
-    },
-    [addNode]
-  );
+    setTreeState(buildTreeFromMessages(normalized));
+    setMessages(normalized);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
-
-
-      if (options.persistEnabled !== false) {
+      if (persistEnabled !== false) {
         try {
-          // 1) try server history if available
-          const historyEndpoint = options.historyApi || "/api/chat/history";
-          const headers = options.authHeaders ? await options.authHeaders() : {};
+          const headers = authHeaders ? await authHeaders() : {};
           const res = await fetch(
-            `${historyEndpoint}?repo_full_name=${encodeURIComponent(options.repo_full_name)}${options.stage_id ? `&stage_id=${encodeURIComponent(options.stage_id)}` : ""}`,
+            `${historyApi}?repo_full_name=${encodeURIComponent(repo_full_name)}${stage_id ? `&stage_id=${encodeURIComponent(stage_id)}` : ""}`,
             { headers, cache: "no-store" }
           );
+
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data?.messages)) {
               restoreMessages(data.messages);
-              persistMessages(data.messages);
+              const normalized = data.messages
+                .map(normalizeMessage)
+                .filter(
+                  (message: ChatMessage | null): message is ChatMessage =>
+                    message !== null
+                );
+              persistMessages(normalized);
               return;
             }
           }
-        } catch (err) {
-          console.warn("[useChatTree] server history fetch failed", err);
+        } catch (error) {
+          console.warn("[useChatTree] server history fetch failed", error);
         }
       }
 
-      // 2) fall back to localStorage
-      if (options.persistEnabled !== false) {
+      if (persistEnabled !== false) {
         try {
           const raw =
             typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
           if (raw) {
-            const parsed = JSON.parse(raw);
+            const parsed: unknown = JSON.parse(raw);
             if (Array.isArray(parsed)) {
               restoreMessages(parsed);
               return;
             }
           }
-        } catch (err) {
-          console.warn("[useChatTree] restore failed", err);
+        } catch (error) {
+          console.warn("[useChatTree] restore failed", error);
         }
       }
 
-      // reset state when switching repo/stage
       setMessages([]);
       setTreeState({ messages: {}, headId: null, rootIds: [] });
     };
 
     load();
   }, [
-    storageKey,
+    authHeaders,
+    historyApi,
+    persistEnabled,
+    persistMessages,
+    repo_full_name,
     restoreMessages,
-    options.historyApi,
-    options.authHeaders,
-    options.repo_full_name,
-    options.stage_id,
-    options.persistEnabled,
+    stage_id,
+    storageKey,
   ]);
 
   const stop = () => {
@@ -268,24 +352,28 @@ export function useChatTree(options: {
       setStatus("idle");
     }
   };
+
   const isLoading = status === "loading";
 
   const streamResponse = async (
     userContent: string,
     userMessageId: string,
-    currentMessages: any[],
-    requestOptions?: any
+    currentMessages: ChatMessage[],
+    requestOptions?: ChatRequestOptions
   ) => {
     setStatus("loading");
 
-    // Prepare an empty assistant message to stream into
     const assistantId = uuidv4();
-    // Attach assistant node to the user message
     addNode("", "assistant", assistantId, userMessageId);
 
-    const assistantMsg = { id: assistantId, role: "assistant", content: "" };
+    const assistantMsg: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date(),
+    };
 
-    let finalMessages = [...currentMessages, assistantMsg];
+    let finalMessages: ChatMessage[] = [...currentMessages, assistantMsg];
 
     setMessages(finalMessages);
     persistMessages(finalMessages);
@@ -294,8 +382,7 @@ export function useChatTree(options: {
     abortRef.current = controller;
 
     try {
-      const apiUrl = options?.api ?? "/api/chat";
-      const res = await fetch(apiUrl, {
+      const response = await fetch(api, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -308,16 +395,16 @@ export function useChatTree(options: {
         signal: controller.signal,
       });
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      if (!res.body) {
-        const raw = await res.text();
+      if (!response.body) {
+        const raw = await response.text();
         updateNodeContent(assistantId, raw);
         setMessages((prev) => {
-          const next = prev.map((m) =>
-            m.id === assistantId ? { ...m, content: raw } : m
+          const next = prev.map((message) =>
+            message.id === assistantId ? { ...message, content: raw } : message
           );
           finalMessages = next;
           persistMessages(next);
@@ -326,14 +413,16 @@ export function useChatTree(options: {
         return;
       }
 
-      const reader = res.body.getReader();
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
       let fullText = "";
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -342,12 +431,17 @@ export function useChatTree(options: {
           const line = buffer.slice(0, newlineIndex).trim();
           buffer = buffer.slice(newlineIndex + 1);
           const chunk = parseDataStreamLine(line);
-          if (!chunk) continue;
+          if (!chunk) {
+            continue;
+          }
+
           fullText += chunk;
           updateNodeContent(assistantId, fullText);
           setMessages((prev) => {
-            const next = prev.map((m) =>
-              m.id === assistantId ? { ...m, content: fullText } : m
+            const next = prev.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: fullText }
+                : message
             );
             finalMessages = next;
             persistMessages(next);
@@ -362,109 +456,107 @@ export function useChatTree(options: {
       if (abortRef.current === controller) {
         abortRef.current = null;
       }
-      // Persist remotely (best-effort)
+
       try {
-        if (options.persistEnabled !== false) {
-          const historyEndpoint = options.historyApi || "/api/chat/history";
-          const headers = options.authHeaders ? await options.authHeaders() : {};
+        if (persistEnabled !== false) {
+          const headers = authHeaders ? await authHeaders() : {};
           if (headers.Authorization) {
-            await fetch(historyEndpoint, {
+            await fetch(historyApi, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 ...headers,
               },
               body: JSON.stringify({
-                repo_full_name: options.repo_full_name,
-                stage_id: options.stage_id ?? null,
-                messages: finalMessages ?? messages,
+                repo_full_name,
+                stage_id: stage_id ?? null,
+                messages: finalMessages,
               }),
             });
           }
         }
-      } catch (err) {
-        console.warn("[useChatTree] persist remote failed", err);
+      } catch (error) {
+        console.warn("[useChatTree] persist remote failed", error);
       }
     }
   };
 
-  // Send message (User)
-  const sendMessage = async (content: string, requestOptions?: any) => {
+  const sendMessage = async (content: string, requestOptions?: ChatRequestOptions) => {
     const userMsgId = uuidv4();
     addNode(content, "user", userMsgId);
     setInput("");
 
-    const nextUser = { id: userMsgId, role: "user", content, createdAt: new Date() };
+    const nextUser: ChatMessage = {
+      id: userMsgId,
+      role: "user",
+      content,
+      createdAt: new Date(),
+    };
+
     const nextMessages = [...messages, nextUser];
 
     setMessages(nextMessages);
     persistMessages(nextMessages);
 
-
-
     await streamResponse(content, userMsgId, nextMessages, requestOptions);
   };
 
-  // Edit message (Branching)
   const editMessage = async (
     nodeId: string,
     newContent: string,
-    requestOptions?: any
+    requestOptions?: ChatRequestOptions
   ) => {
     const node = treeState.messages[nodeId];
-    if (!node) return;
+    if (!node) {
+      return;
+    }
 
     const parentId = node.parentId;
 
-    // 1. Create new user node attached to parent
     const newMessageId = uuidv4();
     addNode(newContent, "user", newMessageId, parentId);
 
-    // 2. Get history up to parent (this excludes the node being edited and its siblings)
     const history = getThread(parentId, treeState.messages);
 
-    // 3. Construct the new message object
-    const newMessage = {
+    const newMessage: ChatMessage = {
       id: newMessageId,
       role: "user",
       content: newContent,
       createdAt: new Date(),
     };
 
-    // 4. Update linear view to history + new message
     const nextMessages = [...history, newMessage];
     setMessages(nextMessages);
     persistMessages(nextMessages);
 
-
-
-    // 5. Trigger streaming response
     await streamResponse(newContent, newMessageId, nextMessages, requestOptions);
   };
 
-  // Navigate branches
   const navigateBranch = (nodeId: string, direction: "prev" | "next") => {
     const node = treeState.messages[nodeId];
-    if (!node) return;
+    if (!node) {
+      return;
+    }
 
     let siblings: string[] = [];
     if (node.parentId) {
       const parent = treeState.messages[node.parentId];
-      if (parent) siblings = parent.childrenIds;
+      if (parent) {
+        siblings = parent.childrenIds;
+      }
     } else {
       siblings = treeState.rootIds || [];
     }
 
     const currentIndex = siblings.indexOf(nodeId);
-    if (currentIndex === -1) return;
+    if (currentIndex === -1) {
+      return;
+    }
 
     let targetId: string | undefined;
     if (direction === "prev" && currentIndex > 0) {
       targetId = siblings[currentIndex - 1];
-    } else if (
-      direction === "next" &&
-      currentIndex < siblings.length - 1
-    ) {
+    } else if (direction === "next" && currentIndex < siblings.length - 1) {
       targetId = siblings[currentIndex + 1];
     }
 
@@ -496,7 +588,9 @@ function findLatestLeaf(
   let currentId = startNodeId;
   while (true) {
     const node = nodes[currentId];
-    if (!node || node.childrenIds.length === 0) return currentId;
+    if (!node || node.childrenIds.length === 0) {
+      return currentId;
+    }
     currentId = node.childrenIds[node.childrenIds.length - 1];
   }
 }

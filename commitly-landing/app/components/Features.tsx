@@ -2,23 +2,13 @@
 
 import Image from 'next/image'
 import { useLanguage } from '../contexts/LanguageContext'
-import Iridescence from './Iridiscence'
 
 export default function Features() {
     const { t } = useLanguage()
 
     return (
         <section className="max-w-[1344px] mx-auto px-6 sm:px-8 lg:px-20 xl:px-28 2xl:px-40 pt-8 md:pt-12 pb-6 space-y-48">
-            <div className="relative isolate noise feature-card overflow-hidden rounded-xl flex flex-col">
-                <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
-                    <Iridescence
-                        color={[1, 0.7, 0.8]}
-                        mouseReact={false}
-                        amplitude={0.2}
-                        speed={0.25}
-                        rotation={37}
-                    />
-                </div>
+            <div className="relative isolate feature-card overflow-hidden rounded-xl flex flex-col bg-card-1">
                 <div className="gradient-vignette" />
                 <div className="text-center pt-12 pb-8 px-4 relative z-10 bg-black/80 backdrop-blur-sm -mx-1 -mt-1">
                     <h3 className="section-h">{t.feature1Title}</h3>
@@ -29,16 +19,7 @@ export default function Features() {
                 </div>
             </div>
 
-            <div className="relative isolate noise feature-card overflow-hidden rounded-xl flex flex-col">
-                <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
-                    <Iridescence
-                        color={[0.8, 1, 0.7]}
-                        mouseReact={false}
-                        amplitude={0.1}
-                        speed={0.3}
-                        rotation={71}
-                    />
-                </div>
+            <div className="relative isolate feature-card overflow-hidden rounded-xl flex flex-col bg-card-2">
                 <div className="gradient-vignette" />
                 <div className="text-center pt-12 pb-8 px-4 relative z-10 bg-black/80 backdrop-blur-sm -mx-1 -mt-1">
                     <h3 className="section-h">{t.feature2Title}</h3>
@@ -49,16 +30,7 @@ export default function Features() {
                 </div>
             </div>
 
-            <div className="relative isolate noise feature-card overflow-hidden rounded-xl flex flex-col">
-                <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
-                    <Iridescence
-                        color={[0.7, 0.8, 1]}
-                        mouseReact={false}
-                        amplitude={0.1}
-                        speed={0.2}
-                        rotation={132}
-                    />
-                </div>
+            <div className="relative isolate feature-card overflow-hidden rounded-xl flex flex-col bg-card-3">
                 <div className="gradient-vignette" />
                 <div className="text-center pt-12 pb-8 px-4 relative z-10 bg-black/80 backdrop-blur-sm -mx-1 -mt-1">
                     <h3 className="section-h">{t.feature3Title}</h3>

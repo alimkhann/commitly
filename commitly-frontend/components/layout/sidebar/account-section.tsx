@@ -47,9 +47,11 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const [reportBugOpen, setReportBugOpen] = useState(false);
 
   useEffect(() => {
-    if (searchParams?.get("settings") === "connections") {
+    if (searchParams?.get("settings") !== "connections") return;
+    const timeoutId = window.setTimeout(() => {
       setAccountSettingsOpen(true);
-    }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [searchParams]);
 
   const displayName = useMemo(() => {

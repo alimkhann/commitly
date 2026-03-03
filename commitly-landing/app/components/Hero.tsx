@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { WaitlistForm } from './WaitlistForm'
 import { useLanguage } from '../contexts/LanguageContext'
 import ColorBends from './ColorBends'
@@ -11,7 +10,7 @@ type WaitlistStatus = 'idle' | 'success' | 'error' | 'duplicate'
 interface HeroProps {
     heroEmail: string
     setHeroEmail: (email: string) => void
-    waitlistCount: number | null
+    waitlistCount: number
     waitlistStatus: WaitlistStatus
     isSubmittingWaitlist: boolean
     waitlistButtonLabel: string
@@ -30,8 +29,8 @@ export default function Hero({
     const { t } = useLanguage()
 
     return (
-        <section className="w-full px-2 sm:px-2 pt-2 pb-32">
-            <div className="relative isolate rounded-2xl max-w-[1808px] mx-auto px-6 lg:px-14 overflow-hidden flex flex-col bg-black min-h-[calc(100vh-1rem)] justify-center">
+        <section className="w-full pt-2 pb-32">
+            <div className="relative isolate w-full overflow-hidden flex flex-col bg-black min-h-[calc(100vh-1rem)] justify-center px-6 lg:px-14">
                 <div aria-hidden className="absolute inset-0 -z-10">
                     <ColorBends
                         colors={["#FF0000", "#00FF00", "#0000FF"]}
@@ -64,7 +63,7 @@ export default function Hero({
                         <span><span className="text-green-400">{
                             <CountUp
                                 from={0}
-                                to={waitlistCount ?? 0}
+                                to={waitlistCount}
                                 separator=","
                                 direction="up"
                                 duration={1}

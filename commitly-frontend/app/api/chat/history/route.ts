@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-const backendBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const backendBase = process.env.NEXT_PUBLIC_EDGE_API_BASE_URL;
 
 async function forward(req: NextRequest) {
+  if (!backendBase) {
+    return NextResponse.json(
+      { error: "Missing NEXT_PUBLIC_EDGE_API_BASE_URL" },
+      { status: 500 }
+    );
+  }
   const url = new URL(req.url);
   const search = url.search ? url.search : "";
   const target = `${backendBase}/api/v1/roadmap/chat/history${search}`;

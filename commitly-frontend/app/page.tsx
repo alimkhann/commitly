@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
+import type { GlobalUsage } from "@/lib/services/repos";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ export default function Home() {
   const [githubConnected, setGithubConnected] = useState(false);
   const [githubLogin, setGithubLogin] = useState<string | null>(null);
   const [isCheckingGithub, setIsCheckingGithub] = useState(false);
+  const [globalUsage, setGlobalUsage] = useState<GlobalUsage | null>(null);
   const { isSignedIn, getToken } = useAuth();
   const { markPending } = useRoadmapCatalog();
 
@@ -59,6 +61,22 @@ export default function Home() {
       cancelled = true;
     };
   }, [getToken, isSignedIn]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchUsage = async () => {
+      const response = await repoService.getGlobalUsage();
+      if (!(cancelled || !response.ok || !response.data)) {
+        setGlobalUsage(response.data);
+      }
+    };
+    fetchUsage();
+    const intervalId = window.setInterval(fetchUsage, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -178,6 +196,22 @@ export default function Home() {
             </p>
           )}
         </form>
+
+        {globalUsage && (
+          <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/60 bg-card/40 px-5 py-4 text-left">
+            <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
+              Shared AI token pool
+            </p>
+            <p className="mt-1 font-medium text-sm">
+              {globalUsage.remaining.toLocaleString()} /{" "}
+              {globalUsage.daily_limit.toLocaleString()} tokens left
+            </p>
+            <p className="mt-1 text-muted-foreground text-xs">
+              Mode: {globalUsage.mode} · resets{" "}
+              {new Date(globalUsage.reset_at).toLocaleString()}
+            </p>
+          </div>
+        )}
 
         {/*
         <div className="space-y-4">

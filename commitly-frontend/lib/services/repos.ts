@@ -22,6 +22,7 @@ const API_ROUTES = {
   recordView: (owner: string, repo: string) =>
     `/api/v1/roadmap/${owner}/${repo}/view`,
   chat: "/api/v1/roadmap/chat",
+  usageGlobal: "/api/v1/usage/global",
 };
 
 export type RepoIdentity = {
@@ -106,6 +107,19 @@ export type UserRepoState = {
   pinned_at?: string;
   repo?: RoadmapSummary | null;
 };
+
+export type GlobalUsage = {
+  daily_limit: number;
+  used: number;
+  remaining: number;
+  mode: "normal" | "low" | "critical" | string;
+  reset_at: string;
+};
+
+export type RoadmapStreamEvent =
+  | { type: "progress"; message: string }
+  | { type: "result"; data: RoadmapResponseBody }
+  | { type: "error"; message: string };
 
 const GIT_SUFFIX_REGEX = /\.git$/i;
 const INVALID_CHAR_REGEX = /[^A-Za-z0-9._-]/g;
@@ -195,7 +209,7 @@ export const repoService = {
     repoUrl: string,
     authToken?: string,
     options?: { forceRefresh?: boolean }
-  ): AsyncGenerator<any, void, unknown> {
+  ): AsyncGenerator<RoadmapStreamEvent, void, unknown> {
     if (!env.apiBaseUrl) {
       throw new Error("API base URL missing");
     }
@@ -219,7 +233,7 @@ export const repoService = {
         if (errorBody) {
           errorMessage += ` - ${errorBody}`;
         }
-      } catch (e) {
+      } catch {
         // Ignore error reading body
       }
       throw new Error(errorMessage);
@@ -241,7 +255,7 @@ export const repoService = {
         if (line.startsWith("data: ")) {
           const data = line.slice(6);
           try {
-            yield JSON.parse(data);
+            yield JSON.parse(data) as RoadmapStreamEvent;
           } catch (e) {
             console.error("Failed to parse SSE data", e);
           }
@@ -581,6 +595,20 @@ export const repoService = {
         stage_id: stageId,
       },
       authToken,
+    });
+  },
+
+  getGlobalUsage(): Promise<ApiClientResponse<GlobalUsage>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<GlobalUsage>(env.apiBaseUrl, {
+      path: API_ROUTES.usageGlobal,
+      cache: "no-store",
     });
   },
 };

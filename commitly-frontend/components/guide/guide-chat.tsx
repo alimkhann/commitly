@@ -11,18 +11,18 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
-import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   type ChangeEvent,
   type FormEvent,
+  type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import Markdown from "react-markdown";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +106,19 @@ export default function GuideChat() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const markdownComponents = useMemo<Components>(
+    () => ({
+      a: (props) => (
+        <a
+          {...props}
+          className="font-medium text-primary hover:underline"
+          rel="noopener noreferrer"
+          target="_blank"
+        />
+      ),
+    }),
+    []
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -113,8 +126,12 @@ export default function GuideChat() {
 
   const getRequestOptions = async () => {
     const token = await getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     return {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers,
       body: {
         repo_full_name: `${activeData?.identity.owner}/${activeData?.identity.repoName}`,
         stage_id: stageId ?? undefined,
@@ -122,8 +139,7 @@ export default function GuideChat() {
     };
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitCurrentInput = async () => {
     if (!(isSignedIn && input.trim()) || isLoading || !activeData) {
       return;
     }
@@ -134,6 +150,18 @@ export default function GuideChat() {
 
     const options = await getRequestOptions();
     await sendMessage(input, options);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await submitCurrentInput();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void submitCurrentInput();
+    }
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -190,7 +218,7 @@ export default function GuideChat() {
               Ask for a walkthrough or context about this stage.
             </div>
           ) : (
-            (messages as any[]).map((messageItem) => {
+            messages.map((messageItem) => {
               const node = treeState.messages[messageItem.id];
               let siblings: string[] = [];
               if (node?.parentId) {
@@ -208,19 +236,7 @@ export default function GuideChat() {
                   {messageItem.role !== "user" ? (
                     <div className="flex flex-col gap-2">
                       <div className="prose prose-invert max-w-none text-sm prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10">
-                        <Markdown
-                          components={{
-                            a: ({ node, ...props }) => (
-                              <a
-                                {...(props as any)}
-                                className="font-medium text-primary hover:underline"
-                                rel="noopener noreferrer"
-                                target="_blank"
-                              />
-                            ),
-                          }}
-                          remarkPlugins={[remarkGfm]}
-                        >
+                        <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                           {messageItem.content}
                         </Markdown>
                       </div>
@@ -352,12 +368,7 @@ export default function GuideChat() {
             ref={textareaRef}
             rows={1}
             value={input}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e as any);
-              }
-            }}
+            onKeyDown={handleKeyDown}
           />
           <Button
             className="h-8 w-8 shrink-0 rounded-lg"

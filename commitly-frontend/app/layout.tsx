@@ -8,8 +8,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { type ReactNode, Suspense } from "react";
 import HomeBackground from "@/components/layout/home-background";
-import { ResizableLayout } from "@/components/layout/resizable-layout";
-import RightSidebar from "@/components/layout/right-sidebar";
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper";
 import { LayoutProvider } from "@/components/providers/layout-provider";
 import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider";

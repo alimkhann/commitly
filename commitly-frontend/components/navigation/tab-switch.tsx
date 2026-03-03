@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { useLayout } from "@/components/providers/layout-provider";
 
 type TabSwitchProps = {
   repoId: string;
