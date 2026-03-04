@@ -41,12 +41,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>("system");
   const [language, setLanguageState] = useState<AppLanguage>("en");
   const [saving, setSaving] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const storedTheme = normalizeTheme(localStorage.getItem(STORAGE_THEME_KEY));
     const storedLanguage = normalizeLanguage(localStorage.getItem(STORAGE_LANGUAGE_KEY));
     setThemeState(storedTheme);
     setLanguageState(storedLanguage);
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -131,8 +133,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   );
 
   const t = useCallback(
-    (key: TranslationKey, fallback?: string) => tForLanguage(language, key, fallback),
-    [language]
+    (key: TranslationKey, fallback?: string) =>
+      tForLanguage(hydrated ? language : "en", key, fallback),
+    [hydrated, language]
   );
 
   const value = useMemo<PreferencesContextValue>(

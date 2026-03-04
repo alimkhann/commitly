@@ -30,6 +30,7 @@ const API_ROUTES = {
   recordView: (owner: string, repo: string) =>
     `/api/v1/roadmap/${owner}/${repo}/view`,
   chat: "/api/v1/roadmap/chat",
+  translateStages: "/api/v1/roadmap/translate-stages",
   usageGlobal: "/api/v1/usage/global",
   bugReport: "/api/v1/feedback/bug",
   preferences: "/api/v1/preferences",
@@ -176,6 +177,32 @@ export type UserPreferences = {
   theme: "system" | "light" | "dark";
   language: "en" | "zh-HK" | "kz" | "ru";
   updated_at?: string | null;
+};
+
+export type RoadmapTranslationLanguage = "en" | "zh-HK" | "kz" | "ru";
+
+export type RoadmapTranslatedStage = {
+  stage_id: string;
+  title: string;
+  summary: string;
+  goals: string[];
+  prerequisites: string[];
+  checkpoints: string[];
+  tasks: Array<{
+    label: string;
+    steps: string[];
+    files?: string[];
+    commands?: string[];
+  }>;
+  quality_score: number;
+  source_hash: string;
+};
+
+export type RoadmapTranslationResponse = {
+  repo_full_name: string;
+  target_language: RoadmapTranslationLanguage;
+  translated: RoadmapTranslatedStage[];
+  cache_hit_ratio: number;
 };
 
 export type RoadmapCatalogPage = {
@@ -859,7 +886,8 @@ export const repoService = {
     repo: string,
     message: string,
     stageId?: string,
-    authToken?: string
+    authToken?: string,
+    preferredLanguage?: RoadmapTranslationLanguage
   ): Promise<ApiClientResponse<{ response: string }>> {
     if (!env.apiBaseUrl) {
       return Promise.resolve({
@@ -875,7 +903,32 @@ export const repoService = {
         message,
         repo_full_name: `${owner}/${repo}`,
         stage_id: stageId,
+        preferred_language: preferredLanguage,
       },
+      authToken,
+    });
+  },
+
+  translateStages(
+    payload: {
+      repo_full_name: string;
+      target_language: RoadmapTranslationLanguage;
+      stage_ids: string[];
+      source_hashes?: Record<string, string>;
+    },
+    authToken?: string
+  ): Promise<ApiClientResponse<RoadmapTranslationResponse>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<RoadmapTranslationResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.translateStages,
+      method: "POST",
+      body: payload,
       authToken,
     });
   },

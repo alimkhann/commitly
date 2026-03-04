@@ -24,6 +24,7 @@ import {
 } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export default function GuideChat() {
   const repoId = params.repoId as string;
   const searchParams = useSearchParams();
   const { isSignedIn, getToken } = useAuth();
+  const { language, t } = usePreferences();
   const { getBySlug, yourRepos } = useRoadmapCatalog();
 
   const cachedRecord = getBySlug(repoId);
@@ -135,6 +137,7 @@ export default function GuideChat() {
       body: {
         repo_full_name: `${activeData?.identity.owner}/${activeData?.identity.repoName}`,
         stage_id: stageId ?? undefined,
+        preferred_language: language,
       },
     };
   };
@@ -193,7 +196,7 @@ export default function GuideChat() {
   if (!activeData) {
     return (
       <div className="flex h-full items-center justify-center p-4 text-center text-muted-foreground text-sm">
-        Select a repository to start chatting.
+        {t("guide_select_repo", "Select a repository to start chatting.")}
       </div>
     );
   }
@@ -203,7 +206,9 @@ export default function GuideChat() {
       {stageContext && (
         <div className="border-b border-border/70 bg-card p-4">
           <div className="space-y-2">
-            <Badge variant="outline">Context: {stageContext.title}</Badge>
+            <Badge variant="outline">
+              {t("stage_context", "Stage context")}: {stageContext.title}
+            </Badge>
             <p className="line-clamp-2 text-muted-foreground text-xs">
               {stageContext.summary}
             </p>
@@ -215,7 +220,10 @@ export default function GuideChat() {
         <div className="flex flex-col gap-6">
           {messages.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/70 bg-card p-6 text-center text-muted-foreground text-sm">
-              Ask for a walkthrough or context about this stage.
+              {t(
+                "guide_empty_state",
+                "No guide activity yet. Ask for a walkthrough to start the conversation."
+              )}
             </div>
           ) : (
             messages.map((messageItem) => {
@@ -286,13 +294,13 @@ export default function GuideChat() {
                               size="sm"
                               variant="ghost"
                             >
-                              Cancel
+                              {t("cancel", "Cancel")}
                             </Button>
                             <Button
                               onClick={() => handleEditSubmit(messageItem.id)}
                               size="sm"
                             >
-                              Save
+                              {t("save", "Save")}
                             </Button>
                           </div>
                         </div>
@@ -345,7 +353,7 @@ export default function GuideChat() {
               <div className="h-2 w-2 rounded-full bg-current" />
               <div className="h-2 w-2 rounded-full bg-current" />
               <div className="h-2 w-2 rounded-full bg-current" />
-              <span>Thinking...</span>
+              <span>{t("thinking", "Thinking...")}</span>
             </div>
           )}
           <div ref={bottomRef} />
@@ -363,8 +371,8 @@ export default function GuideChat() {
             onChange={handleInputChange}
             placeholder={
               isSignedIn
-                ? "Ask a question..."
-                : "Sign in to chat"
+                ? t("guide_input_placeholder", "Ask for context, code walkthroughs, or compare approaches...")
+                : t("guide_signin_placeholder", "Sign in to start working with the AI guide.")
             }
             ref={textareaRef}
             rows={1}

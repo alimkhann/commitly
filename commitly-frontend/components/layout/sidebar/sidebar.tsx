@@ -158,10 +158,11 @@ export default function Sidebar() {
                 <Image
                   alt="commitly"
                   className={cn(
-                    "rounded-lg object-contain transition-opacity duration-150",
+                    "invert rounded-lg object-contain transition-opacity duration-150 dark:invert-0",
                     collapsed && "group-hover:opacity-0"
                   )}
                   fill
+                  sizes="64px"
                   src="/logos/logo_4x.png"
                 />
               </div>
@@ -221,7 +222,7 @@ export default function Sidebar() {
               </p>
               {loading && (
                 <Badge className="font-normal text-[11px]" variant="outline">
-                  Loading…
+                  {t("loading", "Loading...")}
                 </Badge>
               )}
             </div>
@@ -365,6 +366,7 @@ function SidebarRepoRow({
   desyncingRepo: string | null;
   archivingRepo: string | null;
 }) {
+  const { t } = usePreferences();
   const { slug, fullName, pending, repoFullName } = row;
   const isDesyncing = desyncingRepo === repoFullName;
   const isArchiving = archivingRepo === repoFullName;
@@ -432,34 +434,38 @@ function SidebarRepoRow({
                   variant="ghost"
                 >
                   <MoreHorizontal className="h-3 w-3" />
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{t("actions", "Actions")}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem onClick={() => onArchive(repoFullName)}>
                   <Archive className="mr-2 h-3.5 w-3.5" />
-                  Archive
+                  {t("archive", "Archive")}
                 </DropdownMenuItem>
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Unlink className="mr-2 h-3.5 w-3.5" />
-                      Remove from library
+                      {t("remove_from_library", "Remove from library")}
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Remove from library?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        {t("remove_from_library_title", "Remove from library?")}
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes the roadmap from your personal library. The
-                        public timeline will remain available.
+                        {t(
+                          "remove_from_library_desc",
+                          "This removes the roadmap from your personal library. The public timeline will remain available."
+                        )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>{t("cancel", "Cancel")}</AlertDialogCancel>
                       <AlertDialogAction onClick={() => onDesync(repoFullName)}>
-                        Confirm remove
+                        {t("confirm_remove", "Confirm remove")}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

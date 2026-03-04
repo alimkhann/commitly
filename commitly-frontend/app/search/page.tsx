@@ -94,7 +94,10 @@ export default function SearchPage() {
         });
         setPublicError(null);
       } else {
-        setPublicError(response.error ?? "Unable to load public catalog.");
+        setPublicError(
+          response.error ??
+            t("public_catalog_load_error", "Unable to load public catalog.")
+        );
       }
       setPublicLoading(false);
     };
@@ -102,7 +105,7 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [backendConfigured, sortBy, difficulty]);
+  }, [backendConfigured, sortBy, difficulty, t]);
 
   const syncedMap = useMemo(
     () => new Map(synced.map((repo) => [repo.repo.full_name, repo])),
@@ -182,7 +185,10 @@ export default function SearchPage() {
             <Input
               className="border-0 bg-transparent text-base focus-visible:ring-0"
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="deepseek, ncnn, microsoft/vscode..."
+              placeholder={t(
+                "search_placeholder",
+                "deepseek, ncnn, microsoft/vscode..."
+              )}
               value={query}
             />
           </div>
@@ -195,7 +201,7 @@ export default function SearchPage() {
                   onClick={() => setDifficulty(level)}
                   variant={difficulty === level ? "secondary" : "ghost"}
                 >
-                  {level}
+                  {t(`difficulty_${level}`, level)}
                 </Button>
               )
             )}
@@ -215,14 +221,24 @@ export default function SearchPage() {
               value={sortBy}
             >
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Sort by" />
+                <SelectValue placeholder={t("sort_by", "Sort by")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="newest">Newest</SelectItem>
-                <SelectItem value="trending">Trending</SelectItem>
-                <SelectItem value="most_viewed">Most viewed</SelectItem>
-                <SelectItem value="most_synced">Most saved</SelectItem>
-                <SelectItem value="highest_rated">Highest rated</SelectItem>
+                <SelectItem value="newest">
+                  {t("sort_newest", "Newest")}
+                </SelectItem>
+                <SelectItem value="trending">
+                  {t("sort_trending", "Trending")}
+                </SelectItem>
+                <SelectItem value="most_viewed">
+                  {t("sort_most_viewed", "Most viewed")}
+                </SelectItem>
+                <SelectItem value="most_synced">
+                  {t("sort_most_saved", "Most saved")}
+                </SelectItem>
+                <SelectItem value="highest_rated">
+                  {t("sort_highest_rated", "Highest rated")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -233,7 +249,7 @@ export default function SearchPage() {
         <div className="flex items-center justify-between">
           <p className="font-medium text-sm">{t("quick_test_repos", "Quick test repos")}</p>
           <p className="text-muted-foreground text-xs">
-            GitHub examples for generation QA
+            {t("qa_examples_caption", "GitHub examples for generation QA")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -282,11 +298,12 @@ export default function SearchPage() {
                       variant="outline"
                     >
                       {syncedMap.get(repo.repo_full_name)?.timeline.length ?? 0}{" "}
-                      stages
+                      {t("stages", "stages")}
                     </Badge>
                   </div>
                   <CardDescription>
-                    {normalizeDescription(repo.repo?.description) || "No description"}
+                    {normalizeDescription(repo.repo?.description) ||
+                      t("no_description", "No description")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
@@ -305,7 +322,7 @@ export default function SearchPage() {
                       <Link
                         href={`/repo/${repo.slug}?view=timeline&fullName=${repo.repo?.full_name ?? repo.repo_full_name}`}
                       >
-                        Read roadmap
+                        {t("read_roadmap", "Read roadmap")}
                       </Link>
                     </Button>
                   </div>
@@ -324,8 +341,9 @@ export default function SearchPage() {
           )}
           {publicMeta && (
             <p className="text-muted-foreground text-xs">
-              Page {publicMeta.page} of {publicMeta.total_pages} •{" "}
-              {publicMeta.total_count} total
+              {t("page", "Page")} {publicMeta.page} {t("of", "of")}{" "}
+              {publicMeta.total_pages} • {publicMeta.total_count}{" "}
+              {t("total", "total")}
             </p>
           )}
         </div>
@@ -367,11 +385,12 @@ export default function SearchPage() {
                       className="text-xs uppercase tracking-wide"
                       variant="outline"
                     >
-                      {repo.timeline.length} stages
+                      {repo.timeline.length} {t("stages", "stages")}
                     </Badge>
                   </div>
                   <CardDescription>
-                    {normalizeDescription(repo.repo.description) || "No description"}
+                    {normalizeDescription(repo.repo.description) ||
+                      t("no_description", "No description")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
@@ -381,7 +400,7 @@ export default function SearchPage() {
                       <span>
                         {repo.repo.language ??
                           repo.repo.primary_language ??
-                          "Unknown"}
+                          t("language_unknown", "Unknown")}
                         {repo.repo.star_count
                           ? ` • ${repo.repo.star_count}★`
                           : ""}
@@ -415,7 +434,7 @@ export default function SearchPage() {
                       <Link
                         href={`/repo/${identity.slug}?view=timeline&fullName=${repo.repo.full_name}`}
                       >
-                        Read roadmap
+                        {t("read_roadmap", "Read roadmap")}
                       </Link>
                     </Button>
                   </div>

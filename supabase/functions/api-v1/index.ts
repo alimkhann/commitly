@@ -25,6 +25,7 @@ type UserSoftUsage = {
 
 type RoadmapGenerationJobStatus = "queued" | "running" | "partial_ready" | "completed" | "failed";
 type RoadmapGenerationPhase = "ingest" | "syllabus" | "hydrate" | "validate" | "persist" | "complete";
+type RoadmapTranslationLanguage = "en" | "zh-HK" | "kz" | "ru";
 
 type RepoIdentity = {
   owner: string;
@@ -131,11 +132,19 @@ const GEMINI_MODELS_PLANNER = ["gemini-3.1-pro-preview", "gemini-3-flash-preview
 const GEMINI_MODELS_HYDRATOR = ["gemini-3-flash-preview", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview"];
 const GEMINI_MODELS_REPAIR = ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"];
 const GEMINI_MODELS_CHAT = ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"];
+const GEMINI_MODELS_TRANSLATE = ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"];
 const ADMIN_CATALOG_SECRET = Deno.env.get("ADMIN_CATALOG_SECRET") ?? "";
 
 const GLOBAL_DAILY_TOKEN_LIMIT = Number(Deno.env.get("GLOBAL_DAILY_TOKEN_LIMIT") ?? "2500000");
 const USER_DAILY_TOKEN_SOFT_LIMIT = Number(Deno.env.get("USER_DAILY_TOKEN_SOFT_LIMIT") ?? "120000");
 const CURRICULUM_PIPELINE_VERSION = "v2";
+const ROADMAP_TRANSLATION_LANGUAGES: RoadmapTranslationLanguage[] = ["en", "zh-HK", "kz", "ru"];
+const ROADMAP_TRANSLATION_LANGUAGE_LABELS: Record<RoadmapTranslationLanguage, string> = {
+  en: "English",
+  "zh-HK": "Cantonese (Traditional Chinese, Hong Kong)",
+  kz: "Kazakh",
+  ru: "Russian",
+};
 
 const jwks = CLERK_JWKS_URL ? createRemoteJWKSet(new URL(CLERK_JWKS_URL)) : null;
 
@@ -229,6 +238,45 @@ async function readJsonBody(req: Request): Promise<Record<string, unknown>> {
   } catch {
     return {};
   }
+}
+
+function normalizePreferredLanguage(value: unknown): RoadmapTranslationLanguage {
+  if (typeof value !== "string") {
+    return "en";
+  }
+  const normalized = value.trim();
+  return ROADMAP_TRANSLATION_LANGUAGES.includes(normalized as RoadmapTranslationLanguage)
+    ? (normalized as RoadmapTranslationLanguage)
+    : "en";
+}
+
+function detectLikelyLanguage(value: string): RoadmapTranslationLanguage | null {
+  const text = value.trim();
+  if (!text) {
+    return null;
+  }
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF]/u.test(text)) {
+    return "zh-HK";
+  }
+  if (/[ӘәҒғҚқҢңӨөҰұҮүІі]/u.test(text)) {
+    return "kz";
+  }
+  if (/[А-Яа-яЁё]/u.test(text)) {
+    return "ru";
+  }
+  if (/[A-Za-z]/.test(text)) {
+    return "en";
+  }
+  return null;
+}
+
+function hashText(value: string) {
+  let hash = 0x811c9dc5;
+  for (let idx = 0; idx < value.length; idx += 1) {
+    hash ^= value.charCodeAt(idx);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function getBearerToken(req: Request) {
@@ -1162,13 +1210,16 @@ function buildChatPrompt(options: {
   roadmapSummary: string;
   userQuery: string;
   mode: "normal" | "low" | "critical";
+  responseLanguage: RoadmapTranslationLanguage;
 }) {
-  const { repoName, roadmapSummary, userQuery, mode } = options;
+  const { repoName, roadmapSummary, userQuery, mode, responseLanguage } = options;
+  const languageLabel = ROADMAP_TRANSLATION_LANGUAGE_LABELS[responseLanguage];
 
   return `You are Commitly, a stage-grounded beginner coding coach.
 
 Repository: ${repoName}
 Budget mode: ${mode}
+Preferred response language: ${languageLabel}
 Stage/timeline context:
 ${roadmapSummary}
 
@@ -2993,9 +3044,15 @@ function mergeSyllabusNodeIntoStage(stage: Record<string, unknown>, node: Roadma
   };
 }
 
-async function getOrCreateProgressiveJob(context: AuthedRouteContext, repoUrl: string, forceRefresh: boolean) {
+async function getOrCreateProgressiveJob(
+  context: AuthedRouteContext,
+  repoUrl: string,
+  forceRefresh: boolean,
+  options?: { quickStart?: boolean },
+) {
   const identity = parseRepoUrl(repoUrl);
   const { supabase, userId } = context;
+  const quickStart = Boolean(options?.quickStart);
 
   if (!forceRefresh) {
     const { data: existingJob } = await supabase
@@ -3016,6 +3073,39 @@ async function getOrCreateProgressiveJob(context: AuthedRouteContext, repoUrl: s
   const usageSnapshot = await resolveUsageMode(supabase, userId);
   if (usageSnapshot.mode === "critical") {
     throw new Error("Token budget is depleted. Please try again after reset.");
+  }
+
+  if (quickStart) {
+    const { data: createdJob, error: createError } = await supabase
+      .from("roadmap_generation_jobs")
+      .insert({
+        user_id: userId,
+        repo_full_name: identity.fullName,
+        repo_url: repoUrl,
+        status: "queued",
+        generated_stages: 0,
+        total_planned_stages: 0,
+        stage_budget: 0,
+        mode: usageSnapshot.mode,
+        initial_timeline: [],
+        repo_summary: {
+          full_name: identity.fullName,
+          html_url: `https://github.com/${identity.fullName}`,
+        },
+        commit_context: [],
+        last_error: null,
+        progress_percent: computeProgressPercent(0, 1, "ingest"),
+        current_phase: "ingest",
+        phase_message: "Queued. Start continue generation to run ingest.",
+      })
+      .select("*")
+      .single();
+
+    if (createError || !createdJob) {
+      throw new Error(createError?.message ?? "Failed to initialize roadmap generation job");
+    }
+
+    return createdJob as Record<string, unknown>;
   }
 
   const githubToken = await getGitHubTokenForUser(supabase, userId);
@@ -3103,9 +3193,94 @@ async function getOrCreateProgressiveJob(context: AuthedRouteContext, repoUrl: s
   return createdJob as Record<string, unknown>;
 }
 
+async function bootstrapProgressiveJob(
+  context: AuthedRouteContext,
+  jobRow: Record<string, unknown>,
+  usageMode: "normal" | "low" | "critical",
+) {
+  const { supabase, userId } = context;
+  const repoUrl = typeof jobRow.repo_url === "string" && jobRow.repo_url.trim().length > 0
+    ? String(jobRow.repo_url)
+    : `https://github.com/${String(jobRow.repo_full_name ?? "")}`;
+  const identity = parseRepoUrl(repoUrl);
+
+  await updateGenerationJobPhase(supabase, String(jobRow.id), {
+    phase: "ingest",
+    status: "running",
+    generatedStages: 0,
+    totalStages: 1,
+    message: "Collecting repository context...",
+    lastError: null,
+  });
+
+  const githubToken = await getGitHubTokenForUser(supabase, userId);
+  const ingest = await collectRepoIngestSnapshot({
+    supabase,
+    identity,
+    githubToken,
+    usageMode,
+  });
+  const syllabus = await persistSyllabus({
+    supabase,
+    ingest,
+    forceRefresh: false,
+  });
+  const setupStage = normalizeTimeline(
+    [],
+    0,
+    ingest.commitContextLines.map((line) => ({ sha: line.split(":")[0] ?? "" })),
+  );
+
+  const { data: existingRoadmap } = await supabase
+    .from("generated_roadmaps")
+    .select("*")
+    .eq("repo_full_name", identity.fullName)
+    .maybeSingle();
+
+  const repoSummary = {
+    ...ingest.repoSummary,
+    view_count: Number(existingRoadmap?.view_count ?? 0),
+    sync_count: Number(existingRoadmap?.sync_count ?? 0),
+    rating_count: Number(existingRoadmap?.rating_count ?? 0),
+    rating_sum: Number(existingRoadmap?.rating_sum ?? 0),
+    ingest_snapshot_key: ingest.snapshotKey,
+    syllabus_id: syllabus.syllabusId,
+    logical_stage_target: syllabus.logicalStageTarget,
+    curriculum_mode: ingest.complexity.mode,
+  };
+
+  const { data: updated, error: updateError } = await supabase
+    .from("roadmap_generation_jobs")
+    .update({
+      repo_url: repoUrl,
+      status: "queued",
+      generated_stages: 0,
+      total_planned_stages: syllabus.stageTarget,
+      stage_budget: syllabus.stageTarget,
+      mode: usageMode,
+      initial_timeline: setupStage,
+      repo_summary: repoSummary,
+      commit_context: ingest.commitContextLines,
+      last_error: null,
+      progress_percent: computeProgressPercent(0, syllabus.stageTarget, "syllabus"),
+      current_phase: "syllabus",
+      phase_message: "Syllabus compiled. Ready to hydrate stages.",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", String(jobRow.id))
+    .select("*")
+    .single();
+
+  if (updateError || !updated) {
+    throw new Error(updateError?.message ?? "Failed to bootstrap generation job");
+  }
+
+  return updated as Record<string, unknown>;
+}
+
 async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId: string, chunkSize: number) {
   const { supabase, userId } = context;
-  const { data: jobRow, error: jobError } = await supabase
+  const { data, error: jobError } = await supabase
     .from("roadmap_generation_jobs")
     .select("*")
     .eq("id", jobId)
@@ -3115,9 +3290,10 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
   if (jobError) {
     throw new Error(jobError.message);
   }
-  if (!jobRow) {
+  if (!data) {
     throw new Error("Roadmap generation job not found");
   }
+  let jobRow = data as Record<string, unknown>;
 
   const status = String(jobRow.status ?? "queued") as RoadmapGenerationJobStatus;
   if (status === "completed") {
@@ -3144,6 +3320,12 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       lastError: "Token budget is depleted. Please try again after reset.",
     });
     throw new Error("Token budget is depleted. Please try again after reset.");
+  }
+
+  const needsBootstrap = Number(jobRow.total_planned_stages ?? 0) <= 0 ||
+    String((jobRow.repo_summary as Record<string, unknown> | null)?.syllabus_id ?? "").length === 0;
+  if (needsBootstrap) {
+    jobRow = await bootstrapProgressiveJob(context, jobRow, usageSnapshot.mode);
   }
 
   const totalPlannedStages = Number(jobRow.total_planned_stages ?? 0);
@@ -3515,24 +3697,20 @@ async function handleGenerateRoadmapProgressive(context: AuthedRouteContext) {
   }
 
   try {
-    const job = await getOrCreateProgressiveJob(context, repoUrl, forceRefresh);
+    const job = await getOrCreateProgressiveJob(context, repoUrl, forceRefresh, { quickStart: true });
     const jobId = String(job.id);
     const currentGenerated = Number(job.generated_stages ?? 0);
     const totalPlanned = Number(job.total_planned_stages ?? 0);
-    let snapshot = {
+    const snapshot = {
       status: String(job.status ?? "queued") as RoadmapGenerationJobStatus,
       generated_stages: currentGenerated,
       total_planned_stages: totalPlanned,
       timeline: Array.isArray(job.initial_timeline) ? job.initial_timeline : [],
       repo_full_name: String(job.repo_full_name),
-      progress_percent: Number(job.progress_percent ?? computeProgressPercent(currentGenerated, totalPlanned, "syllabus")),
-      current_phase: String(job.current_phase ?? "syllabus"),
-      phase_message: String(job.phase_message ?? "Syllabus compiled. Ready to hydrate stages."),
+      progress_percent: Number(job.progress_percent ?? computeProgressPercent(currentGenerated, Math.max(totalPlanned, 1), "ingest")),
+      current_phase: String(job.current_phase ?? "ingest"),
+      phase_message: String(job.phase_message ?? "Queued. Start continue generation to begin ingest."),
     };
-
-    if (snapshot.status === "queued" || snapshot.generated_stages === 0) {
-      snapshot = await runProgressiveGenerationChunk(context, jobId, snapshot.status === "queued" ? 4 : 3);
-    }
 
     return toJsonResponse({
       job_id: jobId,
@@ -3767,6 +3945,390 @@ async function handleHydrateSpecificStage(context: AuthedRouteContext, stageId: 
     const detail = error instanceof Error ? error.message : "Unable to hydrate stage";
     return routeError(502, detail, "stage_hydrate_failed");
   }
+}
+
+function toTranslatableStagePayload(stage: Record<string, unknown>) {
+  const tasks = Array.isArray(stage.tasks) ? stage.tasks : [];
+  const resources = Array.isArray(stage.resources) ? stage.resources : [];
+  const codeExamples = Array.isArray(stage.code_examples) ? stage.code_examples : [];
+  return {
+    stage_id: String(stage.id ?? ""),
+    title: String(stage.title ?? ""),
+    summary: String(stage.summary ?? ""),
+    goals: Array.isArray(stage.goals) ? stage.goals.map((item) => String(item)) : [],
+    prerequisites: Array.isArray(stage.prerequisites)
+      ? stage.prerequisites.map((item) => String(item))
+      : [],
+    checkpoints: Array.isArray(stage.checkpoints)
+      ? stage.checkpoints.map((item) => String(item))
+      : [],
+    tasks: tasks.map((task) => ({
+      label: String((task as Record<string, unknown>).label ?? ""),
+      steps: Array.isArray((task as Record<string, unknown>).steps)
+        ? ((task as Record<string, unknown>).steps as unknown[]).map((item) => String(item))
+        : [],
+    })),
+    resources: resources.map((resource) => ({
+      label: String((resource as Record<string, unknown>).label ?? ""),
+    })),
+    code_examples: codeExamples.map((example) => ({
+      description: String((example as Record<string, unknown>).description ?? ""),
+    })),
+  };
+}
+
+function buildStageSourceHash(stage: Record<string, unknown>) {
+  return hashText(JSON.stringify(toTranslatableStagePayload(stage)));
+}
+
+function mergeTranslatedStage(
+  original: Record<string, unknown>,
+  translated: Record<string, unknown>,
+) {
+  const originalTasks = Array.isArray(original.tasks) ? original.tasks : [];
+  const translatedTasks = Array.isArray(translated.tasks) ? translated.tasks : [];
+  const mergedTasks = originalTasks.map((rawTask, index) => {
+    const sourceTask = (rawTask && typeof rawTask === "object") ? (rawTask as Record<string, unknown>) : {};
+    const translatedTask = (translatedTasks[index] && typeof translatedTasks[index] === "object")
+      ? (translatedTasks[index] as Record<string, unknown>)
+      : null;
+    const translatedLabel = translatedTask && typeof translatedTask.label === "string"
+      ? translatedTask.label.trim()
+      : "";
+    const translatedSteps = translatedTask && Array.isArray(translatedTask.steps)
+      ? translatedTask.steps
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    return {
+      ...sourceTask,
+      label: translatedLabel || String(sourceTask.label ?? ""),
+      steps: translatedSteps.length > 0
+        ? translatedSteps
+        : (Array.isArray(sourceTask.steps) ? sourceTask.steps : []),
+      // Keep canonical files/commands executable.
+      files: Array.isArray(sourceTask.files) ? sourceTask.files : [],
+      commands: Array.isArray(sourceTask.commands) ? sourceTask.commands : [],
+    };
+  });
+
+  const originalResources = Array.isArray(original.resources) ? original.resources : [];
+  const translatedResources = Array.isArray(translated.resources) ? translated.resources : [];
+  const mergedResources = originalResources.map((resource, index) => {
+    const source = (resource && typeof resource === "object") ? (resource as Record<string, unknown>) : {};
+    const translatedResource = (translatedResources[index] && typeof translatedResources[index] === "object")
+      ? (translatedResources[index] as Record<string, unknown>)
+      : null;
+    return {
+      ...source,
+      label: translatedResource && typeof translatedResource.label === "string" && translatedResource.label.trim().length > 0
+        ? translatedResource.label.trim()
+        : String(source.label ?? ""),
+    };
+  });
+
+  const originalExamples = Array.isArray(original.code_examples) ? original.code_examples : [];
+  const translatedExamples = Array.isArray(translated.code_examples) ? translated.code_examples : [];
+  const mergedExamples = originalExamples.map((example, index) => {
+    const source = (example && typeof example === "object") ? (example as Record<string, unknown>) : {};
+    const translatedExample = (translatedExamples[index] && typeof translatedExamples[index] === "object")
+      ? (translatedExamples[index] as Record<string, unknown>)
+      : null;
+    return {
+      ...source,
+      description: translatedExample &&
+          typeof translatedExample.description === "string" &&
+          translatedExample.description.trim().length > 0
+        ? translatedExample.description.trim()
+        : String(source.description ?? ""),
+    };
+  });
+
+  const translateArray = (value: unknown, fallback: unknown[]) => {
+    if (!Array.isArray(value)) {
+      return fallback;
+    }
+    const next = value
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .map((item) => item.trim());
+    return next.length > 0 ? next : fallback;
+  };
+
+  return {
+    ...original,
+    title: typeof translated.title === "string" && translated.title.trim().length > 0
+      ? translated.title.trim()
+      : String(original.title ?? ""),
+    summary: typeof translated.summary === "string" && translated.summary.trim().length > 0
+      ? translated.summary.trim()
+      : String(original.summary ?? ""),
+    goals: translateArray(translated.goals, Array.isArray(original.goals) ? original.goals : []),
+    prerequisites: translateArray(
+      translated.prerequisites,
+      Array.isArray(original.prerequisites) ? original.prerequisites : [],
+    ),
+    checkpoints: translateArray(
+      translated.checkpoints,
+      Array.isArray(original.checkpoints) ? original.checkpoints : [],
+    ),
+    tasks: mergedTasks,
+    resources: mergedResources,
+    code_examples: mergedExamples,
+  };
+}
+
+function buildStageTranslationPrompt(
+  targetLanguage: RoadmapTranslationLanguage,
+  stages: Array<Record<string, unknown>>,
+) {
+  return `Translate the stage payloads to ${ROADMAP_TRANSLATION_LANGUAGE_LABELS[targetLanguage]}.
+
+Rules:
+- Preserve stage_id exactly.
+- Keep technical meaning and beginner tone.
+- Translate only natural-language text fields.
+- Do not translate file paths, shell commands, package names, code snippets, or IDs.
+- Return valid JSON only in this schema:
+{
+  "translated": [
+    {
+      "stage_id": "stage-1",
+      "title": "...",
+      "summary": "...",
+      "goals": ["..."],
+      "prerequisites": ["..."],
+      "checkpoints": ["..."],
+      "tasks": [{"label":"...","steps":["..."]}],
+      "resources": [{"label":"..."}],
+      "code_examples": [{"description":"..."}]
+    }
+  ]
+}
+
+Stage payloads:
+${JSON.stringify(stages)}`;
+}
+
+async function handleTranslateStages(context: RouteContext) {
+  const body = await readJsonBody(context.req);
+  const repoFullName = typeof body.repo_full_name === "string" ? body.repo_full_name.trim() : "";
+  const targetLanguage = normalizePreferredLanguage(body.target_language);
+  const stageIds = Array.isArray(body.stage_ids)
+    ? body.stage_ids
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .map((item) => item.trim())
+    : [];
+  const sourceHashesRaw = (body.source_hashes && typeof body.source_hashes === "object")
+    ? (body.source_hashes as Record<string, unknown>)
+    : null;
+
+  if (!repoFullName) {
+    return routeError(400, "repo_full_name is required", "missing_repo_full_name");
+  }
+  if (stageIds.length === 0) {
+    return routeError(400, "stage_ids is required", "missing_stage_ids");
+  }
+
+  const { data: roadmapRow, error: roadmapError } = await context.supabase
+    .from("generated_roadmaps")
+    .select("repo_full_name,timeline,is_catalog_visible")
+    .eq("repo_full_name", repoFullName)
+    .maybeSingle();
+
+  if (roadmapError) {
+    return routeError(500, roadmapError.message, "roadmap_lookup_failed");
+  }
+  if (!roadmapRow) {
+    return routeError(404, "Roadmap not found", "roadmap_not_found");
+  }
+
+  if (!Boolean(roadmapRow.is_catalog_visible)) {
+    let userId: string | null = null;
+    try {
+      userId = await getAuthedUserId(context.req, false);
+    } catch {
+      userId = null;
+    }
+    if (!userId) {
+      return routeError(403, "Roadmap is private", "roadmap_private");
+    }
+    const { data: hasAccess } = await context.supabase
+      .from("user_synced_repos")
+      .select("repo_full_name")
+      .eq("user_id", userId)
+      .eq("repo_full_name", repoFullName)
+      .eq("is_archived", false)
+      .maybeSingle();
+    if (!hasAccess) {
+      return routeError(403, "Roadmap is private", "roadmap_private");
+    }
+  }
+
+  const timeline = Array.isArray(roadmapRow.timeline)
+    ? (roadmapRow.timeline as Array<Record<string, unknown>>)
+    : [];
+  const stageById = new Map(
+    timeline
+      .filter((stage) => stage && typeof stage.id === "string")
+      .map((stage) => [String(stage.id), stage]),
+  );
+  const requestedStages = stageIds
+    .map((stageId) => {
+      const stage = stageById.get(stageId);
+      if (!stage) {
+        return null;
+      }
+      const sourceHashFromClient = sourceHashesRaw && typeof sourceHashesRaw[stageId] === "string"
+        ? String(sourceHashesRaw[stageId])
+        : null;
+      const sourceHash = sourceHashFromClient && sourceHashFromClient.trim().length > 0
+        ? sourceHashFromClient
+        : buildStageSourceHash(stage);
+      return {
+        stageId,
+        stage,
+        sourceHash,
+      };
+    })
+    .filter((item): item is { stageId: string; stage: Record<string, unknown>; sourceHash: string } => Boolean(item));
+
+  if (requestedStages.length === 0) {
+    return routeError(404, "No matching stages found", "stage_not_found");
+  }
+
+  const responseRows = requestedStages.map(({ stageId, stage, sourceHash }) => ({
+    stage_id: stageId,
+    source_hash: sourceHash,
+    translated_payload: stage,
+    quality_score: scoreStageQuality(stage),
+    cache_hit: targetLanguage === "en",
+  }));
+
+  if (targetLanguage !== "en") {
+    const { data: cachedRows } = await context.supabase
+      .from("roadmap_stage_translations")
+      .select("stage_id,source_hash,translated_payload,quality_score")
+      .eq("repo_full_name", repoFullName)
+      .eq("target_language", targetLanguage)
+      .in("stage_id", requestedStages.map((item) => item.stageId));
+
+    const cacheByStage = new Map<string, Record<string, unknown>>();
+    for (const row of cachedRows ?? []) {
+      cacheByStage.set(`${row.stage_id}::${row.source_hash}`, row as Record<string, unknown>);
+    }
+
+    const missingStages: Array<{
+      stageId: string;
+      sourceHash: string;
+      stage: Record<string, unknown>;
+    }> = [];
+
+    for (let idx = 0; idx < requestedStages.length; idx += 1) {
+      const item = requestedStages[idx];
+      const cacheKey = `${item.stageId}::${item.sourceHash}`;
+      const cached = cacheByStage.get(cacheKey);
+      if (cached && cached.translated_payload && typeof cached.translated_payload === "object") {
+        responseRows[idx] = {
+          stage_id: item.stageId,
+          source_hash: item.sourceHash,
+          translated_payload: cached.translated_payload as Record<string, unknown>,
+          quality_score: Number(cached.quality_score ?? scoreStageQuality(item.stage)),
+          cache_hit: true,
+        };
+      } else {
+        missingStages.push(item);
+      }
+    }
+
+    if (missingStages.length > 0) {
+      const translatedRowsToPersist: Array<Record<string, unknown>> = [];
+      for (let offset = 0; offset < missingStages.length; offset += 3) {
+        const batch = missingStages.slice(offset, offset + 3);
+        const prompt = buildStageTranslationPrompt(
+          targetLanguage,
+          batch.map((item) => ({
+            stage_id: item.stageId,
+            ...toTranslatableStagePayload(item.stage),
+          })),
+        );
+        const result = await callGeminiAndParseJson({
+          prompt,
+          maxOutputTokens: 2200,
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          models: GEMINI_MODELS_TRANSLATE,
+          retries: 1,
+        });
+        const translatedItems = Array.isArray(result.parsed.translated)
+          ? result.parsed.translated
+          : [];
+        const translatedById = new Map<string, Record<string, unknown>>();
+        for (const item of translatedItems) {
+          if (item && typeof item === "object") {
+            const row = item as Record<string, unknown>;
+            const stageId = typeof row.stage_id === "string" ? row.stage_id : "";
+            if (stageId) {
+              translatedById.set(stageId, row);
+            }
+          }
+        }
+
+        for (const item of batch) {
+          const translated = translatedById.get(item.stageId) ?? {};
+          const merged = mergeTranslatedStage(item.stage, translated);
+          const qualityScore = scoreStageQuality(merged);
+          translatedRowsToPersist.push({
+            repo_full_name: repoFullName,
+            stage_id: item.stageId,
+            target_language: targetLanguage,
+            source_hash: item.sourceHash,
+            translated_payload: merged,
+            quality_score: qualityScore,
+          });
+          const rowIndex = responseRows.findIndex((row) => row.stage_id === item.stageId);
+          if (rowIndex >= 0) {
+            responseRows[rowIndex] = {
+              stage_id: item.stageId,
+              source_hash: item.sourceHash,
+              translated_payload: merged,
+              quality_score: qualityScore,
+              cache_hit: false,
+            };
+          }
+        }
+      }
+
+      if (translatedRowsToPersist.length > 0) {
+        await context.supabase
+          .from("roadmap_stage_translations")
+          .upsert(translatedRowsToPersist, {
+            onConflict: "repo_full_name,stage_id,target_language,source_hash",
+          });
+      }
+    }
+  }
+
+  const translated = responseRows.map((row) => {
+    const payload = row.translated_payload as Record<string, unknown>;
+    return {
+      stage_id: row.stage_id,
+      title: String(payload.title ?? ""),
+      summary: String(payload.summary ?? ""),
+      goals: Array.isArray(payload.goals) ? payload.goals : [],
+      prerequisites: Array.isArray(payload.prerequisites) ? payload.prerequisites : [],
+      checkpoints: Array.isArray(payload.checkpoints) ? payload.checkpoints : [],
+      tasks: Array.isArray(payload.tasks) ? payload.tasks : [],
+      quality_score: Number(row.quality_score ?? scoreStageQuality(payload)),
+      source_hash: String(row.source_hash),
+    };
+  });
+
+  const cacheHits = responseRows.filter((row) => row.cache_hit).length;
+  return toJsonResponse({
+    repo_full_name: repoFullName,
+    target_language: targetLanguage,
+    translated,
+    cache_hit_ratio: translated.length > 0 ? Number((cacheHits / translated.length).toFixed(3)) : 0,
+  });
 }
 
 async function handleBugReport(context: AuthedRouteContext) {
@@ -4109,6 +4671,7 @@ async function handleChat(context: RouteContext) {
   const body = await readJsonBody(context.req);
   const repoFullName = typeof body.repo_full_name === "string" ? body.repo_full_name : "";
   const stageId = typeof body.stage_id === "string" ? body.stage_id : null;
+  const preferredLanguage = normalizePreferredLanguage(body.preferred_language);
 
   const messages = Array.isArray(body.messages)
     ? body.messages.filter((message) => message && typeof message === "object")
@@ -4128,6 +4691,9 @@ async function handleChat(context: RouteContext) {
   if (!repoFullName || !userQuery) {
     return routeError(400, "repo_full_name and a user message are required.");
   }
+
+  const inferredMessageLanguage = detectLikelyLanguage(userQuery);
+  const responseLanguage = inferredMessageLanguage ?? preferredLanguage;
 
   const { data: roadmap } = await context.supabase
     .from("generated_roadmaps")
@@ -4180,6 +4746,7 @@ async function handleChat(context: RouteContext) {
     roadmapSummary,
     userQuery,
     mode: usageSnapshot.mode,
+    responseLanguage,
   });
 
   const maxOutputTokens = usageSnapshot.mode === "low" ? 768 : 1200;
@@ -4206,6 +4773,7 @@ async function handleChat(context: RouteContext) {
       metadata: {
         repo_full_name: repoFullName,
         mode: usageSnapshot.mode,
+        response_language: responseLanguage,
         global_remaining: usageSnapshot.globalUsage.remaining,
         user_remaining: usageSnapshot.userUsage.remaining,
       },
@@ -4607,6 +5175,9 @@ Deno.serve(async (req) => {
     }
     if (path === "/api/v1/roadmap/chat" && req.method === "POST") {
       return await handleChat(context);
+    }
+    if (path === "/api/v1/roadmap/translate-stages" && req.method === "POST") {
+      return await handleTranslateStages(context);
     }
     if (path === "/api/v1/roadmap/chat/history" && req.method === "GET") {
       return await withAuth(context, handleChatHistoryGet);

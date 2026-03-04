@@ -25,6 +25,7 @@ import {
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import TabSwitch from "@/components/navigation/tab-switch";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export default function GuideView() {
   const repoId = params.repoId as string;
   const searchParams = useSearchParams();
   const { isSignedIn, getToken } = useAuth();
+  const { language, t } = usePreferences();
   const { getBySlug, yourRepos, upsertRoadmap } = useRoadmapCatalog();
 
   const cachedRecord = getBySlug(repoId);
@@ -86,6 +88,20 @@ export default function GuideView() {
       ? (cachedRecord as RoadmapResponseBody)
       : null
   );
+  const [translatedStage, setTranslatedStage] = useState<{
+    stage_id: string;
+    title: string;
+    summary: string;
+    goals: string[];
+    prerequisites: string[];
+    checkpoints: string[];
+    tasks: Array<{
+      label: string;
+      steps: string[];
+      files?: string[];
+      commands?: string[];
+    }>;
+  } | null>(null);
   const [guideLoadError, setGuideLoadError] = useState<string | null>(null);
   const roadmap = useMemo(
     () =>
@@ -113,14 +129,16 @@ export default function GuideView() {
         upsertRoadmap(response.data);
         setGuideLoadError(null);
       } else if (!response.ok) {
-        setGuideLoadError(response.error ?? "Unable to load guide data.");
+        setGuideLoadError(
+          response.error ?? t("guide_load_error", "Unable to load guide data.")
+        );
       }
     };
     loadRoadmap();
     return () => {
       cancelled = true;
     };
-  }, [identity, roadmap, upsertRoadmap]);
+  }, [identity, roadmap, t, upsertRoadmap]);
 
   const activeData = useMemo(() => {
     if (roadmap && identity) {
@@ -163,6 +181,43 @@ export default function GuideView() {
     }
     return activeData.timeline.find((stage) => stage.id === stageId) ?? null;
   }, [activeData, stageId]);
+
+  useEffect(() => {
+    if (!(activeData && stageContext && language !== "en")) {
+      return;
+    }
+
+    let cancelled = false;
+    const translateStage = async () => {
+      const token = isSignedIn ? (await getToken?.()) ?? undefined : undefined;
+      const response = await repoService.translateStages(
+        {
+          repo_full_name: activeData.name,
+          target_language: language,
+          stage_ids: [stageContext.id],
+        },
+        token
+      );
+      if (cancelled || !(response.ok && response.data?.translated.length)) {
+        return;
+      }
+      const translated = response.data.translated[0];
+      setTranslatedStage({
+        stage_id: translated.stage_id,
+        title: translated.title,
+        summary: translated.summary,
+        goals: translated.goals,
+        prerequisites: translated.prerequisites,
+        checkpoints: translated.checkpoints,
+        tasks: translated.tasks,
+      });
+    };
+
+    void translateStage();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeData, getToken, isSignedIn, language, stageContext]);
 
   const {
     messages,
@@ -217,6 +272,7 @@ export default function GuideView() {
       body: {
         repo_full_name: `${activeData?.identity.owner}/${activeData?.identity.repoName}`,
         stage_id: stageId ?? undefined,
+        preferred_language: language,
       },
     };
   };
@@ -264,15 +320,36 @@ export default function GuideView() {
   if (!activeData) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
-        <p className="font-medium text-sm">Guide</p>
+        <p className="font-medium text-sm">{t("guide", "Guide")}</p>
         <p className="text-muted-foreground text-sm">
-          {guideLoadError ?? "Loading guide..."}
+          {guideLoadError ?? t("guide_loading", "Loading guide...")}
         </p>
       </div>
     );
   }
 
   const hasStage = Boolean(stageContext);
+  const displayStageContext = (() => {
+    if (!stageContext) {
+      return null;
+    }
+    if (!(translatedStage && translatedStage.stage_id === stageContext.id)) {
+      return stageContext;
+    }
+    return {
+      ...stageContext,
+      title: translatedStage.title || stageContext.title,
+      summary: translatedStage.summary || stageContext.summary,
+      goals: translatedStage.goals?.length ? translatedStage.goals : stageContext.goals,
+      prerequisites: translatedStage.prerequisites?.length
+        ? translatedStage.prerequisites
+        : stageContext.prerequisites,
+      checkpoints: translatedStage.checkpoints?.length
+        ? translatedStage.checkpoints
+        : stageContext.checkpoints,
+      tasks: translatedStage.tasks?.length ? translatedStage.tasks : stageContext.tasks,
+    };
+  })();
 
   const renderChatInterface = () => (
     <div className="flex h-full flex-col overflow-hidden">
@@ -281,7 +358,10 @@ export default function GuideView() {
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <div className="rounded-2xl border border-border/70 border-dashed bg-card p-8">
               <p className="text-muted-foreground text-sm">
-                No guide activity yet. Ask for a walkthrough to start the conversation.
+                {t(
+                  "guide_empty_state",
+                  "No guide activity yet. Ask for a walkthrough to start the conversation."
+                )}
               </p>
             </div>
           </div>
@@ -358,13 +438,13 @@ export default function GuideView() {
                             size="sm"
                             variant="ghost"
                           >
-                            Cancel
+                            {t("cancel", "Cancel")}
                           </Button>
                           <Button
                             onClick={() => handleEditSubmit(messageItem.id)}
                             size="sm"
                           >
-                            Save & Submit
+                            {t("save_submit", "Save & submit")}
                           </Button>
                         </div>
                       </div>
@@ -442,7 +522,7 @@ export default function GuideView() {
             <div className="h-2 w-2 rounded-full bg-current" />
             <div className="h-2 w-2 rounded-full bg-current" />
             <div className="h-2 w-2 rounded-full bg-current" />
-            <span>Thinking...</span>
+            <span>{t("thinking", "Thinking...")}</span>
           </div>
         )}
         <div ref={bottomRef} />
@@ -459,8 +539,14 @@ export default function GuideView() {
             onChange={handleInputChange}
             placeholder={
               isSignedIn
-                ? "Ask for context, code walkthroughs, or compare approaches..."
-                : "Sign in to start working with the AI guide."
+                ? t(
+                  "guide_input_placeholder",
+                  "Ask for context, code walkthroughs, or compare approaches..."
+                )
+                : t(
+                  "guide_signin_placeholder",
+                  "Sign in to start working with the AI guide."
+                )
             }
             ref={textareaRef}
             rows={1}
@@ -479,13 +565,13 @@ export default function GuideView() {
     </div>
   );
 
-  if (hasStage && stageContext) {
+  if (hasStage && displayStageContext) {
     return (
       <div className="flex h-full w-full flex-col overflow-hidden">
         <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-card px-6 py-3">
           <div className="space-y-0.5">
             <p className="text-muted-foreground text-[10px] uppercase tracking-wider">
-              Guide
+              {t("guide", "Guide")}
             </p>
             <h1 className="font-semibold text-sm">{activeData.name}</h1>
           </div>
@@ -501,21 +587,21 @@ export default function GuideView() {
               <div className="space-y-8">
                 <div>
                   <Badge variant="outline" className="mb-3">
-                    Stage Context
+                    {t("stage_context", "Stage context")}
                   </Badge>
-                  <h2 className="font-semibold text-2xl">{stageContext.title}</h2>
+                  <h2 className="font-semibold text-2xl">{displayStageContext.title}</h2>
                   <p className="mt-3 text-muted-foreground leading-relaxed">
-                    {stageContext.summary}
+                    {displayStageContext.summary}
                   </p>
                 </div>
 
-                {stageContext.goals?.length ? (
+                {displayStageContext.goals?.length ? (
                   <div className="space-y-3">
                     <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Goals
+                      {t("goals", "Goals")}
                     </p>
                     <ul className="space-y-2 text-sm text-muted-foreground">
-                      {stageContext.goals.map((goal: string, idx: number) => (
+                      {displayStageContext.goals.map((goal: string, idx: number) => (
                         <li key={idx} className="flex items-start gap-2.5">
                           <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/80" />
                           <span>{goal}</span>
@@ -525,13 +611,13 @@ export default function GuideView() {
                   </div>
                 ) : null}
 
-                {stageContext.tasks?.length ? (
+                {displayStageContext.tasks?.length ? (
                   <div className="space-y-3">
                     <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Tasks
+                      {t("tasks", "Tasks")}
                     </p>
                     <div className="space-y-3">
-                      {stageContext.tasks.map((rawTask: unknown, idx: number) => {
+                      {displayStageContext.tasks.map((rawTask: unknown, idx: number) => {
                         const task = normalizeTask(rawTask, idx);
                         return (
                           <div
@@ -584,9 +670,9 @@ export default function GuideView() {
                   <Link
                     href={`/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(
                       activeData.name
-                    )}#${stageContext.id}`}
+                    )}#${displayStageContext.id}`}
                   >
-                    View full stage details
+                    {t("view_full_stage_details", "View full stage details")}
                   </Link>
                 </Button>
               </div>
@@ -601,7 +687,7 @@ export default function GuideView() {
     <div className="flex h-full w-full flex-col overflow-hidden px-6 pt-10 pb-4 lg:px-12">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-muted-foreground text-sm">Guide</p>
+          <p className="text-muted-foreground text-sm">{t("guide", "Guide")}</p>
           <h1 className="font-semibold text-2xl">{activeData.name}</h1>
         </div>
         <TabSwitch repoId={repoId} />

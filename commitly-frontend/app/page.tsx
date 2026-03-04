@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import type { GlobalUsage } from "@/lib/services/repos";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ export default function Home() {
   const [isCheckingGithub, setIsCheckingGithub] = useState(false);
   const [globalUsage, setGlobalUsage] = useState<GlobalUsage | null>(null);
   const { isSignedIn, getToken } = useAuth();
+  const { t } = usePreferences();
   const { markPending } = useRoadmapCatalog();
 
   useEffect(() => {
@@ -92,7 +94,7 @@ export default function Home() {
     }
 
     if (!githubConnected) {
-      setError("Connect GitHub before generating a roadmap.");
+      setError(t("connect_github_before_generate", "Connect GitHub before generating a roadmap."));
       return;
     }
 
@@ -101,7 +103,7 @@ export default function Home() {
     const identity = repoService.parseRepoInput(value);
     if (!identity) {
       setIsSubmitting(false);
-      setError("Enter a valid GitHub repository URL (owner/name).");
+      setError(t("invalid_repo_url", "Enter a valid GitHub repository URL (owner/name)."));
       return;
     }
 
@@ -140,19 +142,21 @@ export default function Home() {
       <section className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-10 py-16 text-center">
         <div className="space-y-4">
           <p className="text-muted-foreground text-xs uppercase tracking-[0.28em]">
-            Repo-first learning
+            {t("home_kicker", "Repo-first learning")}
           </p>
           <h1 className="font-semibold text-4xl leading-tight tracking-tight sm:text-5xl">
-            Hey, builder. Ready to learn?
+            {t("home_title", "Hey, builder. Ready to learn?")}
           </h1>
           <p className="text-muted-foreground text-lg">
-            Drop a GitHub repo and we&apos;ll draft a roadmap that mirrors how
-            the authors shipped it.
+            {t(
+              "home_subtitle",
+              "Drop a GitHub repo and we'll draft a roadmap that mirrors how the authors shipped it."
+            )}
           </p>
         </div>
 
         <form
-          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6 shadow-[0_12px_40px_rgba(0,0,0,0.32)]"
+          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6"
           onSubmit={handleSubmit}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
@@ -169,7 +173,9 @@ export default function Home() {
               size="lg"
               type="submit"
             >
-              {isSubmitting ? "Generating..." : "Generate roadmap"}
+              {isSubmitting
+                ? t("generating", "Generating...")
+                : t("generate_roadmap", "Generate roadmap")}
             </Button>
           </div>
           {error && (
@@ -179,8 +185,11 @@ export default function Home() {
             <div className="flex flex-col gap-3 text-left text-sm">
               <p className="text-muted-foreground">
                 {isCheckingGithub
-                  ? "Checking your GitHub connection..."
-                  : "Connect GitHub to allow Commitly to read repository history."}
+                  ? t("github_checking", "Checking your GitHub connection...")
+                  : t(
+                    "github_connect_required",
+                    "Connect GitHub to allow Commitly to read repository history."
+                  )}
               </p>
               {!isCheckingGithub && (
                 <Button
@@ -188,14 +197,14 @@ export default function Home() {
                   type="button"
                   variant="secondary"
                 >
-                  Connect GitHub
+                  {t("connect_github", "Connect GitHub")}
                 </Button>
               )}
             </div>
           )}
           {githubConnected && githubLogin && (
             <p className="text-left text-muted-foreground text-xs">
-              Connected as {githubLogin}
+              {t("connected_as", "Connected as")} {githubLogin}
             </p>
           )}
         </form>
@@ -203,27 +212,19 @@ export default function Home() {
         {globalUsage && (
           <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/70 bg-card px-5 py-4 text-left">
             <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
-              Shared AI token pool
+              {t("shared_token_pool", "Shared AI token pool")}
             </p>
             <p className="mt-1 font-medium text-sm">
               {globalUsage.remaining.toLocaleString()} /{" "}
-              {globalUsage.daily_limit.toLocaleString()} tokens left
+              {globalUsage.daily_limit.toLocaleString()}{" "}
+              {t("tokens_left", "tokens left")}
             </p>
             <p className="mt-1 text-muted-foreground text-xs">
-              Mode: {globalUsage.mode} · resets{" "}
+              {t("mode", "Mode")}: {globalUsage.mode} · {t("resets", "resets")}{" "}
               {new Date(globalUsage.reset_at).toLocaleString()}
             </p>
           </div>
         )}
-
-        {/*
-        <div className="space-y-4">
-          <p className="text-sm font-medium">Examples</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {/* Examples removed as mock data is deleted
-          </div>
-        </div>
-        */}
       </section>
     </div>
   );

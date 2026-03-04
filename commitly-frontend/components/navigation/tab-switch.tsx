@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { usePreferences } from "@/components/providers/preferences-provider";
 
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,7 @@ type TabSwitchProps = {
 };
 
 export default function TabSwitch({ repoId }: TabSwitchProps) {
+  const { t } = usePreferences();
   const searchParams = useSearchParams();
   const view = searchParams.get("view");
   const fullName = searchParams.get("fullName");
@@ -33,7 +35,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
         href={timelineHref}
         replace
       >
-        Timeline
+        {t("timeline", "Timeline")}
       </Link>
       <Link
         className={cn(
@@ -45,7 +47,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
         href={guideHref}
         replace
       >
-        Guide
+        {t("guide", "Guide")}
       </Link>
     </div>
   );

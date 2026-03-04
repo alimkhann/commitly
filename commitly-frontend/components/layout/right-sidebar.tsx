@@ -3,11 +3,13 @@
 import { useParams } from "next/navigation";
 import GuideChat from "@/components/guide/guide-chat";
 import { useLayout } from "@/components/providers/layout-provider";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2, X } from "lucide-react";
 
 export default function RightSidebar() {
   const { setRightSidebarOpen, isFullscreen, setIsFullscreen } = useLayout();
+  const { t } = usePreferences();
   const params = useParams();
   const repoId = params?.repoId;
 
@@ -18,7 +20,7 @@ export default function RightSidebar() {
   return (
     <div className="flex h-full flex-col border-l border-border/70 bg-card">
       <div className="flex items-center justify-between border-b border-border/70 p-4">
-        <h2 className="font-semibold text-sm">Guide Chat</h2>
+        <h2 className="font-semibold text-sm">{t("guide_chat", "Guide chat")}</h2>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"

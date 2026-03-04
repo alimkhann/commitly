@@ -2,11 +2,13 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
 
 import { Button } from "@/components/ui/button";
 import { mapGithubOAuthError } from "@/lib/services/error-messages";
 
 function GithubOAuthResultContent() {
+  const { t } = usePreferences();
   const router = useRouter();
   const params = useSearchParams();
   const status = params.get("status");
@@ -14,10 +16,10 @@ function GithubOAuthResultContent() {
   const detail = params.get("detail");
   const isError = status === "error";
   const title = isError
-    ? "GitHub connection failed"
+    ? t("github_connection_failed", "GitHub connection failed")
     : status === "success"
-      ? "GitHub connection successful"
-      : "GitHub connection updated";
+      ? t("github_connection_success", "GitHub connection successful")
+      : t("github_connection_updated", "GitHub connection updated");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,12 +38,14 @@ function GithubOAuthResultContent() {
           </p>
         ) : (
           <p className="mt-3 text-muted-foreground">
-            You can close this tab. We&apos;ll refresh your dashboard
-            automatically.
+            {t(
+              "github_oauth_success_body",
+              "You can close this tab. We'll refresh your dashboard automatically."
+            )}
           </p>
         )}
         <Button className="mt-6" onClick={() => router.push("/")}>
-          Return home
+          {t("return_home", "Return home")}
         </Button>
       </div>
     </div>
@@ -50,7 +54,7 @@ function GithubOAuthResultContent() {
 
 export default function GithubOAuthResult() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="sr-only" />}>
       <GithubOAuthResultContent />
     </Suspense>
   );

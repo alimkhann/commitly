@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +23,7 @@ type ReportBugProps = {
 
 export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
   const { getToken, isSignedIn } = useAuth();
+  const { t } = usePreferences();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,13 +40,18 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
 
   const handleSubmit = async () => {
     if (!isSignedIn) {
-      setSubmitError("Sign in before sending a bug report.");
+      setSubmitError(t("bug_sign_in_required", "Sign in before sending a bug report."));
       return;
     }
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
     if (trimmedTitle.length < 6 || trimmedDescription.length < 15) {
-      setSubmitError("Please provide a clearer title and reproduction details.");
+      setSubmitError(
+        t(
+          "bug_validation_error",
+          "Please provide a clearer title and reproduction details."
+        )
+      );
       return;
     }
 
@@ -63,7 +70,9 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
         token
       );
       if (!response.ok) {
-        setSubmitError(response.error ?? "Failed to submit bug report.");
+        setSubmitError(
+          response.error ?? t("bug_submit_failed", "Failed to submit bug report.")
+        );
         return;
       }
       setSubmitted(true);
@@ -72,7 +81,9 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
       window.setTimeout(() => handleClose(false), 900);
     } catch (error) {
       setSubmitError(
-        error instanceof Error ? error.message : "Failed to submit bug report."
+        error instanceof Error
+          ? error.message
+          : t("bug_submit_failed", "Failed to submit bug report.")
       );
     } finally {
       setIsSubmitting(false);
@@ -85,57 +96,73 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
         <DialogHeader>
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            <DialogTitle>Report an issue</DialogTitle>
+            <DialogTitle>{t("report_issue_title", "Report an issue")}</DialogTitle>
           </div>
           <DialogDescription>
-            Share what went wrong so we can reproduce and fix it quickly.
-            Attaching screenshots or logs helps shorten the cycle.
+            {t(
+              "report_issue_desc",
+              "Share what went wrong so we can reproduce and fix it quickly. Attaching screenshots or logs helps."
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="font-medium text-sm" htmlFor="bug-title">
-              Title
+              {t("title", "Title")}
             </label>
             <Input
               id="bug-title"
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Streaming output stops after a few tokens"
+              placeholder={t(
+                "bug_title_placeholder",
+                "Streaming output stops after a few tokens"
+              )}
               value={title}
             />
           </div>
 
           <div className="space-y-2">
             <label className="font-medium text-sm" htmlFor="bug-description">
-              What happened?
+              {t("what_happened", "What happened?")}
             </label>
             <Textarea
               id="bug-description"
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Steps to reproduce, expected result, actual outcome..."
+              placeholder={t(
+                "bug_description_placeholder",
+                "Steps to reproduce, expected result, actual outcome..."
+              )}
               rows={6}
               value={description}
             />
           </div>
 
           <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
-            Include links, screenshots, or logs directly in the description for now.
+            {t(
+              "bug_attach_hint",
+              "Include links, screenshots, or logs directly in the description for now."
+            )}
           </p>
           {submitError && <p className="text-destructive text-sm">{submitError}</p>}
           {submitted && (
             <p className="text-emerald-400 text-sm">
-              Report submitted. Thank you for the detailed repro.
+              {t(
+                "bug_submitted",
+                "Report submitted. Thank you for the detailed reproduction."
+              )}
             </p>
           )}
         </div>
 
         <div className="flex justify-end gap-2">
           <Button onClick={() => handleClose(false)} variant="ghost">
-            Cancel
+            {t("cancel", "Cancel")}
           </Button>
           <Button disabled={isSubmitting} onClick={handleSubmit} type="button">
-            {isSubmitting ? "Sending..." : "Send report"}
+            {isSubmitting
+              ? t("sending", "Sending...")
+              : t("send_report", "Send report")}
           </Button>
         </div>
       </DialogContent>

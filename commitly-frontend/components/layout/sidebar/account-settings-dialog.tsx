@@ -27,7 +27,7 @@ export default function AccountSettingsDialog({
   open,
   onOpenChange,
 }: AccountSettingsDialogProps) {
-  const { theme } = usePreferences();
+  const { theme, t } = usePreferences();
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
@@ -56,21 +56,21 @@ export default function AccountSettingsDialog({
           routing="hash"
         >
           <UserProfile.Page
-            label="Preferences"
+            label={t("settings_preferences", "Preferences")}
             labelIcon={<SlidersHorizontal className="h-3.5 w-3.5" />}
             url="preferences"
           >
             <GeneralPreferences />
           </UserProfile.Page>
           <UserProfile.Page
-            label="Connections"
+            label={t("connections", "Connections")}
             labelIcon={<GitBranch className="h-3.5 w-3.5" />}
             url="connections"
           >
             <GithubConnectionPreferences />
           </UserProfile.Page>
           <UserProfile.Page
-            label="Archived Repositories"
+            label={t("archived_repositories", "Archived repositories")}
             labelIcon={<Archive className="h-3.5 w-3.5" />}
             url="archived"
           >
@@ -148,6 +148,7 @@ function GeneralPreferences() {
 }
 
 function GithubConnectionPreferences() {
+  const { t } = usePreferences();
   const { isSignedIn, getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -178,7 +179,7 @@ function GithubConnectionPreferences() {
         }
       } catch {
         if (!cancelled) {
-          setError("Failed to check GitHub connection");
+          setError(t("github_status_failed", "Failed to check GitHub connection"));
         }
       } finally {
         if (!cancelled) {
@@ -190,7 +191,7 @@ function GithubConnectionPreferences() {
     return () => {
       cancelled = true;
     };
-  }, [getToken, isSignedIn]);
+  }, [getToken, isSignedIn, t]);
 
   const handleDisconnect = async () => {
     if (!isSignedIn) {
@@ -209,7 +210,7 @@ function GithubConnectionPreferences() {
       setConnected(false);
       setGithubLogin(null);
     } catch {
-      setError("Failed to disconnect GitHub");
+      setError(t("github_disconnect_failed", "Failed to disconnect GitHub"));
     } finally {
       setLoading(false);
     }
@@ -237,7 +238,7 @@ function GithubConnectionPreferences() {
         setError(mapGithubOAuthError(errorCode, response.error));
       }
     } catch {
-      setError("Failed to start GitHub OAuth");
+      setError(t("github_oauth_start_failed", "Failed to start GitHub OAuth"));
     } finally {
       setLoading(false);
     }
@@ -248,14 +249,14 @@ function GithubConnectionPreferences() {
       <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
-            <p className="font-medium text-base text-foreground">GitHub</p>
+            <p className="font-medium text-base text-foreground">{t("github", "GitHub")}</p>
             {(() => {
               let statusText =
-                "Connect to generate roadmaps from your repositories.";
+                t("github_connect_blurb", "Connect to generate roadmaps from your repositories.");
               if (connected && githubLogin) {
-                statusText = `Connected as ${githubLogin}`;
+                statusText = `${t("connected_as", "Connected as")} ${githubLogin}`;
               } else if (loading) {
-                statusText = "Checking your GitHub connection...";
+                statusText = t("github_checking", "Checking your GitHub connection...");
               }
               return <p className="text-muted-foreground text-xs">{statusText}</p>;
             })()}
@@ -270,7 +271,7 @@ function GithubConnectionPreferences() {
                 type="button"
                 variant="outline"
               >
-                Disconnect
+                {t("disconnect", "Disconnect")}
               </Button>
             ) : (
               !loading && (
@@ -280,7 +281,7 @@ function GithubConnectionPreferences() {
                   type="button"
                   variant="outline"
                 >
-                  Connect GitHub
+                  {t("connect_github", "Connect GitHub")}
                 </Button>
               )
             )}
@@ -292,6 +293,7 @@ function GithubConnectionPreferences() {
 }
 
 function ArchivedRepositoriesPreferences() {
+  const { t } = usePreferences();
   const { archivedRepos, unarchive } = useRoadmapCatalog();
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
@@ -310,11 +312,13 @@ function ArchivedRepositoriesPreferences() {
         <div className="rounded-3xl border border-border/60 bg-background/60 p-6 text-center">
           <Archive className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="font-medium text-base text-foreground">
-            No archived repositories
+            {t("no_archived_repositories", "No archived repositories")}
           </p>
           <p className="mt-1 text-muted-foreground text-xs">
-            Repositories you archive will appear here. You can unarchive them
-            anytime.
+            {t(
+              "archived_repositories_hint",
+              "Repositories you archive appear here. You can unarchive them anytime."
+            )}
           </p>
         </div>
       ) : (
@@ -337,7 +341,7 @@ function ArchivedRepositoriesPreferences() {
                       </p>
                     )}
                     <p className="text-muted-foreground text-xs">
-                      Archived repositories are read-only
+                      {t("archived_readonly", "Archived repositories are read-only")}
                     </p>
                   </div>
                   <Button
@@ -347,7 +351,9 @@ function ArchivedRepositoriesPreferences() {
                     type="button"
                     variant="outline"
                   >
-                    {isLoading ? "Unarchiving..." : "Unarchive"}
+                    {isLoading
+                      ? t("unarchiving", "Unarchiving...")
+                      : t("unarchive", "Unarchive")}
                   </Button>
                 </div>
               </div>

@@ -6,8 +6,9 @@
     "dev": "next dev -p 3700",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --max-warnings=0 && npm run lint:styles",
+    "lint": "eslint . --max-warnings=0 && npm run lint:styles && npm run i18n:check",
     "lint:styles": "stylelint \"**/*.css\" --ignore-path .gitignore",
+    "i18n:check": "node scripts/check-i18n-keys.mjs",
     "prepare": "husky"
   },
   "engines": {
