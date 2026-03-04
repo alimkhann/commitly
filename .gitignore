@@ -2,6 +2,7 @@
 *.cursorignore
 cursor-logs.md
 *.sql
+!supabase/migrations/*.sql
 __pypackages__/
 __pycache__
 .pytest_cache/
