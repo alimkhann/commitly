@@ -26,6 +26,7 @@ type UserSoftUsage = {
 type RoadmapGenerationJobStatus = "queued" | "running" | "partial_ready" | "completed" | "failed";
 type RoadmapGenerationPhase = "ingest" | "syllabus" | "hydrate" | "validate" | "persist" | "complete";
 type RoadmapTranslationLanguage = "en" | "zh-HK" | "kz" | "ru";
+type RepoArchetype = "utility-lib" | "sdk" | "tooling" | "saas-app" | "infra";
 
 type RepoIdentity = {
   owner: string;
@@ -38,6 +39,7 @@ type CurriculumComplexity = {
   logicalStageTarget: number;
   stageTarget: number;
   mode: "single_track" | "multi_track";
+  archetype: RepoArchetype;
 };
 
 type RepoIngestSnapshot = {
@@ -53,11 +55,27 @@ type RepoIngestSnapshot = {
     fileCount: number;
     topLevelDirs: string[];
     manifests: string[];
+    hotPaths: string[];
+    featureKeywords: string[];
+    architectureMap: Record<string, unknown>;
+    apiConcepts: string[];
+    archetype: RepoArchetype;
   };
   readmeExcerpt: string;
   complexity: CurriculumComplexity;
   stageTarget: number;
   logicalStageTarget: number;
+};
+
+type StageEvidenceRef = {
+  stage_id: string;
+  objective: string;
+  themes: string[];
+  hot_paths: string[];
+  feature_keywords: string[];
+  readme_hints: string[];
+  api_concepts: string[];
+  archetype: RepoArchetype;
 };
 
 type RoadmapSyllabusNode = {
@@ -137,7 +155,7 @@ const ADMIN_CATALOG_SECRET = Deno.env.get("ADMIN_CATALOG_SECRET") ?? "";
 
 const GLOBAL_DAILY_TOKEN_LIMIT = Number(Deno.env.get("GLOBAL_DAILY_TOKEN_LIMIT") ?? "2500000");
 const USER_DAILY_TOKEN_SOFT_LIMIT = Number(Deno.env.get("USER_DAILY_TOKEN_SOFT_LIMIT") ?? "120000");
-const CURRICULUM_PIPELINE_VERSION = "v2";
+const CURRICULUM_PIPELINE_VERSION = "v2.1";
 const ROADMAP_TRANSLATION_LANGUAGES: RoadmapTranslationLanguage[] = ["en", "zh-HK", "kz", "ru"];
 const ROADMAP_TRANSLATION_LANGUAGE_LABELS: Record<RoadmapTranslationLanguage, string> = {
   en: "English",
@@ -147,6 +165,45 @@ const ROADMAP_TRANSLATION_LANGUAGE_LABELS: Record<RoadmapTranslationLanguage, st
 };
 
 const jwks = CLERK_JWKS_URL ? createRemoteJWKSet(new URL(CLERK_JWKS_URL)) : null;
+const REPO_GENERIC_TERMS = new Set([
+  "project",
+  "repo",
+  "repository",
+  "code",
+  "feature",
+  "features",
+  "build",
+  "setup",
+  "configuration",
+  "config",
+  "module",
+  "stage",
+  "task",
+  "utility",
+  "app",
+  "application",
+  "typescript",
+  "javascript",
+  "node",
+  "package",
+  "framework",
+  "function",
+  "functions",
+  "tests",
+  "testing",
+  "lint",
+  "tooling",
+  "workflow",
+  "guide",
+  "docs",
+  "readme",
+]);
+const TEMPLATE_TASK_PATTERNS = [
+  /define .*scope and acceptance checks/i,
+  /implement .*in your own workspace/i,
+  /verify .*with tests and checks/i,
+];
+const CROSS_STAGE_SIMILARITY_LIMIT = 0.62;
 
 const textEncoder = new TextEncoder();
 
@@ -164,7 +221,7 @@ async function fetchWithTimeout(
   ]);
 }
 
-function toJsonResponse(payload: JsonObject, status = 200, extraHeaders: HeadersInit = {}) {
+function toJsonResponse(payload: Record<string, unknown>, status = 200, extraHeaders: HeadersInit = {}) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: {
@@ -511,6 +568,123 @@ function summarizeCommitClusters(commitLines: string[]) {
     .sort((a, b) => b.commit_count - a.commit_count);
 }
 
+function normalizeKeywordToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\-_/]+/g, " ")
+    .trim();
+}
+
+function classifyRepoArchetype(options: {
+  description: string;
+  topics: string[];
+  manifests: string[];
+  topLevelDirs: string[];
+  fileCount: number;
+  repoSizeKb: number;
+}): RepoArchetype {
+  const description = options.description.toLowerCase();
+  const topics = options.topics.map((topic) => topic.toLowerCase());
+  const manifests = options.manifests.map((item) => item.toLowerCase());
+  const dirs = options.topLevelDirs.map((item) => item.toLowerCase());
+
+  const has = (patterns: RegExp[]) =>
+    patterns.some((pattern) =>
+      pattern.test(description) ||
+      topics.some((topic) => pattern.test(topic)) ||
+      dirs.some((dir) => pattern.test(dir)) ||
+      manifests.some((manifest) => pattern.test(manifest)));
+
+  if (has([/\b(terraform|k8s|kubernetes|helm|ansible|iac|infrastructure|deployment)\b/])) {
+    return "infra";
+  }
+  if (has([/\b(sdk|client|api-client|typescript-sdk|javascript-sdk)\b/])) {
+    return "sdk";
+  }
+  if (has([/\b(cli|linter|compiler|bundler|plugin|tooling|formatter|build-tool)\b/])) {
+    return "tooling";
+  }
+  if (
+    has([/\b(saas|dashboard|frontend|backend|fullstack|platform|webapp|application)\b/]) ||
+    dirs.some((dir) => ["app", "apps", "web", "dashboard", "server", "api"].includes(dir))
+  ) {
+    return "saas-app";
+  }
+
+  if (
+    has([/\b(utility|helpers?|library|parser|formatter|convert|conversion)\b/]) ||
+    options.fileCount < 180 ||
+    options.repoSizeKb < 4000
+  ) {
+    return "utility-lib";
+  }
+
+  return "saas-app";
+}
+
+function extractFeatureKeywords(options: {
+  topics: string[];
+  description: string;
+  readmeExcerpt: string;
+}) {
+  const tokens: string[] = [];
+  tokens.push(...options.topics);
+  tokens.push(...options.description.split(/[\s,.;:()[\]{}"'`]+/));
+  const headingTokens = options.readmeExcerpt
+    .split("\n")
+    .filter((line) => /^#{1,4}\s/.test(line.trim()) || /^[-*]\s/.test(line.trim()))
+    .flatMap((line) => line.replace(/^#{1,4}\s*/, "").split(/[\s,.;:()[\]{}"'`]+/));
+  tokens.push(...headingTokens);
+
+  const normalized = tokens
+    .map((token) => normalizeKeywordToken(token))
+    .flatMap((token) => token.split(/\s+/))
+    .filter((token) => token.length >= 3 && token.length <= 24 && !REPO_GENERIC_TERMS.has(token));
+
+  const counts = new Map<string, number>();
+  for (const token of normalized) {
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 24)
+    .map(([token]) => token);
+}
+
+function buildArchitectureMap(options: {
+  archetype: RepoArchetype;
+  manifests: string[];
+  topLevelDirs: string[];
+  hotPaths: string[];
+}) {
+  const entrypoints = options.hotPaths
+    .filter((path) => /(src\/index|src\/main|index\.ts|index\.js|cli\.|server\.|api\/)/i.test(path))
+    .slice(0, 12);
+  const runtime = options.manifests.some((path) => path.endsWith("pyproject.toml") || path.endsWith("requirements.txt"))
+    ? "python"
+    : options.manifests.some((path) => path.endsWith("Cargo.toml"))
+      ? "rust"
+      : options.manifests.some((path) => path.endsWith("go.mod"))
+        ? "go"
+        : "javascript-typescript";
+
+  return {
+    archetype: options.archetype,
+    runtime,
+    package_manager: options.manifests.some((path) => path.endsWith("pnpm-lock.yaml"))
+      ? "pnpm"
+      : options.manifests.some((path) => path.endsWith("package-lock.json"))
+        ? "npm"
+        : options.manifests.some((path) => path.endsWith("yarn.lock"))
+          ? "yarn"
+          : "unknown",
+    top_level_dirs: options.topLevelDirs.slice(0, 24),
+    manifests: options.manifests.slice(0, 24),
+    entrypoints,
+  };
+}
+
 function computeCurriculumComplexity(options: {
   repoSizeKb: number;
   commitSampleCount: number;
@@ -518,6 +692,7 @@ function computeCurriculumComplexity(options: {
   topLevelDirCount: number;
   manifestCount: number;
   clusterCount: number;
+  archetype: RepoArchetype;
 }): CurriculumComplexity {
   const {
     repoSizeKb,
@@ -526,6 +701,7 @@ function computeCurriculumComplexity(options: {
     topLevelDirCount,
     manifestCount,
     clusterCount,
+    archetype,
   } = options;
   const rawScore =
     (Math.log10(Math.max(repoSizeKb, 1)) * 8) +
@@ -535,14 +711,44 @@ function computeCurriculumComplexity(options: {
     (manifestCount * 2.4) +
     (clusterCount * 1.3);
   const score = Number(rawScore.toFixed(2));
-  const logicalStageTarget = Math.max(10, Math.min(1000, Math.round(10 + rawScore * 1.75)));
-  const stageTarget = Math.max(10, Math.min(48, Math.round(8 + rawScore * 0.45)));
-  const mode: CurriculumComplexity["mode"] = logicalStageTarget > 160 ? "multi_track" : "single_track";
+  const tinyRepo = fileCount <= 120 || repoSizeKb <= 1500;
+  const smallRepo = fileCount <= 480 || repoSizeKb <= 7000;
+
+  let stageTarget = Math.max(6, Math.min(48, Math.round(6 + rawScore * 0.34)));
+  let logicalStageTarget = Math.max(10, Math.min(320, Math.round(10 + rawScore * 1.2)));
+
+  if (archetype === "utility-lib") {
+    stageTarget = Math.max(6, Math.min(18, stageTarget));
+    logicalStageTarget = Math.max(10, Math.min(40, logicalStageTarget));
+  } else if (archetype === "sdk") {
+    stageTarget = Math.max(8, Math.min(28, stageTarget));
+    logicalStageTarget = Math.max(12, Math.min(56, logicalStageTarget));
+  } else if (archetype === "tooling") {
+    stageTarget = Math.max(10, Math.min(30, stageTarget));
+    logicalStageTarget = Math.max(14, Math.min(70, logicalStageTarget));
+  } else if (archetype === "infra") {
+    stageTarget = Math.max(10, Math.min(36, stageTarget));
+    logicalStageTarget = Math.max(16, Math.min(90, logicalStageTarget));
+  } else {
+    stageTarget = Math.max(12, Math.min(48, stageTarget));
+    logicalStageTarget = Math.max(20, Math.min(200, logicalStageTarget));
+  }
+
+  if (tinyRepo) {
+    stageTarget = Math.min(stageTarget, 14);
+    logicalStageTarget = Math.min(logicalStageTarget, 24);
+  } else if (smallRepo) {
+    stageTarget = Math.min(stageTarget, 28);
+    logicalStageTarget = Math.min(logicalStageTarget, 42);
+  }
+
+  const mode: CurriculumComplexity["mode"] = logicalStageTarget > Math.max(40, stageTarget * 2) ? "multi_track" : "single_track";
   return {
     score,
     logicalStageTarget,
     stageTarget,
     mode,
+    archetype,
   };
 }
 
@@ -555,6 +761,71 @@ function compactReadme(text: string) {
     .slice(0, 80)
     .join("\n")
     .slice(0, 5000);
+}
+
+async function collectCommitHotPaths(
+  repoFullName: string,
+  commits: Array<Record<string, unknown>>,
+  token: string | null,
+  limit: number,
+) {
+  const sample = commits.slice(0, Math.max(4, Math.min(limit, commits.length)));
+  const pathScores = new Map<string, number>();
+
+  for (const commit of sample) {
+    const sha = String(commit.sha ?? "").trim();
+    if (!sha) {
+      continue;
+    }
+    try {
+      const detail = await githubRequest<Record<string, unknown>>(
+        `/repos/${repoFullName}/commits/${encodeURIComponent(sha)}`,
+        token,
+      );
+      const changedFiles = Array.isArray(detail.files) ? detail.files as Array<Record<string, unknown>> : [];
+      for (const file of changedFiles) {
+        const filename = String(file.filename ?? "").trim();
+        if (!filename) {
+          continue;
+        }
+        const additions = Number(file.additions ?? 0);
+        const deletions = Number(file.deletions ?? 0);
+        const score = Math.max(1, Math.round((Math.max(additions, 0) + Math.max(deletions, 0)) / 12));
+        pathScores.set(filename, (pathScores.get(filename) ?? 0) + score);
+      }
+    } catch {
+      // Best-effort enrichment. Missing commit details should not fail generation.
+      continue;
+    }
+  }
+
+  return Array.from(pathScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30)
+    .map(([path]) => path);
+}
+
+function extractApiConcepts(hotPaths: string[], featureKeywords: string[]) {
+  const conceptTokens = new Map<string, number>();
+  for (const path of hotPaths) {
+    const segments = path
+      .replace(/\.[a-z0-9]+$/i, "")
+      .split(/[\/_-]/g)
+      .map((segment) => normalizeKeywordToken(segment))
+      .filter((segment) => segment.length >= 3 && !REPO_GENERIC_TERMS.has(segment));
+    for (const segment of segments) {
+      conceptTokens.set(segment, (conceptTokens.get(segment) ?? 0) + 2);
+    }
+  }
+
+  for (const keyword of featureKeywords) {
+    conceptTokens.set(keyword, (conceptTokens.get(keyword) ?? 0) + 1);
+  }
+
+  return Array.from(conceptTokens.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 24)
+    .map(([token]) => token);
 }
 
 async function collectRepoIngestSnapshot(options: {
@@ -607,6 +878,16 @@ async function collectRepoIngestSnapshot(options: {
 
     const cachedTreeStats = (existingSnapshot.tree_stats ?? {}) as Record<string, unknown>;
     const cachedComplexity = (existingSnapshot.complexity ?? {}) as Record<string, unknown>;
+    const cachedArchetypeRaw = String(
+      cachedTreeStats.archetype ??
+        cachedComplexity.archetype ??
+        "utility-lib",
+    );
+    const cachedArchetype: RepoArchetype = (
+      ["utility-lib", "sdk", "tooling", "saas-app", "infra"].includes(cachedArchetypeRaw)
+        ? cachedArchetypeRaw
+        : "utility-lib"
+    ) as RepoArchetype;
     return {
       snapshotKey,
       repoSummary: (existingSnapshot.repo_summary ?? {}) as Record<string, unknown>,
@@ -628,6 +909,19 @@ async function collectRepoIngestSnapshot(options: {
         manifests: Array.isArray(cachedTreeStats.manifests)
           ? (cachedTreeStats.manifests as unknown[]).map((item) => String(item))
           : [],
+        hotPaths: Array.isArray(cachedTreeStats.hot_paths)
+          ? (cachedTreeStats.hot_paths as unknown[]).map((item) => String(item))
+          : [],
+        featureKeywords: Array.isArray(cachedTreeStats.feature_keywords)
+          ? (cachedTreeStats.feature_keywords as unknown[]).map((item) => String(item))
+          : [],
+        architectureMap: cachedTreeStats.architecture_map && typeof cachedTreeStats.architecture_map === "object"
+          ? (cachedTreeStats.architecture_map as Record<string, unknown>)
+          : {},
+        apiConcepts: Array.isArray(cachedTreeStats.api_concepts)
+          ? (cachedTreeStats.api_concepts as unknown[]).map((item) => String(item))
+          : [],
+        archetype: cachedArchetype,
       },
       readmeExcerpt: String(existingSnapshot.readme_excerpt ?? ""),
       complexity: {
@@ -635,6 +929,7 @@ async function collectRepoIngestSnapshot(options: {
         logicalStageTarget: Number(cachedComplexity.logical_stage_target ?? Number(existingSnapshot.logical_stage_target ?? 10)),
         stageTarget: Number(cachedComplexity.stage_target ?? Number(existingSnapshot.stage_target ?? 10)),
         mode: String(cachedComplexity.mode ?? "single_track") as CurriculumComplexity["mode"],
+        archetype: cachedArchetype,
       },
       stageTarget: Number(existingSnapshot.stage_target ?? 10),
       logicalStageTarget: Number(existingSnapshot.logical_stage_target ?? Number(existingSnapshot.stage_target ?? 10)),
@@ -672,6 +967,36 @@ async function collectRepoIngestSnapshot(options: {
     readmeExcerpt = "";
   }
 
+  const topics = Array.isArray(repo.topics)
+    ? repo.topics.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const archetype = classifyRepoArchetype({
+    description: String(repo.description ?? ""),
+    topics,
+    manifests,
+    topLevelDirs,
+    fileCount: filePaths.length,
+    repoSizeKb: Number(repo.size ?? 0),
+  });
+  const hotPaths = await collectCommitHotPaths(
+    identity.fullName,
+    commits,
+    githubToken,
+    usageMode === "low" ? 14 : 26,
+  );
+  const featureKeywords = extractFeatureKeywords({
+    topics,
+    description: String(repo.description ?? ""),
+    readmeExcerpt,
+  });
+  const apiConcepts = extractApiConcepts(hotPaths, featureKeywords);
+  const architectureMap = buildArchitectureMap({
+    archetype,
+    manifests,
+    topLevelDirs,
+    hotPaths,
+  });
+
   const commitClusters = summarizeCommitClusters(commitContextLines);
   const complexity = computeCurriculumComplexity({
     repoSizeKb: Number(repo.size ?? 0),
@@ -680,6 +1005,7 @@ async function collectRepoIngestSnapshot(options: {
     topLevelDirCount: topLevelDirs.length,
     manifestCount: manifests.length,
     clusterCount: commitClusters.length,
+    archetype,
   });
 
   const stageTarget = complexity.stageTarget;
@@ -695,7 +1021,7 @@ async function collectRepoIngestSnapshot(options: {
     owner_avatar_url: String((repo.owner as Record<string, unknown> | undefined)?.avatar_url ?? ""),
     primary_language: String(repo.language ?? ""),
     languages: null,
-    topics: Array.isArray(repo.topics) ? repo.topics : [],
+    topics,
     difficulty: "easy",
     star_count: Number(repo.stargazers_count ?? 0),
     fork_count: Number(repo.forks_count ?? 0),
@@ -718,6 +1044,11 @@ async function collectRepoIngestSnapshot(options: {
         file_count: filePaths.length,
         top_level_dirs: topLevelDirs,
         manifests,
+        hot_paths: hotPaths,
+        feature_keywords: featureKeywords,
+        architecture_map: architectureMap,
+        api_concepts: apiConcepts,
+        archetype,
       },
       readme_excerpt: readmeExcerpt,
       complexity: {
@@ -725,6 +1056,7 @@ async function collectRepoIngestSnapshot(options: {
         logical_stage_target: logicalStageTarget,
         stage_target: stageTarget,
         mode: complexity.mode,
+        archetype: complexity.archetype,
       },
       stage_target: stageTarget,
       logical_stage_target: logicalStageTarget,
@@ -756,6 +1088,11 @@ async function collectRepoIngestSnapshot(options: {
       fileCount: filePaths.length,
       topLevelDirs: topLevelDirs.slice(0, 120),
       manifests,
+      hotPaths,
+      featureKeywords,
+      architectureMap,
+      apiConcepts,
+      archetype,
     },
     readmeExcerpt,
     complexity,
@@ -984,11 +1321,25 @@ function buildStageHydrationPrompt(options: {
   readmeExcerpt: string;
   commitClusters: RepoIngestSnapshot["commitClusters"];
   nodes: RoadmapSyllabusNode[];
+  evidenceByStage: StageEvidenceRef[];
 }) {
+  const evidenceMap = new Map(options.evidenceByStage.map((evidence) => [evidence.stage_id, evidence]));
   const nodeLines = options.nodes
-    .map((node) =>
-      `- ${node.id} ${node.title}\n  summary: ${node.summary}\n  goals: ${node.goals.join(" | ") || "N/A"}\n  checkpoints: ${node.checkpoints.join(" | ") || "N/A"}\n  optional_peeks: ${node.optional_peeks.join(" | ") || "none"}`,
-    )
+    .map((node) => {
+      const evidence = evidenceMap.get(node.id);
+      return `- ${node.id} ${node.title}
+  summary: ${node.summary}
+  goals: ${node.goals.join(" | ") || "N/A"}
+  checkpoints: ${node.checkpoints.join(" | ") || "N/A"}
+  optional_peeks: ${node.optional_peeks.join(" | ") || "none"}
+  required_evidence:
+    - archetype: ${evidence?.archetype ?? "unknown"}
+    - objective: ${evidence?.objective ?? node.summary}
+    - hot_paths: ${(evidence?.hot_paths ?? []).join(" | ") || "none"}
+    - feature_keywords: ${(evidence?.feature_keywords ?? []).join(" | ") || "none"}
+    - api_concepts: ${(evidence?.api_concepts ?? []).join(" | ") || "none"}
+    - readme_hints: ${(evidence?.readme_hints ?? []).join(" | ") || "none"}`;
+    })
     .join("\n");
   const clusterLines = options.commitClusters
     .slice(0, 8)
@@ -1020,6 +1371,12 @@ Hard rules:
 5) steps/files/commands must be concrete, no vague placeholders.
 6) Do not create passive tasks like "inspect existing repo", "review source", or "read codebase".
 7) Include optional_peeks as short hints to inspect concepts in original repo (never copy).
+8) Every stage must explicitly reference at least one repo-specific concept from required_evidence (path, keyword, or api_concept).
+9) Never use repetitive stage templates such as:
+   - "Define scope and acceptance checks"
+   - "Implement in your own workspace"
+   - "Verify with tests and checks"
+10) For utility-lib/sdk repos, prioritize core behavior stages (parser/formatter/api behavior) before tooling polish.
 
 Return ONLY JSON:
 {
@@ -1051,11 +1408,22 @@ function buildStageRepairPrompt(options: {
   readmeExcerpt: string;
   commitClusters: RepoIngestSnapshot["commitClusters"];
   nodes: RoadmapSyllabusNode[];
+  evidenceByStage: StageEvidenceRef[];
 }) {
+  const evidenceMap = new Map(options.evidenceByStage.map((evidence) => [evidence.stage_id, evidence]));
   const nodeLines = options.nodes
-    .map((node) =>
-      `- ${node.id} (${node.index}) ${node.title}\n  summary: ${node.summary}\n  goals: ${node.goals.join(" | ") || "N/A"}\n  checkpoints: ${node.checkpoints.join(" | ") || "N/A"}`,
-    )
+    .map((node) => {
+      const evidence = evidenceMap.get(node.id);
+      return `- ${node.id} (${node.index}) ${node.title}
+  summary: ${node.summary}
+  goals: ${node.goals.join(" | ") || "N/A"}
+  checkpoints: ${node.checkpoints.join(" | ") || "N/A"}
+  required_evidence:
+    - archetype: ${evidence?.archetype ?? "unknown"}
+    - hot_paths: ${(evidence?.hot_paths ?? []).join(" | ") || "none"}
+    - feature_keywords: ${(evidence?.feature_keywords ?? []).join(" | ") || "none"}
+    - api_concepts: ${(evidence?.api_concepts ?? []).join(" | ") || "none"}`;
+    })
     .join("\n");
   const clusterLines = options.commitClusters
     .slice(0, 8)
@@ -1082,6 +1450,8 @@ Hard rules:
 4) Every task requires label, steps(2-8), files(real paths), commands(runnable).
 5) Avoid placeholders like "Stage 2", "inspect code", "review existing implementation".
 6) Include explicit checkpoints.
+7) Every repaired stage must mention at least one required_evidence concept.
+8) Do not reuse repetitive scaffolding templates across stages.
 
 Return ONLY JSON:
 {
@@ -1579,6 +1949,9 @@ function mapRoadmapRow(row: Record<string, unknown>, forceCachedValue?: boolean)
   const timelineCount = Array.isArray(row.timeline) ? row.timeline.length : 0;
   const totalStages = Math.max(1, Number(row.total_planned_stages ?? Math.max(timelineCount - 1, generatedStages, 1)));
   const progressPercent = Number(row.progress_percent ?? Math.min(100, Math.round((generatedStages / totalStages) * 100)));
+  const timelineQuality = (row.timeline_quality && typeof row.timeline_quality === "object")
+    ? (row.timeline_quality as Record<string, unknown>)
+    : null;
   return {
     repo: buildRepoSummaryFromRow(row),
     timeline: Array.isArray(row.timeline) ? row.timeline : [],
@@ -1589,6 +1962,14 @@ function mapRoadmapRow(row: Record<string, unknown>, forceCachedValue?: boolean)
     progress_percent: Number.isFinite(progressPercent) ? Math.max(0, Math.min(100, progressPercent)) : 0,
     current_phase: typeof row.current_phase === "string" ? row.current_phase : "complete",
     phase_message: typeof row.phase_message === "string" ? row.phase_message : "Generation complete",
+    timeline_quality: timelineQuality
+      ? {
+        novelty_score: Number(timelineQuality.novelty_score ?? 0),
+        grounding_score: Number(timelineQuality.grounding_score ?? 0),
+        anti_template_pass: Boolean(timelineQuality.anti_template_pass),
+        evaluated_at: String(timelineQuality.evaluated_at ?? new Date().toISOString()),
+      }
+      : null,
   };
 }
 
@@ -1652,6 +2033,43 @@ async function updateGenerationJobPhase(
     .eq("id", jobId);
 }
 
+async function updateGenerationJobQualityDiagnostics(
+  supabase: SupabaseClient,
+  jobId: string,
+  diagnostics: {
+    qualityGateStatus?: "pass" | "fail";
+    qualityFailReasons?: string[];
+    failedStageIds?: string[];
+    dedupeScore?: number;
+    groundingScore?: number;
+  },
+) {
+  const payload: Record<string, unknown> = {};
+  if (diagnostics.qualityGateStatus) {
+    payload.quality_gate_status = diagnostics.qualityGateStatus;
+  }
+  if (diagnostics.qualityFailReasons) {
+    payload.quality_fail_reasons = diagnostics.qualityFailReasons;
+  }
+  if (diagnostics.failedStageIds) {
+    payload.failed_stage_ids = diagnostics.failedStageIds;
+  }
+  if (diagnostics.dedupeScore !== undefined) {
+    payload.dedupe_score = Math.max(0, Math.min(100, Math.round(diagnostics.dedupeScore)));
+  }
+  if (diagnostics.groundingScore !== undefined) {
+    payload.grounding_score = Math.max(0, Math.min(100, Math.round(diagnostics.groundingScore)));
+  }
+  if (Object.keys(payload).length === 0) {
+    return;
+  }
+  payload.updated_at = new Date().toISOString();
+  await supabase
+    .from("roadmap_generation_jobs")
+    .update(payload)
+    .eq("id", jobId);
+}
+
 const FORBIDDEN_CLONE_PATTERNS = [
   /\bgit\s+clone\b/i,
   /\bfork\s+this\s+repo\b/i,
@@ -1696,7 +2114,138 @@ function sanitizeTaskFiles(files: unknown, fallbackBasePath: string) {
   return [`${fallbackBasePath}/index.ts`, `${fallbackBasePath}/README.md`];
 }
 
-function validateHydratedStageQuality(stage: Record<string, unknown>, node: RoadmapSyllabusNode) {
+function toComparableTokens(text: string) {
+  return sanitizeInstructionText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s/_-]+/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !REPO_GENERIC_TERMS.has(token));
+}
+
+function scoreStageGrounding(stage: Record<string, unknown>, evidence?: StageEvidenceRef | null) {
+  if (!evidence) {
+    return 0;
+  }
+  const stageText = JSON.stringify(stage).toLowerCase();
+  const features = new Set([
+    ...(evidence.feature_keywords ?? []),
+    ...(evidence.api_concepts ?? []),
+    ...(evidence.hot_paths ?? []).map((path) => path.split("/").pop() ?? path),
+  ]
+    .map((item) => normalizeKeywordToken(String(item)))
+    .flatMap((item) => item.split(/\s+/))
+    .filter((item) => item.length >= 3 && !REPO_GENERIC_TERMS.has(item)));
+  if (features.size === 0) {
+    return 0;
+  }
+
+  let hitCount = 0;
+  for (const token of features) {
+    if (stageText.includes(token)) {
+      hitCount += 1;
+    }
+  }
+
+  const tasks = Array.isArray(stage.tasks) ? stage.tasks as Array<Record<string, unknown>> : [];
+  let fileHits = 0;
+  for (const task of tasks) {
+    const files = Array.isArray(task.files) ? task.files as string[] : [];
+    for (const file of files) {
+      if ((evidence.hot_paths ?? []).some((path) => path.includes(file) || file.includes(path.split("/").slice(-2).join("/")))) {
+        fileHits += 1;
+      }
+    }
+  }
+
+  const featureCoverage = Math.min(1, hitCount / Math.max(4, Math.floor(features.size * 0.4)));
+  const fileCoverage = Math.min(1, fileHits / 3);
+  return Math.round((featureCoverage * 70) + (fileCoverage * 30));
+}
+
+function toPathSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "feature";
+}
+
+function inferTestFilePath(sourcePath: string) {
+  const normalized = sourcePath.replace(/^\/+/, "");
+  if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(normalized)) {
+    return normalized.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, ".test.$1");
+  }
+  if (normalized.endsWith(".py")) {
+    return normalized.replace(/\.py$/, "_test.py");
+  }
+  if (normalized.endsWith(".go")) {
+    return normalized.replace(/\.go$/, "_test.go");
+  }
+  return `${normalized}.test.ts`;
+}
+
+function buildEvidenceBackedRecoveryTasks(
+  options: {
+    node: RoadmapSyllabusNode;
+    evidence?: StageEvidenceRef | null;
+    existingLabels: Set<string>;
+    fallbackBasePath: string;
+    needed: number;
+  },
+) {
+  const { node, evidence, fallbackBasePath, existingLabels } = options;
+  const concepts = [
+    ...(evidence?.api_concepts ?? []),
+    ...(evidence?.feature_keywords ?? []),
+    ...node.goals,
+    node.title,
+  ]
+    .map((item) => sanitizeInstructionText(String(item)))
+    .filter((item) => item.length >= 3)
+    .map((item) => item.replace(/\s+/g, " ").trim());
+  const uniqueConcepts = Array.from(new Set(concepts)).slice(0, 8);
+  const hotPaths = (evidence?.hot_paths ?? [])
+    .map((path) => String(path).trim())
+    .filter(Boolean);
+
+  const tasks: Array<{ label: string; steps: string[]; files: string[]; commands: string[] }> = [];
+  const targetCount = Math.max(options.needed, 0);
+  for (let idx = 0; idx < uniqueConcepts.length && tasks.length < targetCount; idx += 1) {
+    const concept = uniqueConcepts[idx];
+    const conceptSlug = toPathSlug(concept);
+    const primaryFile = hotPaths[idx] ?? `${fallbackBasePath}/${conceptSlug}.ts`;
+    const testFile = inferTestFilePath(primaryFile);
+    const label = sanitizeInstructionText(`Build ${concept} behavior`);
+    const labelKey = label.toLowerCase();
+    if (!label || existingLabels.has(labelKey)) {
+      continue;
+    }
+    existingLabels.add(labelKey);
+    tasks.push({
+      label,
+      steps: [
+        sanitizeInstructionText(
+          `Define explicit input and output rules for ${concept} in ${primaryFile}.`,
+        ),
+        sanitizeInstructionText(
+          `Implement ${concept} in ${primaryFile} and cover edge cases in ${testFile}.`,
+        ),
+        sanitizeInstructionText("Run tests locally and capture one passing verification case."),
+      ],
+      files: [primaryFile, testFile],
+      commands: ["npm test"],
+    });
+  }
+
+  return tasks;
+}
+
+function validateHydratedStageQuality(
+  stage: Record<string, unknown>,
+  node: RoadmapSyllabusNode,
+  evidence?: StageEvidenceRef | null,
+) {
   const fallbackBasePath = `app/stage-${node.index}`;
   const issues: string[] = [];
   const titleText = String(stage.title ?? node.title ?? "").trim();
@@ -1732,7 +2281,21 @@ function validateHydratedStageQuality(stage: Record<string, unknown>, node: Road
     })
     .filter((task): task is { label: string; steps: string[]; files: string[]; commands: string[] } => Boolean(task));
 
-  const stageText = JSON.stringify(stage);
+  if (sanitizedTasks.length < 3) {
+    const existingLabels = new Set(
+      sanitizedTasks.map((task) => task.label.trim().toLowerCase()).filter(Boolean),
+    );
+    const recoveryTasks = buildEvidenceBackedRecoveryTasks({
+      node,
+      evidence,
+      existingLabels,
+      fallbackBasePath,
+      needed: 3 - sanitizedTasks.length,
+    });
+    sanitizedTasks.push(...recoveryTasks);
+  }
+
+  const stageText = JSON.stringify({ ...stage, tasks: sanitizedTasks });
   const cloneFree = !containsForbiddenCloneInstruction(stageText.toLowerCase());
   if (!cloneFree) {
     issues.push("contains forbidden clone/copy instructions");
@@ -1749,9 +2312,26 @@ function validateHydratedStageQuality(stage: Record<string, unknown>, node: Road
   if (uniqueTaskLabelCount < Math.max(2, Math.floor(sanitizedTasks.length * 0.8))) {
     issues.push("task labels are too repetitive");
   }
+  const templatePatternHits = sanitizedTasks.reduce((count, task) => {
+    const text = `${task.label} ${task.steps.join(" ")}`;
+    return count + (TEMPLATE_TASK_PATTERNS.some((pattern) => pattern.test(text)) ? 1 : 0);
+  }, 0);
+  if (templatePatternHits > 1) {
+    issues.push("contains repetitive scaffold task patterns");
+  }
   const summaryText = sanitizeInstructionText(String(stage.summary ?? node.summary ?? "")).trim();
   if (!summaryText || /^build stage \d+ from scratch/i.test(summaryText)) {
     issues.push("summary is template-like or empty");
+  }
+  const groundingScore = scoreStageGrounding(stage, evidence);
+  if (evidence && groundingScore < 45) {
+    issues.push(`insufficient repo grounding (${groundingScore})`);
+  }
+  if (
+    evidence?.archetype === "utility-lib" &&
+    sanitizedTasks.some((task) => task.files.some((file) => /src\/app\.(ts|js|tsx|jsx)/i.test(file)))
+  ) {
+    issues.push("utility/library stage should not default to app-shell files");
   }
   const qualityCandidate = {
     ...stage,
@@ -1766,6 +2346,7 @@ function validateHydratedStageQuality(stage: Record<string, unknown>, node: Road
   return {
     stage: qualityCandidate,
     qualityScore,
+    groundingScore,
     ok,
     issues,
   };
@@ -1790,7 +2371,133 @@ function scoreStageQuality(stage: Record<string, unknown>) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function normalizeTimeline(timelineRaw: unknown, stageBudget: number, commits: Array<{ sha: string }>) {
+function scoreLexicalSimilarity(a: string, b: string) {
+  const aTokens = new Set(toComparableTokens(a));
+  const bTokens = new Set(toComparableTokens(b));
+  if (aTokens.size === 0 || bTokens.size === 0) {
+    return 0;
+  }
+  let overlap = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) {
+      overlap += 1;
+    }
+  }
+  return overlap / Math.max(1, new Set([...aTokens, ...bTokens]).size);
+}
+
+function stageSignature(stage: Record<string, unknown>) {
+  const tasks = Array.isArray(stage.tasks) ? stage.tasks as Array<Record<string, unknown>> : [];
+  const taskText = tasks
+    .map((task) => {
+      const label = String(task.label ?? "");
+      const steps = Array.isArray(task.steps) ? task.steps.join(" ") : "";
+      return `${label} ${steps}`;
+    })
+    .join(" ");
+  return `${String(stage.title ?? "")} ${String(stage.summary ?? "")} ${taskText}`;
+}
+
+function evaluateChunkQuality(options: {
+  chunkNodes: RoadmapSyllabusNode[];
+  chunkStages: Record<string, unknown>[];
+  existingTimeline: Record<string, unknown>[];
+  validationByNodeId: Map<string, { stage: Record<string, unknown>; qualityScore: number; groundingScore: number; ok: boolean; issues: string[] }>;
+  archetype: RepoArchetype;
+  domainKeywords: string[];
+}) {
+  const reasons: string[] = [];
+  const failedStageIds = new Set<string>();
+  const combinedTimeline = [
+    ...options.existingTimeline.filter((stage) => String(stage.id ?? "") !== "stage-setup"),
+    ...options.chunkStages,
+  ];
+
+  const similarityScores: number[] = [];
+  const signatures = combinedTimeline.map((stage) => ({
+    id: String(stage.id ?? ""),
+    index: Number(stage.index ?? 0),
+    text: stageSignature(stage),
+  }));
+  for (let idx = 0; idx < signatures.length; idx += 1) {
+    for (let j = idx + 1; j < signatures.length; j += 1) {
+      const score = scoreLexicalSimilarity(signatures[idx].text, signatures[j].text);
+      similarityScores.push(score);
+      const involvesNewStage = options.chunkStages.some((stage) => String(stage.id ?? "") === signatures[j].id);
+      if (involvesNewStage && score > CROSS_STAGE_SIMILARITY_LIMIT) {
+        failedStageIds.add(signatures[j].id);
+        reasons.push(`high cross-stage duplication: ${signatures[idx].id} vs ${signatures[j].id} (${score.toFixed(2)})`);
+      }
+    }
+  }
+
+  const chunkTemplateStageIds = options.chunkStages
+    .filter((stage) => {
+      const tasks = Array.isArray(stage.tasks) ? stage.tasks as Array<Record<string, unknown>> : [];
+      const hits = tasks.reduce((count, task) => {
+        const text = `${String(task.label ?? "")} ${
+          Array.isArray(task.steps) ? task.steps.join(" ") : ""
+        }`;
+        return count + (TEMPLATE_TASK_PATTERNS.some((pattern) => pattern.test(text)) ? 1 : 0);
+      }, 0);
+      return hits >= 2;
+    })
+    .map((stage) => String(stage.id ?? ""));
+  if (chunkTemplateStageIds.length > 0) {
+    for (const stageId of chunkTemplateStageIds) {
+      failedStageIds.add(stageId);
+    }
+    reasons.push(`template scaffolding pattern detected in ${chunkTemplateStageIds.join(", ")}`);
+  }
+
+  if (options.archetype === "utility-lib" || options.archetype === "sdk") {
+    const domainTokens = options.domainKeywords
+      .map((keyword) => normalizeKeywordToken(keyword))
+      .filter((keyword) => keyword.length >= 3 && !REPO_GENERIC_TERMS.has(keyword))
+      .slice(0, 16);
+    const firstStages = combinedTimeline
+      .filter((stage) => Number(stage.index ?? 0) > 0)
+      .sort((a, b) => Number(a.index ?? 0) - Number(b.index ?? 0))
+      .slice(0, Math.min(3, combinedTimeline.length));
+    const firstStagesText = firstStages.map((stage) => stageSignature(stage).toLowerCase()).join(" ");
+    const domainCoverage = domainTokens.some((token) => firstStagesText.includes(token));
+    if (!domainCoverage && firstStages.length > 0) {
+      const offending = firstStages
+        .map((stage) => String(stage.id ?? ""))
+        .filter((stageId) => options.chunkStages.some((stage) => String(stage.id ?? "") === stageId));
+      for (const stageId of offending) {
+        failedStageIds.add(stageId);
+      }
+      reasons.push("tiny/small repo early stages miss core domain behavior");
+    }
+  }
+
+  const groundingScores = options.chunkNodes.map((node) =>
+    Number(options.validationByNodeId.get(node.id)?.groundingScore ?? 0));
+  const groundingScore = groundingScores.length > 0
+    ? Math.round(groundingScores.reduce((sum, value) => sum + value, 0) / groundingScores.length)
+    : 0;
+  const maxSimilarity = similarityScores.length > 0 ? Math.max(...similarityScores) : 0;
+  const dedupeScore = Math.max(0, Math.min(100, Math.round((1 - maxSimilarity) * 100)));
+  const noveltyScore = dedupeScore;
+  const antiTemplatePass = chunkTemplateStageIds.length === 0;
+
+  return {
+    noveltyScore,
+    dedupeScore,
+    groundingScore,
+    antiTemplatePass,
+    failedStageIds: Array.from(failedStageIds),
+    reasons: Array.from(new Set(reasons)),
+    qualityGateStatus: failedStageIds.size > 0 || !antiTemplatePass || groundingScore < 45 ? "fail" : "pass",
+  };
+}
+
+function normalizeTimeline(
+  timelineRaw: unknown,
+  stageBudget: number,
+  commits: Array<{ sha: string }>,
+): Array<Record<string, unknown>> {
   const rawList = Array.isArray(timelineRaw) ? timelineRaw : [];
   const stages = rawList
     .slice(0, stageBudget)
@@ -1953,86 +2660,7 @@ function normalizeTimeline(timelineRaw: unknown, stageBudget: number, commits: A
     commit_window: commits.length > 0 ? [commits[commits.length - 1].sha, commits[0].sha] : [],
   };
 
-  return [setupStage, ...stages.map((stage, idx) => ({ ...stage, index: idx + 1 }))];
-}
-
-function toSafeSegment(text: string, fallback: string) {
-  const normalized = text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 36);
-  return normalized || fallback;
-}
-
-function buildDeterministicStageDetail(
-  node: RoadmapSyllabusNode,
-  repoFullName: string,
-) {
-  const slug = toSafeSegment(node.title, `stage-${node.index}`);
-  const docFile = `docs/stages/${node.id}.md`;
-  const featureDir = `src/modules/${slug}`;
-  const stageGoals = node.goals.length > 0
-    ? node.goals
-    : [`Build ${node.title} from scratch`, "Verify behavior with local checks"];
-  const stageCheckpoints = node.checkpoints.length > 0
-    ? node.checkpoints
-    : [
-      `${node.title} works from your own implementation`,
-      "Smoke checks complete locally",
-    ];
-
-  return {
-    id: node.id,
-    index: node.index,
-    title: node.title,
-    summary: sanitizeInstructionText(
-      node.summary || `Build ${node.title} as an independent milestone from scratch.`,
-    ),
-    status: "not-started",
-    eta: node.difficulty === "hard" ? "120m" : node.difficulty === "medium" ? "90m" : "60m",
-    category: node.category,
-    difficulty: node.difficulty,
-    goals: stageGoals,
-    prerequisites: node.prerequisites,
-    checkpoints: stageCheckpoints,
-    tasks: [
-      {
-        label: `Define ${node.title} scope and acceptance checks`,
-        steps: [
-          `Create ${docFile} with a short scope for ${node.title}.`,
-          `Write acceptance checks based on these goals: ${stageGoals.join("; ")}.`,
-          "Add at least one edge case and one failure case to your checklist.",
-        ],
-        files: [docFile],
-        commands: ["mkdir -p docs/stages", `touch ${docFile}`],
-      },
-      {
-        label: `Implement ${node.title} in your own workspace`,
-        steps: [
-          `Create a fresh module under ${featureDir}.`,
-          "Implement core behavior using small functions and explicit input/output contracts.",
-          "Wire the module into your app entrypoint and expose a runnable path.",
-        ],
-        files: [`${featureDir}/index.ts`, `${featureDir}/service.ts`, "src/app.ts"],
-        commands: ["mkdir -p src/modules", `mkdir -p ${featureDir}`, "pnpm dev || npm run dev"],
-      },
-      {
-        label: `Verify ${node.title} with tests and checks`,
-        steps: [
-          `Add tests for ${featureDir}/index.ts covering happy path and at least one edge case.`,
-          "Run lint and tests, then update your stage notes with the final verification result.",
-          `If behavior differs from ${repoFullName}, adjust your implementation but keep your own architecture choices.`,
-        ],
-        files: [`${featureDir}/index.test.ts`, "README.md", docFile],
-        commands: ["pnpm test || npm test", "pnpm lint || npm run lint"],
-      },
-    ],
-    code_examples: [],
-    resources: [],
-    optional_peeks: node.optional_peeks,
-    commit_window: [],
-  };
+  return [setupStage, ...stages.map((stage, idx) => ({ ...stage, index: idx + 1 }))] as Array<Record<string, unknown>>;
 }
 
 async function getGlobalUsage(supabase: SupabaseClient): Promise<GlobalUsage> {
@@ -2363,11 +2991,11 @@ async function generateRoadmapInternal(options: {
         summary: String(stage.summary ?? ""),
         category: String(stage.category ?? "feature"),
         difficulty: String(stage.difficulty ?? "easy"),
-        goals: Array.isArray(stage.goals) ? stage.goals.map((item) => String(item)) : [],
+        goals: Array.isArray(stage.goals) ? stage.goals.map((item: unknown) => String(item)) : [],
         prerequisites: Array.isArray(stage.prerequisites)
-          ? stage.prerequisites.map((item) => String(item))
+          ? stage.prerequisites.map((item: unknown) => String(item))
           : [],
-        checkpoints: Array.isArray(stage.checkpoints) ? stage.checkpoints.map((item) => String(item)) : [],
+        checkpoints: Array.isArray(stage.checkpoints) ? stage.checkpoints.map((item: unknown) => String(item)) : [],
         source_themes: [],
         optional_peeks: [],
       };
@@ -2628,6 +3256,51 @@ async function handleAdminCatalogSoftReset(context: RouteContext) {
     ok: true,
     catalog_segment: segment,
     remaining_visible: Number(visibleCount ?? visibleRows?.length ?? 0),
+  });
+}
+
+async function handleAdminCatalogHideRepo(context: RouteContext) {
+  if (!isAdminAuthorized(context.req)) {
+    return routeError(401, "Unauthorized admin request.");
+  }
+  const body = await readJsonBody(context.req);
+  const repoFullName = typeof body.repo_full_name === "string" ? body.repo_full_name.trim() : "";
+  if (!repoFullName) {
+    return routeError(400, "repo_full_name is required", "missing_repo_full_name");
+  }
+  const segment = typeof body.catalog_segment === "string" && body.catalog_segment.trim().length > 0
+    ? body.catalog_segment.trim().slice(0, 64)
+    : `hidden-${new Date().toISOString().slice(0, 10)}`;
+
+  const { data: existing, error: lookupError } = await context.supabase
+    .from("generated_roadmaps")
+    .select("repo_full_name,is_catalog_visible,catalog_segment")
+    .eq("repo_full_name", repoFullName)
+    .maybeSingle();
+  if (lookupError) {
+    return routeError(500, lookupError.message, "hide_repo_lookup_failed");
+  }
+  if (!existing) {
+    return routeError(404, "Roadmap not found", "roadmap_not_found");
+  }
+
+  const { error: updateError } = await context.supabase
+    .from("generated_roadmaps")
+    .update({
+      is_catalog_visible: false,
+      catalog_segment: segment,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("repo_full_name", repoFullName);
+  if (updateError) {
+    return routeError(500, updateError.message, "hide_repo_failed");
+  }
+
+  return toJsonResponse({
+    ok: true,
+    repo_full_name: repoFullName,
+    is_catalog_visible: false,
+    catalog_segment: segment,
   });
 }
 
@@ -2994,8 +3667,14 @@ async function upsertProgressiveRoadmapRow(options: {
   timeline: Record<string, unknown>[];
   jobState: RoadmapGenerationJobStatus;
   lastGeneratedStage: number;
+  timelineQuality?: {
+    novelty_score: number;
+    grounding_score: number;
+    anti_template_pass: boolean;
+    evaluated_at: string;
+  };
 }) {
-  const { supabase, repoFullName, repoSummary, timeline, jobState, lastGeneratedStage } = options;
+  const { supabase, repoFullName, repoSummary, timeline, jobState, lastGeneratedStage, timelineQuality } = options;
   const mapped = mapRepoSummaryToRoadmapRow(repoSummary);
   const rowToStore = {
     repo_full_name: repoFullName,
@@ -3018,6 +3697,7 @@ async function upsertProgressiveRoadmapRow(options: {
     rating_sum: mapped.rating_sum,
     job_state: jobState,
     last_generated_stage: lastGeneratedStage,
+    timeline_quality: timelineQuality ?? null,
     is_catalog_visible: true,
     catalog_segment: "default",
   };
@@ -3049,11 +3729,11 @@ async function getSyllabusNodesById(supabase: SupabaseClient, syllabusId: string
     summary: String(row.summary ?? ""),
     category: String(row.category ?? "feature"),
     difficulty: String(row.difficulty ?? "easy"),
-    goals: Array.isArray(row.goals) ? row.goals.map((item) => String(item)) : [],
-    prerequisites: Array.isArray(row.prerequisites) ? row.prerequisites.map((item) => String(item)) : [],
-    checkpoints: Array.isArray(row.checkpoints) ? row.checkpoints.map((item) => String(item)) : [],
-    source_themes: Array.isArray(row.source_themes) ? row.source_themes.map((item) => String(item)) : [],
-    optional_peeks: Array.isArray(row.optional_peeks) ? row.optional_peeks.map((item) => String(item)) : [],
+    goals: Array.isArray(row.goals) ? row.goals.map((item: unknown) => String(item)) : [],
+    prerequisites: Array.isArray(row.prerequisites) ? row.prerequisites.map((item: unknown) => String(item)) : [],
+    checkpoints: Array.isArray(row.checkpoints) ? row.checkpoints.map((item: unknown) => String(item)) : [],
+    source_themes: Array.isArray(row.source_themes) ? row.source_themes.map((item: unknown) => String(item)) : [],
+    optional_peeks: Array.isArray(row.optional_peeks) ? row.optional_peeks.map((item: unknown) => String(item)) : [],
   })) as RoadmapSyllabusNode[];
 }
 
@@ -3221,6 +3901,69 @@ function mergeSyllabusNodeIntoStage(stage: Record<string, unknown>, node: Roadma
   };
 }
 
+function pickRelevantHotPaths(
+  node: RoadmapSyllabusNode,
+  hotPaths: string[],
+  featureKeywords: string[],
+) {
+  const nodeTokens = new Set(toComparableTokens(
+    `${node.title} ${node.summary} ${node.goals.join(" ")} ${node.checkpoints.join(" ")}`,
+  ));
+  const keywordHints = featureKeywords.slice(0, 10);
+  const scored = hotPaths.map((path) => {
+    const pathTokens = new Set(toComparableTokens(path));
+    let score = 0;
+    for (const token of pathTokens) {
+      if (nodeTokens.has(token)) {
+        score += 2;
+      }
+      if (keywordHints.some((keyword) => token.includes(keyword) || keyword.includes(token))) {
+        score += 1;
+      }
+    }
+    return { path, score };
+  });
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .filter((item, idx) => item.score > 0 || idx < 3)
+    .slice(0, 8)
+    .map((item) => item.path);
+}
+
+function buildStageEvidenceRefs(options: {
+  nodes: RoadmapSyllabusNode[];
+  commitClusters: RepoIngestSnapshot["commitClusters"];
+  treeStats: RepoIngestSnapshot["treeStats"];
+  readmeExcerpt: string;
+}) {
+  const archetype = options.treeStats.archetype;
+  const readmeHints = options.readmeExcerpt
+    .split("\n")
+    .filter((line) => /^#{1,4}\s/.test(line.trim()))
+    .map((line) => line.replace(/^#{1,4}\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  return options.nodes.map((node) => {
+    const nodeThemes = node.source_themes.length > 0 ? node.source_themes : ["product-iterations"];
+    const relatedClusterSamples = options.commitClusters
+      .filter((cluster) => nodeThemes.some((theme) => cluster.theme.includes(theme) || theme.includes(cluster.theme)))
+      .flatMap((cluster) => cluster.samples)
+      .slice(0, 8);
+
+    return {
+      stage_id: node.id,
+      objective: node.summary || node.title,
+      themes: nodeThemes.slice(0, 6),
+      hot_paths: pickRelevantHotPaths(node, options.treeStats.hotPaths, options.treeStats.featureKeywords),
+      feature_keywords: options.treeStats.featureKeywords.slice(0, 16),
+      readme_hints: [...readmeHints.slice(0, 6), ...relatedClusterSamples.slice(0, 4)].slice(0, 10),
+      api_concepts: options.treeStats.apiConcepts.slice(0, 14),
+      archetype,
+    } as StageEvidenceRef;
+  });
+}
+
 async function getOrCreateProgressiveJob(
   context: AuthedRouteContext,
   repoUrl: string,
@@ -3271,6 +4014,11 @@ async function getOrCreateProgressiveJob(
         },
         commit_context: [],
         last_error: null,
+        quality_gate_status: "pass",
+        quality_fail_reasons: [],
+        failed_stage_ids: [],
+        dedupe_score: 0,
+        grounding_score: 0,
         progress_percent: computeProgressPercent(0, 1, "ingest"),
         current_phase: "ingest",
         phase_message: "Queued. Preparing ingest artifacts...",
@@ -3356,6 +4104,11 @@ async function getOrCreateProgressiveJob(
       repo_summary: repoSummary,
       commit_context: ingest.commitContextLines,
       last_error: null,
+      quality_gate_status: "pass",
+      quality_fail_reasons: [],
+      failed_stage_ids: [],
+      dedupe_score: 0,
+      grounding_score: 0,
       progress_percent: initialStatus === "completed" ? 100 : computeProgressPercent(generatedStages, syllabus.stageTarget, "syllabus"),
       current_phase: initialStatus === "completed" ? "complete" : "syllabus",
       phase_message: initialStatus === "completed" ? "Generation complete." : "Syllabus compiled. Ready to hydrate stages.",
@@ -3439,6 +4192,11 @@ async function bootstrapProgressiveJob(
       repo_summary: repoSummary,
       commit_context: ingest.commitContextLines,
       last_error: null,
+      quality_gate_status: "pass",
+      quality_fail_reasons: [],
+      failed_stage_ids: [],
+      dedupe_score: 0,
+      grounding_score: 0,
       progress_percent: computeProgressPercent(0, syllabus.stageTarget, "syllabus"),
       current_phase: "syllabus",
       phase_message: "Syllabus compiled. Ready to hydrate stages.",
@@ -3485,11 +4243,23 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       progress_percent: Number(jobRow.progress_percent ?? computeProgressPercent(generated, total, "complete")),
       current_phase: String(jobRow.current_phase ?? "complete"),
       phase_message: String(jobRow.phase_message ?? "Generation complete"),
+      quality_gate_status: String(jobRow.quality_gate_status ?? "pass"),
+      quality_fail_reasons: Array.isArray(jobRow.quality_fail_reasons) ? jobRow.quality_fail_reasons : [],
+      failed_stage_ids: Array.isArray(jobRow.failed_stage_ids) ? jobRow.failed_stage_ids : [],
+      dedupe_score: Number(jobRow.dedupe_score ?? 0),
+      grounding_score: Number(jobRow.grounding_score ?? 0),
     };
   }
 
   const usageSnapshot = await resolveUsageMode(supabase, userId);
   if (usageSnapshot.mode === "critical") {
+    await updateGenerationJobQualityDiagnostics(supabase, jobId, {
+      qualityGateStatus: "fail",
+      qualityFailReasons: ["token_budget_exhausted"],
+      failedStageIds: [],
+      dedupeScore: Number(jobRow.dedupe_score ?? 0),
+      groundingScore: Number(jobRow.grounding_score ?? 0),
+    });
     await updateGenerationJobPhase(supabase, jobId, {
       phase: "hydrate",
       status: "failed",
@@ -3530,6 +4300,11 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       progress_percent: 100,
       current_phase: "complete",
       phase_message: "Generation complete.",
+      quality_gate_status: String(jobRow.quality_gate_status ?? "pass"),
+      quality_fail_reasons: Array.isArray(jobRow.quality_fail_reasons) ? jobRow.quality_fail_reasons : [],
+      failed_stage_ids: Array.isArray(jobRow.failed_stage_ids) ? jobRow.failed_stage_ids : [],
+      dedupe_score: Number(jobRow.dedupe_score ?? 0),
+      grounding_score: Number(jobRow.grounding_score ?? 0),
     };
   }
 
@@ -3556,13 +4331,51 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
   const ingestSnapshotKey = String(repoSummary.ingest_snapshot_key ?? "");
   let readmeExcerpt = "";
   let commitClusters: RepoIngestSnapshot["commitClusters"] = [];
+  let ingestTreeStats: RepoIngestSnapshot["treeStats"] = {
+    fileCount: 0,
+    topLevelDirs: [],
+    manifests: [],
+    hotPaths: [],
+    featureKeywords: [],
+    architectureMap: {},
+    apiConcepts: [],
+    archetype: "utility-lib",
+  };
   if (ingestSnapshotKey) {
     const { data: ingestSnapshot } = await supabase
       .from("repo_ingest_snapshots")
-      .select("readme_excerpt")
+      .select("readme_excerpt,tree_stats")
       .eq("snapshot_key", ingestSnapshotKey)
       .maybeSingle();
     readmeExcerpt = String(ingestSnapshot?.readme_excerpt ?? "");
+    const treeStatsRaw = (ingestSnapshot?.tree_stats ?? {}) as Record<string, unknown>;
+    const archetypeRaw = String(treeStatsRaw.archetype ?? "utility-lib");
+    ingestTreeStats = {
+      fileCount: Number(treeStatsRaw.file_count ?? 0),
+      topLevelDirs: Array.isArray(treeStatsRaw.top_level_dirs)
+        ? treeStatsRaw.top_level_dirs.map((item) => String(item))
+        : [],
+      manifests: Array.isArray(treeStatsRaw.manifests)
+        ? treeStatsRaw.manifests.map((item) => String(item))
+        : [],
+      hotPaths: Array.isArray(treeStatsRaw.hot_paths)
+        ? treeStatsRaw.hot_paths.map((item) => String(item))
+        : [],
+      featureKeywords: Array.isArray(treeStatsRaw.feature_keywords)
+        ? treeStatsRaw.feature_keywords.map((item) => String(item))
+        : [],
+      architectureMap: treeStatsRaw.architecture_map && typeof treeStatsRaw.architecture_map === "object"
+        ? (treeStatsRaw.architecture_map as Record<string, unknown>)
+        : {},
+      apiConcepts: Array.isArray(treeStatsRaw.api_concepts)
+        ? treeStatsRaw.api_concepts.map((item) => String(item))
+        : [],
+      archetype: (
+        ["utility-lib", "sdk", "tooling", "saas-app", "infra"].includes(archetypeRaw)
+          ? archetypeRaw
+          : "utility-lib"
+      ) as RepoArchetype,
+    };
 
     const { data: clusterRows } = await supabase
       .from("repo_commit_clusters")
@@ -3576,11 +4389,20 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     }));
   }
 
+  const stageEvidence = buildStageEvidenceRefs({
+    nodes: chunkNodes,
+    commitClusters,
+    treeStats: ingestTreeStats,
+    readmeExcerpt,
+  });
+  const stageEvidenceById = new Map(stageEvidence.map((item) => [item.stage_id, item]));
+
   const prompt = buildStageHydrationPrompt({
     repoName: String(jobRow.repo_full_name),
     readmeExcerpt,
     commitClusters,
     nodes: chunkNodes,
+    evidenceByStage: stageEvidence,
   });
 
   await updateGenerationJobPhase(supabase, jobId, {
@@ -3597,30 +4419,36 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     completionTokens: 0,
     totalTokens: 0,
   };
-  let usedDeterministicFallback = false;
   let hydratedSourceTimeline: unknown = [];
   try {
     const result = await callGeminiJson({
       prompt,
-      maxOutputTokens: usageSnapshot.mode === "low" ? 1400 : 2200,
+      maxOutputTokens: usageSnapshot.mode === "low" ? 1700 : 2800,
       responseMimeType: "application/json",
-      temperature: 0.2,
+      temperature: 0.15,
       models: GEMINI_MODELS_HYDRATOR,
+      retries: 3,
     });
     usageMeta = { ...result.usage };
     hydratedSourceTimeline = result.parsed.timeline;
-  } catch {
-    usedDeterministicFallback = true;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "stage hydration failed";
+    await updateGenerationJobQualityDiagnostics(supabase, jobId, {
+      qualityGateStatus: "fail",
+      qualityFailReasons: [`hydration_model_failed: ${reason}`],
+      failedStageIds: chunkNodes.map((node) => node.id),
+      dedupeScore: 0,
+      groundingScore: 0,
+    });
     await updateGenerationJobPhase(supabase, jobId, {
       phase: "hydrate",
-      status: "running",
+      status: "failed",
       generatedStages,
       totalStages: totalPlannedStages,
-      message: "Model output malformed. Recovering with deterministic stage scaffolds...",
-      lastError: null,
+      message: "Hydration model failed.",
+      lastError: reason,
     });
-    hydratedSourceTimeline = chunkNodes.map((node) =>
-      buildDeterministicStageDetail(node, String(jobRow.repo_full_name)));
+    throw new Error(`Hydration model failed: ${reason}`);
   }
 
   const hydrated = normalizeTimeline(hydratedSourceTimeline, chunkNodes.length, commitRefs).filter((stage) => stage.id !== "stage-setup");
@@ -3657,12 +4485,18 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
   });
 
   const stageByNodeId = new Map<string, Record<string, unknown>>();
-  const validationByNodeId = new Map<string, { stage: Record<string, unknown>; qualityScore: number; ok: boolean; issues: string[] }>();
+  const validationByNodeId = new Map<string, {
+    stage: Record<string, unknown>;
+    qualityScore: number;
+    groundingScore: number;
+    ok: boolean;
+    issues: string[];
+  }>();
   for (let idx = 0; idx < chunkNodes.length; idx += 1) {
     const node = chunkNodes[idx];
     const stage = initialStages[idx];
     stageByNodeId.set(node.id, stage);
-    validationByNodeId.set(node.id, validateHydratedStageQuality(stage, node));
+    validationByNodeId.set(node.id, validateHydratedStageQuality(stage, node, stageEvidenceById.get(node.id)));
   }
 
   const failedNodes = chunkNodes.filter((node) => !(validationByNodeId.get(node.id)?.ok ?? false));
@@ -3672,6 +4506,7 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       readmeExcerpt,
       commitClusters,
       nodes: failedNodes,
+      evidenceByStage: stageEvidence.filter((item) => failedNodes.some((node) => node.id === item.stage_id)),
     });
     const repairResult = await callGeminiJson({
       prompt: repairPrompt,
@@ -3696,56 +4531,18 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
         continue;
       }
       const merged = mergeSyllabusNodeIntoStage(candidate, node);
-      const validated = validateHydratedStageQuality(merged, node);
+      const validated = validateHydratedStageQuality(merged, node, stageEvidenceById.get(node.id));
       stageByNodeId.set(node.id, merged);
       validationByNodeId.set(node.id, validated);
     }
   }
 
-  let remainingFailures = chunkNodes
+  const remainingFailures = chunkNodes
     .map((node) => ({
       node,
       validated: validationByNodeId.get(node.id),
     }))
     .filter((item) => !(item.validated?.ok ?? false));
-  if (remainingFailures.length > 0) {
-    await updateGenerationJobPhase(supabase, jobId, {
-      phase: "validate",
-      status: "running",
-      generatedStages,
-      totalStages: totalPlannedStages,
-      message: "Applying deterministic recovery for low-quality stages...",
-      lastError: null,
-    });
-    for (const failed of remainingFailures) {
-      const recovered = buildDeterministicStageDetail(failed.node, String(jobRow.repo_full_name));
-      const validated = validateHydratedStageQuality(recovered, failed.node);
-      stageByNodeId.set(failed.node.id, recovered);
-      validationByNodeId.set(failed.node.id, validated);
-    }
-  }
-
-  remainingFailures = chunkNodes
-    .map((node) => ({
-      node,
-      validated: validationByNodeId.get(node.id),
-    }))
-    .filter((item) => !(item.validated?.ok ?? false));
-  if (remainingFailures.length > 0) {
-    const reason = remainingFailures
-      .slice(0, 3)
-      .map((item) => `${item.node.id}: ${(item.validated?.issues ?? ["unknown quality failure"]).join(", ")}`)
-      .join(" | ");
-    await updateGenerationJobPhase(supabase, jobId, {
-      phase: "validate",
-      status: "failed",
-      generatedStages,
-      totalStages: totalPlannedStages,
-      message: "Stage quality validation failed.",
-      lastError: reason,
-    });
-    throw new Error(`Stage quality validation failed. ${reason}`);
-  }
 
   const normalizedChunk = chunkNodes.map((node) => {
     const validated = validationByNodeId.get(node.id);
@@ -3756,6 +4553,58 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       index: node.index,
     };
   });
+  const qualityGate = evaluateChunkQuality({
+    chunkNodes,
+    chunkStages: normalizedChunk,
+    existingTimeline: currentTimeline,
+    validationByNodeId,
+    archetype: ingestTreeStats.archetype,
+    domainKeywords: [...ingestTreeStats.featureKeywords, ...ingestTreeStats.apiConcepts],
+  });
+  const failedStageIds = new Set<string>(qualityGate.failedStageIds);
+  const qualityFailReasons: string[] = qualityGate.reasons.length > 0 ? [...qualityGate.reasons] : [];
+
+  if (remainingFailures.length > 0) {
+    const stageFailureReasons = remainingFailures.map((item) => {
+      const issues = item.validated?.issues ?? ["unknown quality failure"];
+      return `${item.node.id}: ${issues.join(", ")}`;
+    });
+    for (const item of remainingFailures) {
+      failedStageIds.add(item.node.id);
+    }
+    qualityFailReasons.push(...stageFailureReasons);
+  }
+
+  await supabase
+    .from("roadmap_generation_quality_runs")
+    .insert({
+      job_id: jobId,
+      repo_full_name: String(jobRow.repo_full_name),
+      novelty_score: qualityGate.noveltyScore,
+      grounding_score: qualityGate.groundingScore,
+      anti_template_pass: qualityGate.antiTemplatePass,
+      reasons: qualityFailReasons,
+    });
+
+  if (failedStageIds.size > 0 || qualityGate.qualityGateStatus === "fail") {
+    const reason = qualityFailReasons.slice(0, 5).join(" | ") || "strict quality gate failed";
+    await updateGenerationJobQualityDiagnostics(supabase, jobId, {
+      qualityGateStatus: "fail",
+      qualityFailReasons: qualityFailReasons,
+      failedStageIds: Array.from(failedStageIds),
+      dedupeScore: qualityGate.dedupeScore,
+      groundingScore: qualityGate.groundingScore,
+    });
+    await updateGenerationJobPhase(supabase, jobId, {
+      phase: "validate",
+      status: "failed",
+      generatedStages,
+      totalStages: totalPlannedStages,
+      message: "Stage quality validation failed.",
+      lastError: reason,
+    });
+    throw new Error(`Stage quality validation failed. ${reason}`);
+  }
 
   await updateGenerationJobPhase(supabase, jobId, {
     phase: "persist",
@@ -3776,6 +4625,11 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       generated_stages: nextGeneratedStages,
       initial_timeline: nextTimeline,
       last_error: null,
+      quality_gate_status: "pass",
+      quality_fail_reasons: [],
+      failed_stage_ids: [],
+      dedupe_score: qualityGate.dedupeScore,
+      grounding_score: qualityGate.groundingScore,
       current_phase: nextStatus === "completed" ? "complete" : "hydrate",
       phase_message: nextStatus === "completed" ? "Generation complete." : "Ready to hydrate next stage window.",
       progress_percent: computeProgressPercent(
@@ -3818,29 +4672,57 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     .from("roadmap_stage_details")
     .upsert(stageDetailsRows, { onConflict: "job_id,stage_id" });
 
-  const qualityRows = normalizedChunk.map((stage) => ({
-    job_id: jobId,
-    repo_full_name: String(jobRow.repo_full_name),
-    stage_id: String(stage.id),
-    stage_index: Number(stage.index),
-    quality_score: scoreStageQuality(stage as Record<string, unknown>),
-    checks: {
-      has_tasks: Array.isArray(stage.tasks) && stage.tasks.length > 0,
-      has_goals: Array.isArray(stage.goals) && stage.goals.length > 0,
-      clone_free: JSON.stringify(stage).toLowerCase().includes("git clone") === false,
-    },
-  }));
+  const stageEvidenceRows = normalizedChunk.map((stage) => {
+    const stageRecord = stage as Record<string, unknown>;
+    const stageId = String(stageRecord.id ?? "");
+    const evidence = stageEvidenceById.get(stageId);
+    return {
+      job_id: jobId,
+      stage_id: stageId,
+      evidence_refs: evidence ?? {
+        stage_id: stageId,
+        objective: String(stageRecord.summary ?? ""),
+        themes: [],
+        hot_paths: [],
+        feature_keywords: [],
+        readme_hints: [],
+        api_concepts: [],
+        archetype: ingestTreeStats.archetype,
+      },
+      created_at: new Date().toISOString(),
+    };
+  });
+  await supabase
+    .from("roadmap_generation_stage_evidence")
+    .upsert(stageEvidenceRows, { onConflict: "job_id,stage_id" });
+
+  const qualityRows = normalizedChunk.map((stage) => {
+    const stageRecord = stage as Record<string, unknown>;
+    return {
+      job_id: jobId,
+      repo_full_name: String(jobRow.repo_full_name),
+      stage_id: String(stageRecord.id ?? ""),
+      stage_index: Number(stageRecord.index ?? 0),
+      quality_score: scoreStageQuality(stageRecord),
+      checks: {
+        has_tasks: Array.isArray(stageRecord.tasks) && stageRecord.tasks.length > 0,
+        has_goals: Array.isArray(stageRecord.goals) && stageRecord.goals.length > 0,
+        clone_free: JSON.stringify(stageRecord).toLowerCase().includes("git clone") === false,
+      },
+    };
+  });
   await supabase.from("roadmap_quality_reports").insert(qualityRows);
 
   const peekRows = normalizedChunk.flatMap((stage) => {
-    const optionalPeeks = Array.isArray(stage.optional_peeks)
-      ? stage.optional_peeks.map((item) => String(item)).filter(Boolean)
+    const stageRecord = stage as Record<string, unknown>;
+    const optionalPeeks = Array.isArray(stageRecord.optional_peeks)
+      ? stageRecord.optional_peeks.map((item: unknown) => String(item)).filter(Boolean)
       : [];
-    return optionalPeeks.map((peek, idx) => ({
+    return optionalPeeks.map((peek: string, idx: number) => ({
       job_id: jobId,
       repo_full_name: String(jobRow.repo_full_name),
-      stage_id: String(stage.id),
-      stage_index: Number(stage.index),
+      stage_id: String(stageRecord.id ?? ""),
+      stage_index: Number(stageRecord.index ?? 0),
       peek_rank: idx + 1,
       peek_text: peek,
     }));
@@ -3856,6 +4738,12 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     timeline: nextTimeline,
     jobState: nextStatus,
     lastGeneratedStage: nextGeneratedStages,
+    timelineQuality: {
+      novelty_score: qualityGate.noveltyScore,
+      grounding_score: qualityGate.groundingScore,
+      anti_template_pass: qualityGate.antiTemplatePass,
+      evaluated_at: new Date().toISOString(),
+    },
   });
 
   const fallbackTokens = estimateTokenUsage(prompt) + estimateTokenUsage(JSON.stringify(normalizedChunk));
@@ -3872,7 +4760,6 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       chunk_size: stagesToGenerate,
       stage_start: stageStart,
       stage_end: stageEnd,
-      hydration_fallback: usedDeterministicFallback,
       global_remaining: usageSnapshot.globalUsage.remaining,
       user_remaining: usageSnapshot.userUsage.remaining,
     },
@@ -3906,6 +4793,11 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     phase_message: nextStatus === "completed"
       ? "Generation complete."
       : `Generated ${nextGeneratedStages}/${totalPlannedStages} stages.`,
+    quality_gate_status: "pass",
+    quality_fail_reasons: [],
+    failed_stage_ids: [],
+    dedupe_score: qualityGate.dedupeScore,
+    grounding_score: qualityGate.groundingScore,
   };
 }
 
@@ -3932,6 +4824,11 @@ async function handleGenerateRoadmapProgressive(context: AuthedRouteContext) {
       progress_percent: Number(job.progress_percent ?? computeProgressPercent(currentGenerated, Math.max(totalPlanned, 1), "ingest")),
       current_phase: String(job.current_phase ?? "ingest"),
       phase_message: String(job.phase_message ?? "Queued. Preparing ingest artifacts..."),
+      quality_gate_status: String(job.quality_gate_status ?? "pass"),
+      quality_fail_reasons: Array.isArray(job.quality_fail_reasons) ? job.quality_fail_reasons : [],
+      failed_stage_ids: Array.isArray(job.failed_stage_ids) ? job.failed_stage_ids : [],
+      dedupe_score: Number(job.dedupe_score ?? 0),
+      grounding_score: Number(job.grounding_score ?? 0),
     };
 
     return toJsonResponse({
@@ -3944,6 +4841,11 @@ async function handleGenerateRoadmapProgressive(context: AuthedRouteContext) {
       progress_percent: snapshot.progress_percent,
       current_phase: snapshot.current_phase,
       phase_message: snapshot.phase_message,
+      quality_gate_status: snapshot.quality_gate_status,
+      quality_fail_reasons: snapshot.quality_fail_reasons,
+      failed_stage_ids: snapshot.failed_stage_ids,
+      dedupe_score: snapshot.dedupe_score,
+      grounding_score: snapshot.grounding_score,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Progressive roadmap generation failed";
@@ -3960,7 +4862,7 @@ async function handleGenerateRoadmapProgressive(context: AuthedRouteContext) {
 async function handleRoadmapJobStatus(context: AuthedRouteContext, jobId: string) {
   const { data, error } = await context.supabase
     .from("roadmap_generation_jobs")
-    .select("id,status,generated_stages,total_planned_stages,last_error,updated_at,progress_percent,current_phase,phase_message")
+    .select("id,status,generated_stages,total_planned_stages,last_error,updated_at,progress_percent,current_phase,phase_message,quality_gate_status,quality_fail_reasons,failed_stage_ids,dedupe_score,grounding_score")
     .eq("id", jobId)
     .eq("user_id", context.userId)
     .maybeSingle();
@@ -3981,6 +4883,11 @@ async function handleRoadmapJobStatus(context: AuthedRouteContext, jobId: string
     progress_percent: data.progress_percent,
     current_phase: data.current_phase,
     phase_message: data.phase_message,
+    quality_gate_status: data.quality_gate_status,
+    quality_fail_reasons: Array.isArray(data.quality_fail_reasons) ? data.quality_fail_reasons : [],
+    failed_stage_ids: Array.isArray(data.failed_stage_ids) ? data.failed_stage_ids : [],
+    dedupe_score: Number(data.dedupe_score ?? 0),
+    grounding_score: Number(data.grounding_score ?? 0),
   });
 }
 
@@ -3996,6 +4903,11 @@ async function handleRoadmapJobContinue(context: AuthedRouteContext, jobId: stri
       progress_percent: snapshot.progress_percent,
       current_phase: snapshot.current_phase,
       phase_message: snapshot.phase_message,
+      quality_gate_status: snapshot.quality_gate_status,
+      quality_fail_reasons: snapshot.quality_fail_reasons,
+      failed_stage_ids: snapshot.failed_stage_ids,
+      dedupe_score: snapshot.dedupe_score,
+      grounding_score: snapshot.grounding_score,
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unable to continue roadmap generation";
@@ -4025,6 +4937,11 @@ async function handleRoadmapJobHydrateNext(context: AuthedRouteContext, jobId: s
       progress_percent: snapshot.progress_percent,
       current_phase: snapshot.current_phase,
       phase_message: snapshot.phase_message,
+      quality_gate_status: snapshot.quality_gate_status,
+      quality_fail_reasons: snapshot.quality_fail_reasons,
+      failed_stage_ids: snapshot.failed_stage_ids,
+      dedupe_score: snapshot.dedupe_score,
+      grounding_score: snapshot.grounding_score,
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unable to hydrate next roadmap chunk";
@@ -4468,7 +5385,6 @@ async function handleTranslateStages(context: RouteContext) {
         const prompt = buildStageTranslationPrompt(
           targetLanguage,
           batch.map((item) => ({
-            stage_id: item.stageId,
             ...toTranslatableStagePayload(item.stage),
           })),
         );
@@ -5367,6 +6283,9 @@ Deno.serve(async (req) => {
     }
     if (path === "/api/v1/admin/catalog/soft-reset" && req.method === "POST") {
       return await handleAdminCatalogSoftReset(context);
+    }
+    if (path === "/api/v1/admin/catalog/hide-repo" && req.method === "POST") {
+      return await handleAdminCatalogHideRepo(context);
     }
     if (path === "/api/v1/preferences" && req.method === "GET") {
       return await withAuth(context, handleGetPreferences);

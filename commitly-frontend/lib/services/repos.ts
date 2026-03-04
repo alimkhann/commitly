@@ -80,6 +80,12 @@ export type RoadmapResponseBody = {
   timeline: RepoTimelineStage[];
   cached: boolean;
   generated_at: string;
+  timeline_quality?: {
+    novelty_score: number;
+    grounding_score: number;
+    anti_template_pass: boolean;
+    evaluated_at: string;
+  } | null;
   job_state?: RoadmapGenerationJobStatus | string;
   last_generated_stage?: number;
   progress_percent?: number;
@@ -104,6 +110,11 @@ export type ProgressiveGenerationStartResponse = {
   progress_percent: number;
   current_phase: RoadmapGenerationPhase | string;
   phase_message: string | null;
+  quality_gate_status?: "pass" | "fail";
+  quality_fail_reasons?: string[];
+  failed_stage_ids?: string[];
+  dedupe_score?: number;
+  grounding_score?: number;
 };
 
 export type ProgressiveGenerationJobResponse = {
@@ -115,6 +126,11 @@ export type ProgressiveGenerationJobResponse = {
   progress_percent: number;
   current_phase: RoadmapGenerationPhase | string;
   phase_message: string | null;
+  quality_gate_status?: "pass" | "fail";
+  quality_fail_reasons?: string[];
+  failed_stage_ids?: string[];
+  dedupe_score?: number;
+  grounding_score?: number;
 };
 
 export type RoadmapSyllabusNode = {
@@ -171,6 +187,11 @@ export type HydrateNextResponse = {
   progress_percent: number;
   current_phase: RoadmapGenerationPhase | string;
   phase_message: string | null;
+  quality_gate_status?: "pass" | "fail";
+  quality_fail_reasons?: string[];
+  failed_stage_ids?: string[];
+  dedupe_score?: number;
+  grounding_score?: number;
 };
 
 export type UserPreferences = {
