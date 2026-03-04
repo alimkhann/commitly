@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { type JSX, useCallback, useEffect, useMemo, useState } from "react";
+import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import TabSwitch from "@/components/navigation/tab-switch";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import {
@@ -1205,17 +1205,33 @@ function GenerationLoadingCard({
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
       <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
         <div className="absolute inset-0 rounded-full border border-primary/20" />
+        <div className="absolute inset-2 animate-pulse rounded-full border border-primary/25" />
         <Clock3 className="h-10 w-10 text-primary" />
       </div>
       <div className="max-w-md space-y-2">
         <h2 className="font-semibold text-2xl">
-          Generating roadmap for {repoName}
+          <ShinyText>Generating roadmap for {repoName}</ShinyText>
         </h2>
         <p className="text-muted-foreground">
           {status ||
             "Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute."}
         </p>
+        <div className="flex items-center justify-center gap-1.5 pt-2">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70 [animation-delay:0ms]" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/60 [animation-delay:200ms]" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/50 [animation-delay:400ms]" />
+        </div>
       </div>
     </div>
   );
+}
+
+function ShinyText({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <span className={cn("shiny-text animate-shiny-text", className)}>{children}</span>;
 }
