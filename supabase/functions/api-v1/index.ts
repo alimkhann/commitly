@@ -59,6 +59,9 @@ type RepoIngestSnapshot = {
     featureKeywords: string[];
     architectureMap: Record<string, unknown>;
     apiConcepts: string[];
+    knownFiles: string[];
+    packageManager: "pnpm" | "npm" | "yarn" | "bun" | "unknown";
+    scripts: string[];
     archetype: RepoArchetype;
   };
   readmeExcerpt: string;
@@ -155,7 +158,7 @@ const ADMIN_CATALOG_SECRET = Deno.env.get("ADMIN_CATALOG_SECRET") ?? "";
 
 const GLOBAL_DAILY_TOKEN_LIMIT = Number(Deno.env.get("GLOBAL_DAILY_TOKEN_LIMIT") ?? "2500000");
 const USER_DAILY_TOKEN_SOFT_LIMIT = Number(Deno.env.get("USER_DAILY_TOKEN_SOFT_LIMIT") ?? "120000");
-const CURRICULUM_PIPELINE_VERSION = "v2.1";
+const CURRICULUM_PIPELINE_VERSION = "v2.3";
 const ROADMAP_TRANSLATION_LANGUAGES: RoadmapTranslationLanguage[] = ["en", "zh-HK", "kz", "ru"];
 const ROADMAP_TRANSLATION_LANGUAGE_LABELS: Record<RoadmapTranslationLanguage, string> = {
   en: "English",
@@ -203,7 +206,36 @@ const TEMPLATE_TASK_PATTERNS = [
   /implement .*in your own workspace/i,
   /verify .*with tests and checks/i,
 ];
-const CROSS_STAGE_SIMILARITY_LIMIT = 0.62;
+const NON_SOURCE_FILE_PATTERNS = [
+  /^package\.json$/i,
+  /^pnpm-lock\.yaml$/i,
+  /^package-lock\.json$/i,
+  /^yarn\.lock$/i,
+  /^bun\.lockb?$/i,
+  /^tsconfig\.json$/i,
+  /^biome\.json$/i,
+  /^eslint(\.config)?\.[a-z0-9]+$/i,
+  /^prettier(\.config)?\.[a-z0-9]+$/i,
+  /^\.github\//i,
+];
+const DISALLOWED_TASK_COMMAND_PATTERNS = [
+  /^git\s+/i,
+  /^mkdir\b/i,
+  /^touch\b/i,
+  /^rm\b/i,
+  /^cp\b/i,
+  /^mv\b/i,
+  /^grep\b/i,
+  /^ls\b/i,
+  /^cat\b/i,
+];
+const ALLOWED_TASK_COMMAND_PATTERNS = [
+  /^(npm|pnpm|yarn|bun)\s+(run\s+[a-z0-9:_-]+|test|lint|build|typecheck|check|dev|add|install|init)\b/i,
+  /^(npx|pnpm\s+dlx|bunx)\s+[a-z0-9@._:/-]+/i,
+  /^(node|deno|python|python3|go|cargo)\b/i,
+];
+const CROSS_STAGE_SIMILARITY_LIMIT = 0.65;
+const MIN_DEDUPE_SCORE = 50;
 
 const textEncoder = new TextEncoder();
 
@@ -685,6 +717,60 @@ function buildArchitectureMap(options: {
   };
 }
 
+function detectPackageManager(options: {
+  packageManagerField?: string;
+  manifests: string[];
+}) {
+  const field = String(options.packageManagerField ?? "").toLowerCase();
+  if (field.startsWith("pnpm")) {
+    return "pnpm" as const;
+  }
+  if (field.startsWith("yarn")) {
+    return "yarn" as const;
+  }
+  if (field.startsWith("bun")) {
+    return "bun" as const;
+  }
+  if (field.startsWith("npm")) {
+    return "npm" as const;
+  }
+  if (options.manifests.some((path) => path.endsWith("pnpm-lock.yaml"))) {
+    return "pnpm" as const;
+  }
+  if (options.manifests.some((path) => path.endsWith("yarn.lock"))) {
+    return "yarn" as const;
+  }
+  if (options.manifests.some((path) => path.endsWith("bun.lockb"))) {
+    return "bun" as const;
+  }
+  if (options.manifests.some((path) => path.endsWith("package-lock.json"))) {
+    return "npm" as const;
+  }
+  return "unknown" as const;
+}
+
+function parsePackageScripts(raw: string) {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const scriptsRaw = parsed.scripts;
+    const scripts = scriptsRaw && typeof scriptsRaw === "object"
+      ? Object.keys(scriptsRaw as Record<string, unknown>)
+      : [];
+    return {
+      packageManagerField: typeof parsed.packageManager === "string" ? parsed.packageManager : "",
+      scripts: scripts
+        .map((script) => String(script).trim())
+        .filter((script) => script.length > 0)
+        .slice(0, 64),
+    };
+  } catch {
+    return {
+      packageManagerField: "",
+      scripts: [] as string[],
+    };
+  }
+}
+
 function computeCurriculumComplexity(options: {
   repoSizeKb: number;
   commitSampleCount: number;
@@ -921,6 +1007,17 @@ async function collectRepoIngestSnapshot(options: {
         apiConcepts: Array.isArray(cachedTreeStats.api_concepts)
           ? (cachedTreeStats.api_concepts as unknown[]).map((item) => String(item))
           : [],
+        knownFiles: Array.isArray(cachedTreeStats.known_files)
+          ? (cachedTreeStats.known_files as unknown[]).map((item) => String(item))
+          : [],
+        packageManager: (
+          ["pnpm", "npm", "yarn", "bun", "unknown"].includes(String(cachedTreeStats.package_manager ?? "unknown"))
+            ? String(cachedTreeStats.package_manager ?? "unknown")
+            : "unknown"
+        ) as RepoIngestSnapshot["treeStats"]["packageManager"],
+        scripts: Array.isArray(cachedTreeStats.scripts)
+          ? (cachedTreeStats.scripts as unknown[]).map((item) => String(item))
+          : [],
         archetype: cachedArchetype,
       },
       readmeExcerpt: String(existingSnapshot.readme_excerpt ?? ""),
@@ -958,6 +1055,28 @@ async function collectRepoIngestSnapshot(options: {
     "build.gradle",
   ];
   const manifests = filePaths.filter((path) => manifestNames.some((name) => path.endsWith(name))).slice(0, 120);
+  const knownFiles = filePaths.slice(0, 900);
+
+  let packageScripts: string[] = [];
+  let packageManagerField = "";
+  try {
+    if (filePaths.includes("package.json")) {
+      const packageRaw = await githubRequestRaw(
+        `/repos/${identity.fullName}/contents/package.json?ref=${encodeURIComponent(defaultBranch)}`,
+        githubToken,
+      );
+      const parsedPackage = parsePackageScripts(packageRaw);
+      packageScripts = parsedPackage.scripts;
+      packageManagerField = parsedPackage.packageManagerField;
+    }
+  } catch {
+    packageScripts = [];
+    packageManagerField = "";
+  }
+  const packageManager = detectPackageManager({
+    packageManagerField,
+    manifests,
+  });
 
   let readmeExcerpt = "";
   try {
@@ -1048,6 +1167,9 @@ async function collectRepoIngestSnapshot(options: {
         feature_keywords: featureKeywords,
         architecture_map: architectureMap,
         api_concepts: apiConcepts,
+        known_files: knownFiles,
+        package_manager: packageManager,
+        scripts: packageScripts,
         archetype,
       },
       readme_excerpt: readmeExcerpt,
@@ -1092,6 +1214,9 @@ async function collectRepoIngestSnapshot(options: {
       featureKeywords,
       architectureMap,
       apiConcepts,
+      knownFiles,
+      packageManager,
+      scripts: packageScripts,
       archetype,
     },
     readmeExcerpt,
@@ -1322,6 +1447,7 @@ function buildStageHydrationPrompt(options: {
   commitClusters: RepoIngestSnapshot["commitClusters"];
   nodes: RoadmapSyllabusNode[];
   evidenceByStage: StageEvidenceRef[];
+  treeStats: RepoIngestSnapshot["treeStats"];
 }) {
   const evidenceMap = new Map(options.evidenceByStage.map((evidence) => [evidence.stage_id, evidence]));
   const nodeLines = options.nodes
@@ -1345,6 +1471,9 @@ function buildStageHydrationPrompt(options: {
     .slice(0, 8)
     .map((cluster) => `${cluster.theme}: ${cluster.samples.slice(0, 3).join(" | ")}`)
     .join("\n");
+  const knownFilesHint = options.treeStats.knownFiles.slice(0, 90).join(" | ");
+  const scriptsHint = options.treeStats.scripts.join(", ") || "none";
+  const packageManager = options.treeStats.packageManager;
 
   return `You are Commitly Stage Hydrator.
 
@@ -1355,6 +1484,12 @@ ${options.readmeExcerpt || "N/A"}
 
 Commit theme references:
 ${clusterLines || "N/A"}
+
+Known repository files (must be preferred for task file paths):
+${knownFilesHint || "N/A"}
+
+Package manager: ${packageManager}
+Available package scripts: ${scriptsHint}
 
 Stages to hydrate:
 ${nodeLines}
@@ -1377,6 +1512,8 @@ Hard rules:
    - "Implement in your own workspace"
    - "Verify with tests and checks"
 10) For utility-lib/sdk repos, prioritize core behavior stages (parser/formatter/api behavior) before tooling polish.
+11) Task files should match known repository paths whenever possible. Do not invent fake paths like app/stage-*.
+12) Task commands must align with package manager and existing scripts. Avoid invalid commands like npm run dev if dev is not a script.
 
 Return ONLY JSON:
 {
@@ -1409,6 +1546,7 @@ function buildStageRepairPrompt(options: {
   commitClusters: RepoIngestSnapshot["commitClusters"];
   nodes: RoadmapSyllabusNode[];
   evidenceByStage: StageEvidenceRef[];
+  treeStats: RepoIngestSnapshot["treeStats"];
 }) {
   const evidenceMap = new Map(options.evidenceByStage.map((evidence) => [evidence.stage_id, evidence]));
   const nodeLines = options.nodes
@@ -1429,6 +1567,9 @@ function buildStageRepairPrompt(options: {
     .slice(0, 8)
     .map((cluster) => `${cluster.theme}: ${cluster.samples.slice(0, 2).join(" | ")}`)
     .join("\n");
+  const knownFilesHint = options.treeStats.knownFiles.slice(0, 90).join(" | ");
+  const scriptsHint = options.treeStats.scripts.join(", ") || "none";
+  const packageManager = options.treeStats.packageManager;
 
   return `You are Commitly Stage Repair engine.
 
@@ -1439,6 +1580,12 @@ ${options.readmeExcerpt || "N/A"}
 
 Commit theme references:
 ${clusterLines || "N/A"}
+
+Known repository files:
+${knownFilesHint || "N/A"}
+
+Package manager: ${packageManager}
+Available scripts: ${scriptsHint}
 
 Stages requiring repair:
 ${nodeLines}
@@ -1452,6 +1599,8 @@ Hard rules:
 6) Include explicit checkpoints.
 7) Every repaired stage must mention at least one required_evidence concept.
 8) Do not reuse repetitive scaffolding templates across stages.
+9) Use real repository file paths when possible and avoid fake app/stage-* paths.
+10) Commands must be valid for the package manager and known scripts.
 
 Return ONLY JSON:
 {
@@ -2100,7 +2249,7 @@ function containsForbiddenCloneInstruction(text: string) {
   return FORBIDDEN_CLONE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-function sanitizeTaskFiles(files: unknown, fallbackBasePath: string) {
+function sanitizeTaskFiles(files: unknown, _fallbackBasePath: string) {
   const rawFiles = Array.isArray(files)
     ? files.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
@@ -2108,10 +2257,192 @@ function sanitizeTaskFiles(files: unknown, fallbackBasePath: string) {
     .map((item) => item.trim().replace(/^\.\//, ""))
     .filter((item) => !containsForbiddenCloneInstruction(item))
     .slice(0, 6);
-  if (normalized.length > 0) {
-    return normalized;
+  return normalized.length > 0 ? normalized : [];
+}
+
+function resolveKnownRepoFile(
+  file: string,
+  knownFiles?: Set<string>,
+  _evidence?: StageEvidenceRef | null,
+) {
+  const candidate = file.trim().replace(/^\.\//, "");
+  if (!candidate) {
+    return null;
   }
-  return [`${fallbackBasePath}/index.ts`, `${fallbackBasePath}/README.md`];
+  if (!knownFiles || knownFiles.size === 0) {
+    return candidate;
+  }
+  if (knownFiles.has(candidate)) {
+    return candidate;
+  }
+
+  const candidateBase = candidate.split("/").slice(-1)[0] ?? candidate;
+  for (const known of knownFiles) {
+    if (known.endsWith(`/${candidateBase}`) || known === candidateBase) {
+      return known;
+    }
+  }
+  return null;
+}
+
+function isSourceLikeFile(path: string) {
+  const normalized = path.trim().replace(/^\.\//, "");
+  if (!normalized) {
+    return false;
+  }
+  if (NON_SOURCE_FILE_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return false;
+  }
+  if (/^README\.md$/i.test(normalized) || /^docs\//i.test(normalized)) {
+    return true;
+  }
+  if (/\/(test|tests|spec)\//i.test(normalized) || /\.(test|spec)\.[a-z0-9]+$/i.test(normalized)) {
+    return true;
+  }
+  return /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|swift|rb|php|cs|md|json|toml|yaml|yml)$/i.test(normalized);
+}
+
+function normalizeTaskCommands(
+  commands: string[],
+  packageManager: RepoIngestSnapshot["treeStats"]["packageManager"],
+  scripts: Set<string>,
+) {
+  const pm = packageManager;
+  const normalized: string[] = [];
+
+  const normalizeByManager = (command: string) => {
+    let next = command.trim();
+    if (pm === "pnpm") {
+      next = next.replace(/^npm\s+run\s+/i, "pnpm run ");
+      next = next.replace(/^npm\s+test\b/i, "pnpm test");
+      next = next.replace(/^npm\s+install\b/i, "pnpm add");
+    } else if (pm === "yarn") {
+      next = next.replace(/^npm\s+run\s+/i, "yarn ");
+      next = next.replace(/^npm\s+test\b/i, "yarn test");
+    } else if (pm === "bun") {
+      next = next.replace(/^npm\s+run\s+/i, "bun run ");
+      next = next.replace(/^npm\s+test\b/i, "bun test");
+    }
+    return next;
+  };
+
+  const hasScript = (script: string) => scripts.size === 0 || scripts.has(script);
+
+  for (const raw of commands) {
+    const command = normalizeByManager(raw);
+    if (!command) {
+      continue;
+    }
+    if (DISALLOWED_TASK_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) {
+      continue;
+    }
+    const runMatch = command.match(/^(npm|pnpm|yarn|bun)\s+run\s+([a-z0-9:_-]+)/i);
+    if (runMatch) {
+      if (hasScript(runMatch[2])) {
+        normalized.push(command);
+      }
+      continue;
+    }
+    const testMatch = command.match(/^(npm|pnpm|yarn|bun)\s+test\b/i);
+    if (testMatch) {
+      if (hasScript("test")) {
+        normalized.push(command);
+      }
+      continue;
+    }
+    if (ALLOWED_TASK_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) {
+      normalized.push(command);
+      continue;
+    }
+    normalized.push(command);
+  }
+
+  return Array.from(new Set(normalized))
+    .filter((command) => ALLOWED_TASK_COMMAND_PATTERNS.some((pattern) => pattern.test(command)))
+    .slice(0, 6);
+}
+
+function pickValidationCommand(
+  packageManager: RepoIngestSnapshot["treeStats"]["packageManager"],
+  scripts: Set<string>,
+) {
+  const pm = packageManager === "unknown" ? "npm" : packageManager;
+  const preferred = ["test", "typecheck", "lint", "build", "check"];
+  for (const script of preferred) {
+    if (scripts.has(script)) {
+      const candidate = normalizeTaskCommands([`${pm} run ${script}`], packageManager, scripts);
+      if (candidate.length > 0) {
+        return candidate[0];
+      }
+    }
+  }
+  const anyScript = Array.from(scripts)[0];
+  if (anyScript) {
+    const candidate = normalizeTaskCommands([`${pm} run ${anyScript}`], packageManager, scripts);
+    if (candidate.length > 0) {
+      return candidate[0];
+    }
+  }
+  return `${pm} install`;
+}
+
+function buildEvidenceRecoveryTasks(options: {
+  node: RoadmapSyllabusNode;
+  evidence?: StageEvidenceRef | null;
+  knownFiles?: Set<string>;
+  packageManager: RepoIngestSnapshot["treeStats"]["packageManager"];
+  scripts: Set<string>;
+}) {
+  const knownFiles = options.knownFiles;
+  const evidence = options.evidence;
+  const command = pickValidationCommand(options.packageManager, options.scripts);
+  const sourceCandidates = (evidence?.hot_paths ?? [])
+    .map((path) => String(path).trim())
+    .filter((path) => path.length > 0)
+    .filter((path) => isSourceLikeFile(path))
+    .map((path) => resolveKnownRepoFile(path, knownFiles, evidence) ?? path)
+    .slice(0, 6);
+
+  const fallbackKnown = Array.from(knownFiles ?? [])
+    .filter((path) => isSourceLikeFile(path))
+    .slice(0, 8);
+  const filesPool = Array.from(new Set([...sourceCandidates, ...fallbackKnown])).slice(0, 8);
+
+  const concepts = [
+    ...options.node.goals,
+    ...options.node.checkpoints,
+    ...(evidence?.api_concepts ?? []),
+    ...(evidence?.feature_keywords ?? []),
+  ]
+    .map((item) => sanitizeInstructionText(String(item)).replace(/\s+/g, " ").trim())
+    .filter((item) => item.length >= 6 && item.length <= 80)
+    .filter((item) => !/^stage\s+\d+/i.test(item));
+
+  const uniqueConcepts = Array.from(new Set(concepts));
+  const tasks: Array<{ label: string; steps: string[]; files: string[]; commands: string[] }> = [];
+
+  for (let idx = 0; idx < Math.max(3, Math.min(5, uniqueConcepts.length)); idx += 1) {
+    const concept = uniqueConcepts[idx] ?? `Core behavior ${idx + 1}`;
+    const file = filesPool[idx % Math.max(filesPool.length, 1)] ?? "src/index.ts";
+    const secondaryFile = filesPool[(idx + 1) % Math.max(filesPool.length, 1)];
+    const taskFiles = Array.from(new Set([file, secondaryFile].filter(Boolean) as string[])).slice(0, 2);
+    const label = sanitizeInstructionText(`Implement ${concept}`);
+    tasks.push({
+      label,
+      steps: [
+        sanitizeInstructionText(`Implement ${concept} in ${file} with explicit input/output behavior.`),
+        sanitizeInstructionText(`Add at least one verification case covering edge handling for ${concept}.`),
+        sanitizeInstructionText("Run the validation command and record the passing result."),
+      ],
+      files: taskFiles.length > 0 ? taskFiles : [file],
+      commands: [command],
+    });
+    if (tasks.length >= 3) {
+      break;
+    }
+  }
+
+  return tasks.slice(0, 4);
 }
 
 function toComparableTokens(text: string) {
@@ -2163,91 +2494,21 @@ function scoreStageGrounding(stage: Record<string, unknown>, evidence?: StageEvi
   return Math.round((featureCoverage * 70) + (fileCoverage * 30));
 }
 
-function toPathSlug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "feature";
-}
-
-function inferTestFilePath(sourcePath: string) {
-  const normalized = sourcePath.replace(/^\/+/, "");
-  if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(normalized)) {
-    return normalized.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, ".test.$1");
-  }
-  if (normalized.endsWith(".py")) {
-    return normalized.replace(/\.py$/, "_test.py");
-  }
-  if (normalized.endsWith(".go")) {
-    return normalized.replace(/\.go$/, "_test.go");
-  }
-  return `${normalized}.test.ts`;
-}
-
-function buildEvidenceBackedRecoveryTasks(
-  options: {
-    node: RoadmapSyllabusNode;
-    evidence?: StageEvidenceRef | null;
-    existingLabels: Set<string>;
-    fallbackBasePath: string;
-    needed: number;
-  },
-) {
-  const { node, evidence, fallbackBasePath, existingLabels } = options;
-  const concepts = [
-    ...(evidence?.api_concepts ?? []),
-    ...(evidence?.feature_keywords ?? []),
-    ...node.goals,
-    node.title,
-  ]
-    .map((item) => sanitizeInstructionText(String(item)))
-    .filter((item) => item.length >= 3)
-    .map((item) => item.replace(/\s+/g, " ").trim());
-  const uniqueConcepts = Array.from(new Set(concepts)).slice(0, 8);
-  const hotPaths = (evidence?.hot_paths ?? [])
-    .map((path) => String(path).trim())
-    .filter(Boolean);
-
-  const tasks: Array<{ label: string; steps: string[]; files: string[]; commands: string[] }> = [];
-  const targetCount = Math.max(options.needed, 0);
-  for (let idx = 0; idx < uniqueConcepts.length && tasks.length < targetCount; idx += 1) {
-    const concept = uniqueConcepts[idx];
-    const conceptSlug = toPathSlug(concept);
-    const primaryFile = hotPaths[idx] ?? `${fallbackBasePath}/${conceptSlug}.ts`;
-    const testFile = inferTestFilePath(primaryFile);
-    const label = sanitizeInstructionText(`Build ${concept} behavior`);
-    const labelKey = label.toLowerCase();
-    if (!label || existingLabels.has(labelKey)) {
-      continue;
-    }
-    existingLabels.add(labelKey);
-    tasks.push({
-      label,
-      steps: [
-        sanitizeInstructionText(
-          `Define explicit input and output rules for ${concept} in ${primaryFile}.`,
-        ),
-        sanitizeInstructionText(
-          `Implement ${concept} in ${primaryFile} and cover edge cases in ${testFile}.`,
-        ),
-        sanitizeInstructionText("Run tests locally and capture one passing verification case."),
-      ],
-      files: [primaryFile, testFile],
-      commands: ["npm test"],
-    });
-  }
-
-  return tasks;
-}
-
 function validateHydratedStageQuality(
   stage: Record<string, unknown>,
   node: RoadmapSyllabusNode,
   evidence?: StageEvidenceRef | null,
+  context?: {
+    knownFiles?: Set<string>;
+    packageManager?: RepoIngestSnapshot["treeStats"]["packageManager"];
+    scripts?: Set<string>;
+  },
 ) {
   const fallbackBasePath = `app/stage-${node.index}`;
   const issues: string[] = [];
+  const knownFiles = context?.knownFiles;
+  const packageManager = context?.packageManager ?? "unknown";
+  const scripts = context?.scripts ?? new Set<string>();
   const titleText = String(stage.title ?? node.title ?? "").trim();
   const rawTasks = Array.isArray(stage.tasks) ? stage.tasks : [];
   const sanitizedTasks = rawTasks
@@ -2264,36 +2525,28 @@ function validateHydratedStageQuality(
       const commandsRaw = Array.isArray(task.commands)
         ? task.commands.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
         : [];
-      const commands = commandsRaw
+      const commands = normalizeTaskCommands(
+        commandsRaw
         .map((item) => sanitizeInstructionText(item))
         .filter((item) => !containsForbiddenCloneInstruction(item))
-        .slice(0, 6);
-      const files = sanitizeTaskFiles(task.files, fallbackBasePath);
-      if (steps.length < 2) {
+        .slice(0, 6),
+        packageManager,
+        scripts,
+      );
+      const files = sanitizeTaskFiles(task.files, fallbackBasePath)
+        .map((file) => resolveKnownRepoFile(file, knownFiles, evidence))
+        .filter((file): file is string => Boolean(file));
+      if (steps.length < 2 || files.length === 0 || commands.length === 0) {
         return null;
       }
       return {
         label: label || `Build ${node.title}`,
         steps,
         files,
-        commands: commands.length > 0 ? commands : ["npm run dev"],
+        commands,
       };
     })
     .filter((task): task is { label: string; steps: string[]; files: string[]; commands: string[] } => Boolean(task));
-
-  if (sanitizedTasks.length < 3) {
-    const existingLabels = new Set(
-      sanitizedTasks.map((task) => task.label.trim().toLowerCase()).filter(Boolean),
-    );
-    const recoveryTasks = buildEvidenceBackedRecoveryTasks({
-      node,
-      evidence,
-      existingLabels,
-      fallbackBasePath,
-      needed: 3 - sanitizedTasks.length,
-    });
-    sanitizedTasks.push(...recoveryTasks);
-  }
 
   const stageText = JSON.stringify({ ...stage, tasks: sanitizedTasks });
   const cloneFree = !containsForbiddenCloneInstruction(stageText.toLowerCase());
@@ -2305,6 +2558,10 @@ function validateHydratedStageQuality(
   }
   if (sanitizedTasks.length < 3) {
     issues.push("has fewer than 3 actionable tasks");
+  }
+  const sourceLikeTaskCount = sanitizedTasks.filter((task) => task.files.some((file) => isSourceLikeFile(file))).length;
+  if (node.category !== "setup" && sourceLikeTaskCount < Math.max(2, Math.min(3, sanitizedTasks.length))) {
+    issues.push("tasks do not target enough source-like repository files");
   }
   const uniqueTaskLabelCount = new Set(
     sanitizedTasks.map((task) => task.label.trim().toLowerCase()).filter(Boolean),
@@ -2318,6 +2575,12 @@ function validateHydratedStageQuality(
   }, 0);
   if (templatePatternHits > 1) {
     issues.push("contains repetitive scaffold task patterns");
+  }
+  const vagueLabelHits = sanitizedTasks.filter((task) =>
+    /^(build .*behavior|implement .*logic|verify .*|setup .*framework|implement (src|github|workflows|package|lock).*)$/i.test(task.label.trim()) ||
+    /parsing path$/i.test(task.label.trim())).length;
+  if (vagueLabelHits > 1) {
+    issues.push("contains vague or low-signal task labels");
   }
   const summaryText = sanitizeInstructionText(String(stage.summary ?? node.summary ?? "")).trim();
   if (!summaryText || /^build stage \d+ from scratch/i.test(summaryText)) {
@@ -2481,6 +2744,12 @@ function evaluateChunkQuality(options: {
   const dedupeScore = Math.max(0, Math.min(100, Math.round((1 - maxSimilarity) * 100)));
   const noveltyScore = dedupeScore;
   const antiTemplatePass = chunkTemplateStageIds.length === 0;
+  if (dedupeScore < MIN_DEDUPE_SCORE) {
+    for (const stage of options.chunkStages) {
+      failedStageIds.add(String(stage.id ?? ""));
+    }
+    reasons.push(`dedupe score below threshold (${dedupeScore} < ${MIN_DEDUPE_SCORE})`);
+  }
 
   return {
     noveltyScore,
@@ -4339,6 +4608,9 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     featureKeywords: [],
     architectureMap: {},
     apiConcepts: [],
+    knownFiles: [],
+    packageManager: "unknown",
+    scripts: [],
     archetype: "utility-lib",
   };
   if (ingestSnapshotKey) {
@@ -4370,6 +4642,17 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       apiConcepts: Array.isArray(treeStatsRaw.api_concepts)
         ? treeStatsRaw.api_concepts.map((item) => String(item))
         : [],
+      knownFiles: Array.isArray(treeStatsRaw.known_files)
+        ? treeStatsRaw.known_files.map((item) => String(item))
+        : [],
+      packageManager: (
+        ["pnpm", "npm", "yarn", "bun", "unknown"].includes(String(treeStatsRaw.package_manager ?? "unknown"))
+          ? String(treeStatsRaw.package_manager ?? "unknown")
+          : "unknown"
+      ) as RepoIngestSnapshot["treeStats"]["packageManager"],
+      scripts: Array.isArray(treeStatsRaw.scripts)
+        ? treeStatsRaw.scripts.map((item) => String(item))
+        : [],
       archetype: (
         ["utility-lib", "sdk", "tooling", "saas-app", "infra"].includes(archetypeRaw)
           ? archetypeRaw
@@ -4396,6 +4679,11 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     readmeExcerpt,
   });
   const stageEvidenceById = new Map(stageEvidence.map((item) => [item.stage_id, item]));
+  const validationContext = {
+    knownFiles: new Set(ingestTreeStats.knownFiles),
+    packageManager: ingestTreeStats.packageManager,
+    scripts: new Set(ingestTreeStats.scripts),
+  };
 
   const prompt = buildStageHydrationPrompt({
     repoName: String(jobRow.repo_full_name),
@@ -4403,6 +4691,7 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     commitClusters,
     nodes: chunkNodes,
     evidenceByStage: stageEvidence,
+    treeStats: ingestTreeStats,
   });
 
   await updateGenerationJobPhase(supabase, jobId, {
@@ -4496,7 +4785,7 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     const node = chunkNodes[idx];
     const stage = initialStages[idx];
     stageByNodeId.set(node.id, stage);
-    validationByNodeId.set(node.id, validateHydratedStageQuality(stage, node, stageEvidenceById.get(node.id)));
+    validationByNodeId.set(node.id, validateHydratedStageQuality(stage, node, stageEvidenceById.get(node.id), validationContext));
   }
 
   const failedNodes = chunkNodes.filter((node) => !(validationByNodeId.get(node.id)?.ok ?? false));
@@ -4507,6 +4796,7 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       commitClusters,
       nodes: failedNodes,
       evidenceByStage: stageEvidence.filter((item) => failedNodes.some((node) => node.id === item.stage_id)),
+      treeStats: ingestTreeStats,
     });
     const repairResult = await callGeminiJson({
       prompt: repairPrompt,
@@ -4531,13 +4821,55 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
         continue;
       }
       const merged = mergeSyllabusNodeIntoStage(candidate, node);
-      const validated = validateHydratedStageQuality(merged, node, stageEvidenceById.get(node.id));
+      const validated = validateHydratedStageQuality(merged, node, stageEvidenceById.get(node.id), validationContext);
       stageByNodeId.set(node.id, merged);
       validationByNodeId.set(node.id, validated);
     }
   }
 
   const remainingFailures = chunkNodes
+    .map((node) => ({
+      node,
+      validated: validationByNodeId.get(node.id),
+    }))
+    .filter((item) => !(item.validated?.ok ?? false));
+
+  if (remainingFailures.length > 0) {
+    for (const item of remainingFailures) {
+      const node = item.node;
+      const evidence = stageEvidenceById.get(node.id);
+      const recoveredStage = mergeSyllabusNodeIntoStage({
+        ...(stageByNodeId.get(node.id) ?? {}),
+        id: node.id,
+        index: node.index,
+        title: node.title,
+        summary: node.summary,
+        category: node.category,
+        difficulty: node.difficulty,
+        goals: node.goals,
+        prerequisites: node.prerequisites,
+        checkpoints: node.checkpoints,
+        tasks: buildEvidenceRecoveryTasks({
+          node,
+          evidence,
+          knownFiles: validationContext.knownFiles,
+          packageManager: validationContext.packageManager,
+          scripts: validationContext.scripts,
+        }),
+        optional_peeks: node.optional_peeks,
+      }, node);
+      const recoveredValidation = validateHydratedStageQuality(
+        recoveredStage,
+        node,
+        evidence,
+        validationContext,
+      );
+      stageByNodeId.set(node.id, recoveredStage);
+      validationByNodeId.set(node.id, recoveredValidation);
+    }
+  }
+
+  const unresolvedFailures = chunkNodes
     .map((node) => ({
       node,
       validated: validationByNodeId.get(node.id),
@@ -4564,12 +4896,12 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
   const failedStageIds = new Set<string>(qualityGate.failedStageIds);
   const qualityFailReasons: string[] = qualityGate.reasons.length > 0 ? [...qualityGate.reasons] : [];
 
-  if (remainingFailures.length > 0) {
-    const stageFailureReasons = remainingFailures.map((item) => {
+  if (unresolvedFailures.length > 0) {
+    const stageFailureReasons = unresolvedFailures.map((item) => {
       const issues = item.validated?.issues ?? ["unknown quality failure"];
       return `${item.node.id}: ${issues.join(", ")}`;
     });
-    for (const item of remainingFailures) {
+    for (const item of unresolvedFailures) {
       failedStageIds.add(item.node.id);
     }
     qualityFailReasons.push(...stageFailureReasons);
