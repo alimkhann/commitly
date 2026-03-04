@@ -47,8 +47,33 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     const storedTheme = normalizeTheme(localStorage.getItem(STORAGE_THEME_KEY));
     const storedLanguage = normalizeLanguage(localStorage.getItem(STORAGE_LANGUAGE_KEY));
     setThemeState(storedTheme);
-    setLanguageState(storedLanguage);
-    setHydrated(true);
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    let idleId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const applyLanguage = () => {
+      setLanguageState(storedLanguage);
+      setHydrated(true);
+    };
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      // Defer language swap until after initial hydration work to avoid text mismatches
+      idleId = idleWindow.requestIdleCallback(applyLanguage, { timeout: 1800 });
+    } else {
+      timeoutId = globalThis.setTimeout(applyLanguage, 600);
+    }
+    return () => {
+      if (idleId !== null && typeof idleWindow.cancelIdleCallback === "function") {
+        idleWindow.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   useEffect(() => {
