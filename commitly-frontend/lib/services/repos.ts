@@ -42,6 +42,7 @@ const API_ROUTES = {
     `/api/v1/admin/stage-regen-flags/${flagId}/approve`,
   adminStageRegenFlagReject: (flagId: string) =>
     `/api/v1/admin/stage-regen-flags/${flagId}/reject`,
+  workerDrain: "/api/v1/internal/worker/drain",
 };
 
 export type RoadmapGenerationPhase =
@@ -1258,6 +1259,28 @@ export const repoService = {
         },
         body: {
           reason: payload?.reason ?? "",
+        },
+      }
+    );
+  },
+
+  triggerWorkerDrain(
+    maxTasks = 2
+  ): Promise<ApiClientResponse<{ ok: boolean; processed: number; max_tasks: number }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<{ ok: boolean; processed: number; max_tasks: number }>(
+      env.apiBaseUrl,
+      {
+        path: API_ROUTES.workerDrain,
+        method: "POST",
+        body: {
+          max_tasks: Math.max(1, Math.min(12, Math.floor(maxTasks))),
         },
       }
     );

@@ -319,6 +319,7 @@ export default function TimelineView() {
           (startResponse.data as { last_error?: string | null }).last_error ??
           null;
         let stepCount = 0;
+        let lastWorkerKickAt = 0;
         const maxPollSteps = 60;
         while (
           !cancelled &&
@@ -344,7 +345,13 @@ export default function TimelineView() {
           }
 
           const queueState = statusResponse.data.queue_state ?? "idle";
-          if (!(queueState === "queued" || queueState === "processing")) {
+          if (queueState === "queued" || queueState === "processing") {
+            const now = Date.now();
+            if (now - lastWorkerKickAt > 5000) {
+              lastWorkerKickAt = now;
+              void repoService.triggerWorkerDrain(3);
+            }
+          } else {
             await repoService.hydrateNextRoadmapChunk(
               startResponse.data.job_id,
               activeToken,
