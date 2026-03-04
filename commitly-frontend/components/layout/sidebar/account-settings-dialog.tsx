@@ -205,7 +205,7 @@ function GithubConnectionPreferences() {
       if (!response.ok && response.error) {
         const errorCode =
           "errorCode" in response ? response.errorCode : undefined;
-        setError(mapGithubOAuthError(errorCode, response.error));
+        setError(mapGithubOAuthError(errorCode, response.error, t));
       }
       setConnected(false);
       setGithubLogin(null);
@@ -235,7 +235,7 @@ function GithubConnectionPreferences() {
       } else if ("error" in response && response.error) {
         const errorCode =
           "errorCode" in response ? response.errorCode : undefined;
-        setError(mapGithubOAuthError(errorCode, response.error));
+        setError(mapGithubOAuthError(errorCode, response.error, t));
       }
     } catch {
       setError(t("github_oauth_start_failed", "Failed to start GitHub OAuth"));

@@ -129,6 +129,7 @@ export default function TimelineView() {
   const [generatedStages, setGeneratedStages] = useState(0);
   const [totalPlannedStages, setTotalPlannedStages] = useState(0);
   const [isContinuingGeneration, setIsContinuingGeneration] = useState(false);
+  const [flaggingStageId, setFlaggingStageId] = useState<string | null>(null);
   const [stageTranslations, setStageTranslations] = useState<
     Record<
       string,
@@ -318,32 +319,14 @@ export default function TimelineView() {
           (startResponse.data as { last_error?: string | null }).last_error ??
           null;
         let stepCount = 0;
+        const maxPollSteps = 60;
         while (
           !cancelled &&
           currentStatus !== "completed" &&
           currentStatus !== "failed" &&
-          stepCount < 28
+          stepCount < maxPollSteps
         ) {
           const activeToken = (await getToken?.()) ?? token ?? undefined;
-          const chunkResponse = await repoService.hydrateNextRoadmapChunk(
-            startResponse.data.job_id,
-            activeToken,
-            {
-              chunkSize: currentStatus === "queued" ? 4 : 3,
-            }
-          );
-          if (chunkResponse.ok && chunkResponse.data) {
-            applyProgressSnapshot(chunkResponse.data);
-            currentStatus = chunkResponse.data.status;
-            currentError = chunkResponse.data.last_error ?? currentError;
-            stepCount += 1;
-            if (currentStatus === "completed" || currentStatus === "failed") {
-              break;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 450));
-            continue;
-          }
-
           const statusResponse = await repoService.getRoadmapJob(
             startResponse.data.job_id,
             activeToken
@@ -354,6 +337,23 @@ export default function TimelineView() {
           applyProgressSnapshot(statusResponse.data);
           currentStatus = statusResponse.data.status;
           currentError = statusResponse.data.last_error ?? currentError;
+
+          if (currentStatus === "completed" || currentStatus === "failed") {
+            stepCount += 1;
+            break;
+          }
+
+          const queueState = statusResponse.data.queue_state ?? "idle";
+          if (!(queueState === "queued" || queueState === "processing")) {
+            await repoService.hydrateNextRoadmapChunk(
+              startResponse.data.job_id,
+              activeToken,
+              {
+                chunkSize: currentStatus === "queued" ? 4 : 3,
+              }
+            );
+          }
+
           stepCount += 1;
           await new Promise((resolve) => setTimeout(resolve, 700));
         }
@@ -365,9 +365,12 @@ export default function TimelineView() {
           );
         }
 
-        if (currentStatus === "queued" || currentStatus === "running") {
-          throw new Error(
-            "Roadmap generation is taking longer than expected. Continue generation to resume."
+        if (currentStatus === "queued" || currentStatus === "running" || currentStatus === "partial_ready") {
+          setGenerationStatus(
+            t(
+              "generation_queued_status",
+              "Generation is still running in the queue. You can keep this page open or continue from the timeline."
+            )
           );
         }
 
@@ -579,6 +582,97 @@ export default function TimelineView() {
     upsertRoadmap,
   ]);
 
+  const buildStageSourceHash = useCallback((stage: RepoTimelineStage) => {
+    const source = JSON.stringify({
+      id: stage.id,
+      title: stage.title,
+      summary: stage.summary,
+      goals: stage.goals,
+      prerequisites: stage.prerequisites,
+      checkpoints: stage.checkpoints,
+      tasks: stage.tasks.map((task) => ({
+        label: task.label,
+        steps: task.steps,
+      })),
+      resources: stage.resources.map((resource) => ({ label: resource.label })),
+      code_examples: stage.code_examples.map((example) => ({
+        description: example.description,
+      })),
+    });
+    let hash = 0x811c9dc5;
+    for (let idx = 0; idx < source.length; idx += 1) {
+      hash ^= source.charCodeAt(idx);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }, []);
+
+  const handleFlagStageForRegeneration = useCallback(
+    async (stage: RepoTimelineStage) => {
+      if (!(activeRoadmap && identity && isSignedIn)) {
+        setActionError(t("sign_in_track_progress", "Sign in to track progress"));
+        return;
+      }
+      const reason = window.prompt(
+        t(
+          "flag_stage_reason_prompt",
+          "Describe what is wrong with this stage and what should be improved."
+        )
+      );
+      if (!reason || reason.trim().length < 12) {
+        return;
+      }
+      setFlaggingStageId(stage.id);
+      setActionError(null);
+      try {
+        const token = await getToken?.();
+        const response = await repoService.flagStageForRegeneration(
+          stage.id,
+          {
+            repo_full_name: activeRoadmap.repo.full_name,
+            reason: reason.trim(),
+            stage_source_hash: buildStageSourceHash(stage),
+          },
+          token ?? undefined
+        );
+        if (!response.ok) {
+          throw new Error(
+            response.error ??
+              t(
+                "stage_regen_flag_failed",
+                "Unable to flag stage for regeneration right now."
+              )
+          );
+        }
+        setActionError(
+          t(
+            "stage_regen_flagged",
+            "Stage flagged for admin review. We'll regenerate it if approved."
+          )
+        );
+      } catch (error) {
+        setActionError(
+          error instanceof Error
+            ? error.message
+            : t(
+                "stage_regen_flag_failed",
+                "Unable to flag stage for regeneration right now."
+              )
+        );
+      } finally {
+        setFlaggingStageId(null);
+      }
+    },
+    [
+      activeRoadmap,
+      buildStageSourceHash,
+      getToken,
+      identity,
+      isSignedIn,
+      t,
+    ]
+  );
+
   // Fetch user rating when identity and auth are available
   useEffect(() => {
     if (!(identity && isSignedIn)) {
@@ -653,31 +747,6 @@ export default function TimelineView() {
     }
     return activeRoadmap.repo.rating_sum / activeRoadmap.repo.rating_count;
   }, [activeRoadmap]);
-
-  const buildStageSourceHash = useCallback((stage: RepoTimelineStage) => {
-    const source = JSON.stringify({
-      id: stage.id,
-      title: stage.title,
-      summary: stage.summary,
-      goals: stage.goals,
-      prerequisites: stage.prerequisites,
-      checkpoints: stage.checkpoints,
-      tasks: stage.tasks.map((task) => ({
-        label: task.label,
-        steps: task.steps,
-      })),
-      resources: stage.resources.map((resource) => ({ label: resource.label })),
-      code_examples: stage.code_examples.map((example) => ({
-        description: example.description,
-      })),
-    });
-    let hash = 0x811c9dc5;
-    for (let idx = 0; idx < source.length; idx += 1) {
-      hash ^= source.charCodeAt(idx);
-      hash = Math.imul(hash, 0x01000193);
-    }
-    return (hash >>> 0).toString(16).padStart(8, "0");
-  }, []);
 
   const timelineStages = useMemo(() => {
     if (!activeRoadmap) {
@@ -1047,7 +1116,9 @@ export default function TimelineView() {
 
       {activeRoadmap && (
         <TimelineCanvas
+          flaggingStageId={flaggingStageId}
           isSignedIn={isSignedIn}
+          onFlagStageForRegeneration={handleFlagStageForRegeneration}
           onStageWindowChange={requestStageTranslations}
           repoSlug={repoId}
           stages={timelineStages}
@@ -1081,15 +1152,19 @@ function TimelineCanvas({
   stages,
   statusIcon,
   isSignedIn,
+  flaggingStageId,
   repoSlug,
   t,
+  onFlagStageForRegeneration,
   onStageWindowChange,
 }: {
   stages: RepoTimelineStage[];
   statusIcon: Record<RepoTimelineStage["status"], JSX.Element>;
   isSignedIn: boolean;
+  flaggingStageId: string | null;
   repoSlug: string;
   t: (key: string, fallback?: string) => string;
+  onFlagStageForRegeneration?: (stage: RepoTimelineStage) => void;
   onStageWindowChange?: (stageIds: string[]) => void;
 }) {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(
@@ -1131,9 +1206,10 @@ function TimelineCanvas({
     if (centerIndex < 0) {
       return;
     }
-    const windowStart = Math.max(0, centerIndex - 2);
-    const windowEnd = Math.min(stages.length, centerIndex + 3);
-    const stageIds = stages.slice(windowStart, windowEnd).map((stage) => stage.id);
+    const visibleStart = Math.max(0, centerIndex - 2);
+    const visibleEnd = Math.min(stages.length, centerIndex + 3);
+    const prefetchEnd = Math.min(stages.length, visibleEnd + 5);
+    const stageIds = stages.slice(visibleStart, prefetchEnd).map((stage) => stage.id);
     onStageWindowChange(stageIds);
   }, [onStageWindowChange, selectedStage, stages]);
 
@@ -1185,9 +1261,11 @@ function TimelineCanvas({
       <div>
         <TimelineNodeCard
           align="left"
+          flaggingStageId={flaggingStageId}
           index={selectedIndex}
           isCurrent={isSignedIn && selectedStage.status === "in-progress"}
           isSignedIn={isSignedIn}
+          onFlagStageForRegeneration={onFlagStageForRegeneration}
           repoSlug={repoSlug}
           stage={selectedStage}
           statusIcon={statusIcon[selectedStage.status]}
@@ -1204,6 +1282,8 @@ function TimelineNodeCard({
   statusIcon,
   isCurrent,
   isSignedIn,
+  flaggingStageId,
+  onFlagStageForRegeneration,
   repoSlug,
   index,
   t,
@@ -1213,6 +1293,8 @@ function TimelineNodeCard({
   statusIcon: JSX.Element;
   isCurrent: boolean;
   isSignedIn: boolean;
+  flaggingStageId: string | null;
+  onFlagStageForRegeneration?: (stage: RepoTimelineStage) => void;
   repoSlug: string;
   index: number;
   t: (key: string, fallback?: string) => string;
@@ -1509,6 +1591,19 @@ function TimelineNodeCard({
               <span>{stage.eta}</span>
             </div>
             <div className="flex items-center gap-2">
+              {isSignedIn && onFlagStageForRegeneration && (
+                <Button
+                  disabled={flaggingStageId === stage.id}
+                  onClick={() => onFlagStageForRegeneration(stage)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {flaggingStageId === stage.id
+                    ? t("sending", "Sending...")
+                    : t("flag_stage_regenerate", "Flag stage")}
+                </Button>
+              )}
               <Button asChild size="sm" variant={ctaVariant}>
                 <Link href={`/repo/${repoSlug}?view=guide&stage=${stage.id}`}>
                   {ctaLabel}

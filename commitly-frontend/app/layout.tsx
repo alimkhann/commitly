@@ -38,6 +38,19 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+const isProdRuntime =
+  process.env.NODE_ENV === "production" ||
+  process.env.VERCEL_ENV === "production";
+const hasTestClerkKeyInProd =
+  isProdRuntime && clerkPublishableKey.startsWith("pk_test_");
+
+if (hasTestClerkKeyInProd) {
+  console.error(
+    "[commitly] Production runtime is using a Clerk test publishable key (pk_test_*). Switch to production Clerk keys immediately."
+  );
+}
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider
@@ -64,6 +77,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <body
           className={`${inter.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
         >
+          {hasTestClerkKeyInProd && (
+            <div className="border-destructive/40 border-b bg-destructive/15 px-4 py-2 text-center text-destructive text-sm">
+              Clerk production key is not configured. Replace `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` with a production key.
+            </div>
+          )}
           <PreferencesProvider>
             <RoadmapCatalogProvider>
               <LayoutProvider>

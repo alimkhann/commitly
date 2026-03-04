@@ -20,7 +20,7 @@ while ((keyMatch = enKeyRegex.exec(enBlock[1]))) {
 let usageLines = [];
 try {
   usageLines = execSync(
-    "rg -n --no-heading 't\\(\"[^\"]+\"' app components lib --glob '!lib/i18n/translations.ts'",
+    "rg -n --no-heading \"t\\\\((\\\"[^\\\"]+\\\"|'[^']+')\" app components lib --glob '!lib/i18n/translations.ts'",
     { cwd: new URL("..", import.meta.url).pathname }
   )
     .toString()
@@ -32,9 +32,9 @@ try {
 
 const usedKeys = new Set();
 for (const line of usageLines) {
-  const match = line.match(/\bt\("([^"]+)"/);
+  const match = line.match(/\bt\((["'])([^"']+)\1/);
   if (!match) continue;
-  const key = match[1];
+  const key = match[2];
   if (/^[a-z][a-z0-9_-]*$/.test(key)) {
     usedKeys.add(key);
   }
@@ -58,28 +58,16 @@ for (const [, localeName, block] of localeBlocks) {
   while ((match = overrideRegex.exec(block))) {
     overrideKeys.add(match[1]);
   }
-  // Locales are allowed to inherit from English fallback, but we still require core route keys.
-  const requiredCoreKeys = [
-    "new_repo_roadmap",
-    "search_roadmaps",
-    "timeline",
-    "guide",
-    "settings_preferences",
-    "help_title",
-    "policies_title",
-    "release_notes_title",
-    "plans_title",
-  ];
-  const missingCore = requiredCoreKeys.filter((key) => !overrideKeys.has(key));
-  if (missingCore.length > 0) {
-    localeMissing.push({ localeName, missingCore });
+  const missingUsed = [...usedKeys].filter((key) => !overrideKeys.has(key));
+  if (missingUsed.length > 0) {
+    localeMissing.push({ localeName, missingUsed });
   }
 }
 
 if (localeMissing.length > 0) {
-  console.error("[i18n] Missing required core locale overrides:");
+  console.error("[i18n] Missing locale overrides for used keys:");
   for (const issue of localeMissing) {
-    console.error(` - ${issue.localeName}: ${issue.missingCore.join(", ")}`);
+    console.error(` - ${issue.localeName}: ${issue.missingUsed.slice(0, 40).join(", ")}`);
   }
   process.exit(1);
 }

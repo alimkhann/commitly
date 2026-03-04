@@ -34,7 +34,7 @@ function GithubOAuthResultContent() {
         <h1 className="font-semibold text-2xl">{title}</h1>
         {isError ? (
           <p className="mt-3 text-muted-foreground text-sm">
-            {mapGithubOAuthError(errorCode, detail ?? undefined)}
+            {mapGithubOAuthError(errorCode, detail ?? undefined, t)}
           </p>
         ) : (
           <p className="mt-3 text-muted-foreground">

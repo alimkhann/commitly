@@ -133,7 +133,7 @@ export default function Home() {
     } else if (response.error) {
       const errorCode =
         "errorCode" in response ? response.errorCode : undefined;
-      setError(mapGithubOAuthError(errorCode, response.error));
+      setError(mapGithubOAuthError(errorCode, response.error, t));
     }
   };
 

@@ -14,6 +14,8 @@ const API_ROUTES = {
     `/api/v1/roadmap/jobs/${jobId}/hydrate-next`,
   syllabus: (owner: string, repo: string) => `/api/v1/roadmap/syllabus/${owner}/${repo}`,
   hydrateStage: (stageId: string) => `/api/v1/roadmap/stages/${stageId}/hydrate`,
+  flagStageRegenerate: (stageId: string) =>
+    `/api/v1/roadmap/stages/${stageId}/flag-regenerate`,
   catalog: "/api/v1/roadmap/catalog",
   cached: (owner: string, repo: string) =>
     `/api/v1/roadmap/cached/${owner}/${repo}`,
@@ -35,6 +37,11 @@ const API_ROUTES = {
   bugReport: "/api/v1/feedback/bug",
   preferences: "/api/v1/preferences",
   adminCatalogSoftReset: "/api/v1/admin/catalog/soft-reset",
+  adminStageRegenFlags: "/api/v1/admin/stage-regen-flags",
+  adminStageRegenFlagApprove: (flagId: string) =>
+    `/api/v1/admin/stage-regen-flags/${flagId}/approve`,
+  adminStageRegenFlagReject: (flagId: string) =>
+    `/api/v1/admin/stage-regen-flags/${flagId}/reject`,
 };
 
 export type RoadmapGenerationPhase =
@@ -100,6 +107,16 @@ export type RoadmapGenerationJobStatus =
   | "completed"
   | "failed";
 
+export type PlanTier = "free" | "pro" | "ultra";
+
+export type StageRegenerationFlagStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "processing"
+  | "completed"
+  | "failed";
+
 export type ProgressiveGenerationStartResponse = {
   job_id: string;
   repo_full_name: string;
@@ -115,6 +132,23 @@ export type ProgressiveGenerationStartResponse = {
   failed_stage_ids?: string[];
   dedupe_score?: number;
   grounding_score?: number;
+  failed_stage_reports?: Array<{
+    stage_id: string;
+    attempt_count: number;
+    fail_codes: string[];
+    fail_reasons: string[];
+    last_model: string;
+  }>;
+  quality_gate_metrics?: {
+    dedupe_score: number;
+    grounding_score: number;
+    concept_coverage_score: number;
+    template_risk_score: number;
+  };
+  chunk_status?: "pass" | "fail" | "partial_pass";
+  queue_state?: "idle" | "queued" | "processing" | "failed" | string;
+  worker_attempts?: number;
+  last_worker_at?: string | null;
 };
 
 export type ProgressiveGenerationJobResponse = {
@@ -131,6 +165,23 @@ export type ProgressiveGenerationJobResponse = {
   failed_stage_ids?: string[];
   dedupe_score?: number;
   grounding_score?: number;
+  failed_stage_reports?: Array<{
+    stage_id: string;
+    attempt_count: number;
+    fail_codes: string[];
+    fail_reasons: string[];
+    last_model: string;
+  }>;
+  quality_gate_metrics?: {
+    dedupe_score: number;
+    grounding_score: number;
+    concept_coverage_score: number;
+    template_risk_score: number;
+  };
+  chunk_status?: "pass" | "fail" | "partial_pass";
+  queue_state?: "idle" | "queued" | "processing" | "failed" | string;
+  worker_attempts?: number;
+  last_worker_at?: string | null;
 };
 
 export type RoadmapSyllabusNode = {
@@ -192,6 +243,23 @@ export type HydrateNextResponse = {
   failed_stage_ids?: string[];
   dedupe_score?: number;
   grounding_score?: number;
+  failed_stage_reports?: Array<{
+    stage_id: string;
+    attempt_count: number;
+    fail_codes: string[];
+    fail_reasons: string[];
+    last_model: string;
+  }>;
+  quality_gate_metrics?: {
+    dedupe_score: number;
+    grounding_score: number;
+    concept_coverage_score: number;
+    template_risk_score: number;
+  };
+  chunk_status?: "pass" | "fail" | "partial_pass";
+  queue_state?: "idle" | "queued" | "processing" | "failed" | string;
+  worker_attempts?: number;
+  last_worker_at?: string | null;
 };
 
 export type UserPreferences = {
@@ -278,6 +346,25 @@ export type GlobalUsage = {
   remaining: number;
   mode: "normal" | "low" | "critical" | string;
   reset_at: string;
+  user_daily_limit?: number | null;
+  user_used?: number | null;
+  user_remaining?: number | null;
+  user_reset_at?: string | null;
+  plan_tier?: PlanTier | null;
+};
+
+export type StageRegenerationFlag = {
+  id: string;
+  repo_full_name: string;
+  stage_id: string;
+  requested_by: string;
+  status: StageRegenerationFlagStatus;
+  reason: string;
+  stage_source_hash?: string | null;
+  admin_decision_by?: string | null;
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type RoadmapStreamEvent =
@@ -626,6 +713,33 @@ export const repoService = {
       },
       authToken,
     });
+  },
+
+  flagStageForRegeneration(
+    stageId: string,
+    payload: {
+      repo_full_name: string;
+      reason: string;
+      stage_source_hash?: string;
+    },
+    authToken?: string
+  ): Promise<ApiClientResponse<{ ok: boolean; flag: StageRegenerationFlag }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<{ ok: boolean; flag: StageRegenerationFlag }>(
+      env.apiBaseUrl,
+      {
+        path: API_ROUTES.flagStageRegenerate(stageId),
+        method: "POST",
+        body: payload,
+        authToken,
+      }
+    );
   },
 
   listCatalog(
@@ -1056,6 +1170,97 @@ export const repoService = {
         ...(Array.isArray(options?.keepRepos) ? { keep_repos: options.keepRepos } : {}),
       },
     });
+  },
+
+  listStageRegenerationFlags(
+    adminSecret: string,
+    options?: { status?: StageRegenerationFlagStatus; limit?: number; offset?: number }
+  ): Promise<ApiClientResponse<{ items: StageRegenerationFlag[]; limit: number; offset: number }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    const params = new URLSearchParams();
+    if (options?.status) {
+      params.set("status", options.status);
+    }
+    if (typeof options?.limit === "number") {
+      params.set("limit", String(options.limit));
+    }
+    if (typeof options?.offset === "number") {
+      params.set("offset", String(options.offset));
+    }
+    const path = params.toString()
+      ? `${API_ROUTES.adminStageRegenFlags}?${params.toString()}`
+      : API_ROUTES.adminStageRegenFlags;
+    return apiClient<{ items: StageRegenerationFlag[]; limit: number; offset: number }>(
+      env.apiBaseUrl,
+      {
+        path,
+        headers: {
+          "x-admin-secret": adminSecret,
+        },
+        cache: "no-store",
+      }
+    );
+  },
+
+  approveStageRegenerationFlag(
+    adminSecret: string,
+    flagId: string,
+    payload?: { regenerate_now?: boolean; note?: string }
+  ): Promise<ApiClientResponse<{ ok: boolean; flag: StageRegenerationFlag }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<{ ok: boolean; flag: StageRegenerationFlag }>(
+      env.apiBaseUrl,
+      {
+        path: API_ROUTES.adminStageRegenFlagApprove(flagId),
+        method: "POST",
+        headers: {
+          "x-admin-secret": adminSecret,
+        },
+        body: {
+          regenerate_now: payload?.regenerate_now ?? true,
+          note: payload?.note ?? "",
+        },
+      }
+    );
+  },
+
+  rejectStageRegenerationFlag(
+    adminSecret: string,
+    flagId: string,
+    payload?: { reason?: string }
+  ): Promise<ApiClientResponse<{ ok: boolean; flag: StageRegenerationFlag }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<{ ok: boolean; flag: StageRegenerationFlag }>(
+      env.apiBaseUrl,
+      {
+        path: API_ROUTES.adminStageRegenFlagReject(flagId),
+        method: "POST",
+        headers: {
+          "x-admin-secret": adminSecret,
+        },
+        body: {
+          reason: payload?.reason ?? "",
+        },
+      }
+    );
   },
 };
 
