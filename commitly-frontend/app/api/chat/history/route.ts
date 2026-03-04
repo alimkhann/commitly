@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-const backendBase = process.env.NEXT_PUBLIC_EDGE_API_BASE_URL;
+const backendBase = (() => {
+  const value = process.env.NEXT_PUBLIC_EDGE_API_BASE_URL;
+  return value
+    ? value.trim().replace(/\/+$/, "").replace(/\/api\/v1$/i, "")
+    : "";
+})();
 
 async function forward(req: NextRequest) {
   if (!backendBase) {

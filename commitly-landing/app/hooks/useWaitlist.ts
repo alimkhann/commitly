@@ -7,7 +7,7 @@ const DEFAULT_EDGE_API_BASE = 'https://krxngpbvmnbkjfkquhgd.supabase.co/function
 const API_BASE = (
     process.env.NEXT_PUBLIC_EDGE_API_BASE_URL ??
     DEFAULT_EDGE_API_BASE
-).trim()
+).trim().replace(/\/+$/, '').replace(/\/api\/v1$/i, '')
 let hasWarnedMissingEdgeApiBase = false
 
 const WAITLIST_CACHE_KEY = 'commitly_waitlist_count'

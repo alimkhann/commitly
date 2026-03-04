@@ -2,13 +2,18 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
+const normalizeEdgeBaseUrl = (value?: string | null) =>
+  value ? value.trim().replace(/\/+$/, "").replace(/\/api\/v1$/i, "") : "";
+
 export async function POST(req: NextRequest) {
   console.log("Chat API route hit");
   try {
     const body = await req.json();
     const { messages, ...rest } = body;
 
-    const apiBaseUrl = process.env.NEXT_PUBLIC_EDGE_API_BASE_URL;
+    const apiBaseUrl = normalizeEdgeBaseUrl(
+      process.env.NEXT_PUBLIC_EDGE_API_BASE_URL
+    );
     if (!apiBaseUrl) {
       return NextResponse.json(
         { error: "Missing NEXT_PUBLIC_EDGE_API_BASE_URL" },

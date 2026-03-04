@@ -6,7 +6,20 @@ const sanitize = (value?: string) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const edgeApiBaseUrl = sanitize(process.env.NEXT_PUBLIC_EDGE_API_BASE_URL);
+const normalizeEdgeBaseUrl = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.replace(/\/api\/v1$/i, "");
+};
+
+const edgeApiBaseUrl = normalizeEdgeBaseUrl(
+  sanitize(process.env.NEXT_PUBLIC_EDGE_API_BASE_URL)
+);
 
 export const env = {
   apiBaseUrl: edgeApiBaseUrl,
