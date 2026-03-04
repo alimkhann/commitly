@@ -2,13 +2,11 @@
 
 import { UserProfile, useAuth } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
-import { Archive, Bell, GitBranch, SlidersHorizontal } from "lucide-react";
+import { Archive, GitBranch, SlidersHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { mapGithubOAuthError } from "@/lib/services/error-messages";
 import { githubService } from "@/lib/services/github";
 
@@ -23,12 +21,12 @@ export default function AccountSettingsDialog({
 }: AccountSettingsDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="-ml-16 mx-auto border-none bg-transparent p-0 shadow-none">
+      <DialogContent className="mx-auto max-w-4xl border border-border/70 bg-[#0b0f14] p-0 shadow-2xl">
         <UserProfile
           appearance={{
             baseTheme: dark,
             variables: {
-              colorBackground: "#050507",
+              colorBackground: "#0b0f14",
               colorText: "#f5f6fb",
               borderRadius: "0.3rem",
             },
@@ -37,18 +35,11 @@ export default function AccountSettingsDialog({
           routing="hash"
         >
           <UserProfile.Page
-            label="General"
+            label="Preferences"
             labelIcon={<SlidersHorizontal className="h-3.5 w-3.5" />}
-            url="general"
+            url="preferences"
           >
             <GeneralPreferences />
-          </UserProfile.Page>
-          <UserProfile.Page
-            label="Notifications"
-            labelIcon={<Bell className="h-3.5 w-3.5" />}
-            url="notifications"
-          >
-            <NotificationsPreferences />
           </UserProfile.Page>
           <UserProfile.Page
             label="Connections"
@@ -73,80 +64,20 @@ export default function AccountSettingsDialog({
 function GeneralPreferences() {
   return (
     <div className="space-y-5 py-6 text-foreground text-sm">
-      <section className="rounded-3xl border-none p-6">
+      <section className="rounded-2xl border border-border/60 bg-[#0d1117] p-6">
         <div className="space-y-3">
           <div>
-            <p className="font-medium text-base text-white">Theme</p>
+            <p className="font-medium text-base text-white">Preferences</p>
             <p className="text-white/60 text-xs">
-              Commitly follows your system preference by default. Override it to
-              lock a theme.
+              Theme, language, and notifications are currently managed by your
+              system and Clerk profile defaults. No local-only toggles are
+              shown here to avoid fake settings.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-white/80">
-            <Button className="rounded-full px-4" size="sm" variant="secondary">
-              System
-            </Button>
-            <Button className="rounded-full px-4" size="sm" variant="ghost">
-              Light
-            </Button>
-            <Button className="rounded-full px-4" size="sm" variant="ghost">
-              Dark
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border-none p-6 text-foreground">
-        <div className="space-y-3">
-          <div>
-            <p className="font-medium text-base text-white">Language</p>
-            <p className="text-white/60 text-xs">
-              We auto-detect from your browser headers, but you can override it
-              anytime.
-            </p>
-          </div>
-          <Input
-            className="mt-1 text-foreground placeholder:text-white/40"
-            placeholder="Prefer auto-detect"
-          />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function NotificationsPreferences() {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
-
-  return (
-    <div className="space-y-5 py-6 text-foreground text-sm">
-      <section className="rounded-3xl p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">Timeline responses</p>
-            <p className="text-white/60 text-xs">
-              Get a push when commitly generates long-running timelines.
-            </p>
-          </div>
-          <Switch
-            checked={notificationsEnabled}
-            onCheckedChange={setNotificationsEnabled}
-          />
-        </div>
-      </section>
-      <section className="rounded-3xl p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">Weekly digest</p>
-            <p className="text-white/60 text-xs">
-              Summary of repos, hints requested, and plan usage.
-            </p>
-          </div>
-          <Switch
-            checked={weeklyDigestEnabled}
-            onCheckedChange={setWeeklyDigestEnabled}
-          />
+          <p className="text-white/40 text-xs">
+            We’ll expose persistent account preferences once backend support is
+            live.
+          </p>
         </div>
       </section>
     </div>

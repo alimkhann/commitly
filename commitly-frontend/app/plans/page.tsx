@@ -2,6 +2,7 @@
 
 import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +17,10 @@ import { plans } from "@/data/plans";
 
 export default function PlansPage() {
   const router = useRouter();
+  const paidPlansWaitlistUrl = "https://commitly.one";
 
   return (
-    <main className="min-h-screen w-full bg-gradient-to-b from-background via-background/80 to-background px-6 py-12 text-white">
+    <main className="min-h-screen w-full bg-[#070b10] px-6 py-12 text-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-10">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
@@ -29,9 +31,8 @@ export default function PlansPage() {
               Upgrade your workspace when you&apos;re ready.
             </h1>
             <p className="text-base text-muted-foreground">
-              Pick a plan that matches how often you turn repos into guided
-              build plans. All tiers include the dark UI and shadcn component
-              kit.
+              Pricing is transparent, but billing is not live yet. Paid plans
+              are currently waitlist-only.
             </p>
           </div>
           <Button onClick={() => router.back()} variant="ghost">
@@ -43,7 +44,7 @@ export default function PlansPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {plans.map((plan) => (
             <Card
-              className={`flex flex-col border border-border/60 bg-card/80 shadow-2xl shadow-black/30 ${
+              className={`flex flex-col border border-border/60 bg-[#0d1117] ${
                 plan.highlighted ? "ring-2 ring-primary" : ""
               }`}
               key={plan.id}
@@ -66,12 +67,21 @@ export default function PlansPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex-1">
-                <Button
-                  className="w-full font-semibold"
-                  variant={plan.highlighted ? "default" : "secondary"}
-                >
-                  {plan.cta}
-                </Button>
+                {plan.id === "free" ? (
+                  <Button className="w-full font-semibold" disabled variant="secondary">
+                    {plan.cta}
+                  </Button>
+                ) : (
+                  <Button
+                    asChild
+                    className="w-full font-semibold"
+                    variant={plan.highlighted ? "default" : "secondary"}
+                  >
+                    <Link href={paidPlansWaitlistUrl} target="_blank">
+                      Join paid plans waitlist
+                    </Link>
+                  </Button>
+                )}
                 <ul className="mt-6 space-y-3 text-muted-foreground text-sm">
                   {plan.features.map((feature) => (
                     <li className="flex items-center gap-2" key={feature}>
@@ -83,8 +93,8 @@ export default function PlansPage() {
               </CardContent>
               <CardFooter className="text-muted-foreground text-xs">
                 {plan.id === "free"
-                  ? "Includes unlimited mock timelines on public repos."
-                  : "Cancel anytime. We prorate upgrades."}
+                  ? "Free tier is active now."
+                  : "Billing is not active yet. Join waitlist to get notified on launch."}
               </CardFooter>
             </Card>
           ))}

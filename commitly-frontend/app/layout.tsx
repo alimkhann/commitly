@@ -48,14 +48,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           borderRadius: "0.3rem",
         },
         elements: {
-          card: "text-foreground border-none border-white/8 shadow-[0_35px_70px_rgba(0,0,0,0.65)]",
-          formFieldInput: "bg-white/5",
+          card: "text-foreground border border-border bg-[#0d1117] shadow-xl",
+          formFieldInput: "bg-[#090d12] border-border",
           headerTitle: "text-white",
           headerSubtitle: "text-white/70",
           socialButtonsBlockButton:
-            "text-foreground border border-white/12 hover:bg-white/10 transition-colors",
+            "text-foreground border border-border hover:bg-white/5 transition-colors",
           formButtonPrimary:
-            "bg-primary text-primary-foreground hover:bg-primary/85 shadow-[0_15px_35px_rgba(125,211,252,0.45)] transition-all",
+            "bg-primary text-primary-foreground hover:bg-primary/85 transition-colors",
           footerActionLink: "text-primary hover:text-primary/80",
         },
       }}

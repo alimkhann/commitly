@@ -42,6 +42,17 @@ export default function SearchPage() {
   const [publicError, setPublicError] = useState<string | null>(null);
 
   const backendConfigured = repoService.isBackendConfigured();
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const matchesDifficulty = (
+    candidate: string | null | undefined,
+    selected: "all" | "intro" | "easy" | "medium" | "hard"
+  ) => {
+    if (selected === "all") {
+      return true;
+    }
+    return String(candidate ?? "").toLowerCase() === selected;
+  };
 
   useEffect(() => {
     if (!backendConfigured) {
@@ -54,6 +65,7 @@ export default function SearchPage() {
         page: 1,
         page_size: 50,
         sort: sortBy,
+        difficulty: difficulty !== "all" ? difficulty : undefined,
       });
       if (cancelled) {
         return;
@@ -75,7 +87,7 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [backendConfigured, sortBy]);
+  }, [backendConfigured, sortBy, difficulty]);
 
   const syncedMap = useMemo(
     () => new Map(synced.map((repo) => [repo.repo.full_name, repo])),
@@ -98,28 +110,40 @@ export default function SearchPage() {
   );
 
   const syncedMatches = useMemo(() => {
-    if (!query.trim()) {
-      return userRepoList;
-    }
-    const lower = query.toLowerCase();
     return userRepoList.filter((repo) => {
       if (!repo.repo) {
         return false;
       }
+      if (!matchesDifficulty(repo.repo.difficulty, difficulty)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
       const summary = repo.repo.description?.toLowerCase() ?? "";
       return (
-        repo.repo.full_name.toLowerCase().includes(lower) ||
-        summary.includes(lower)
+        repo.repo.full_name.toLowerCase().includes(normalizedQuery) ||
+        summary.includes(normalizedQuery)
       );
     });
-  }, [userRepoList, query]);
+  }, [userRepoList, difficulty, normalizedQuery]);
 
   const publicRepoList = useMemo(() => {
     if (!backendConfigured) {
       return [];
     }
-    return publicRepos;
-  }, [backendConfigured, publicRepos]);
+    return publicRepos.filter((repo) => {
+      if (!matchesDifficulty(repo.repo.difficulty, difficulty)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      const fullName = repo.repo.full_name.toLowerCase();
+      const description = (repo.repo.description ?? "").toLowerCase();
+      return fullName.includes(normalizedQuery) || description.includes(normalizedQuery);
+    });
+  }, [backendConfigured, difficulty, normalizedQuery, publicRepos]);
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">

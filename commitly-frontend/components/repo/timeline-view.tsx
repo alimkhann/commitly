@@ -1206,21 +1206,22 @@ function GenerationLoadingCard({
   status?: string;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-20 text-center">
-      <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
-        <div className="absolute inset-0 rounded-full border border-primary/20" />
-        <div className="absolute inset-2 animate-pulse rounded-full border border-primary/25" />
-        <Clock3 className="h-10 w-10 text-primary" />
-      </div>
-      <div className="max-w-md space-y-2">
+    <div className="flex flex-1 items-center justify-center px-6 py-20">
+      <div className="w-full max-w-2xl rounded-2xl border border-border/70 bg-[#0d1117] p-8 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
+          <Clock3 className="h-7 w-7 text-primary" />
+        </div>
         <h2 className="font-semibold text-2xl">
           <ShinyText>Generating roadmap for {repoName}</ShinyText>
         </h2>
-        <p className="text-muted-foreground">
+        <p className="mt-2 text-muted-foreground">
           {status ||
             "Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute."}
         </p>
-        <div className="flex items-center justify-center gap-1.5 pt-2">
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#111827]">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/70" />
+        </div>
+        <div className="flex items-center justify-center gap-1.5 pt-3">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70 [animation-delay:0ms]" />
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/60 [animation-delay:200ms]" />
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/50 [animation-delay:400ms]" />

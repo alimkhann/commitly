@@ -7,8 +7,13 @@ const API_ROUTES = {
   generateRoadmap: "/api/v1/roadmap/generate",
   generateRoadmapStream: "/api/v1/roadmap/generate/stream",
   generateRoadmapProgressive: "/api/v1/roadmap/generate-progressive",
+  generateSyllabus: "/api/v1/roadmap/syllabus/generate",
   roadmapJob: (jobId: string) => `/api/v1/roadmap/jobs/${jobId}`,
   roadmapJobContinue: (jobId: string) => `/api/v1/roadmap/jobs/${jobId}/continue`,
+  roadmapJobHydrateNext: (jobId: string) =>
+    `/api/v1/roadmap/jobs/${jobId}/hydrate-next`,
+  syllabus: (owner: string, repo: string) => `/api/v1/roadmap/syllabus/${owner}/${repo}`,
+  hydrateStage: (stageId: string) => `/api/v1/roadmap/stages/${stageId}/hydrate`,
   catalog: "/api/v1/roadmap/catalog",
   cached: (owner: string, repo: string) =>
     `/api/v1/roadmap/cached/${owner}/${repo}`,
@@ -26,6 +31,7 @@ const API_ROUTES = {
     `/api/v1/roadmap/${owner}/${repo}/view`,
   chat: "/api/v1/roadmap/chat",
   usageGlobal: "/api/v1/usage/global",
+  bugReport: "/api/v1/feedback/bug",
 };
 
 export type RepoIdentity = {
@@ -89,6 +95,59 @@ export type ProgressiveGenerationJobResponse = {
   total_planned_stages: number;
   last_error: string | null;
   updated_at: string;
+};
+
+export type RoadmapSyllabusNode = {
+  id: string;
+  index: number;
+  title: string;
+  summary: string;
+  category: string;
+  difficulty: string;
+  goals: string[];
+  prerequisites: string[];
+  checkpoints: string[];
+  source_themes?: string[];
+  optional_peeks?: string[];
+};
+
+export type SyllabusGenerateResponse = {
+  job_id: string;
+  repo_full_name: string;
+  status: RoadmapGenerationJobStatus;
+  syllabus: RoadmapSyllabusNode[];
+  initial_stage_details: RepoTimelineStage[];
+  generated_stage_count: number;
+  total_stage_count: number;
+  logical_stage_target: number;
+  curriculum_mode: "single_track" | "multi_track" | string;
+};
+
+export type SyllabusResponse = {
+  repo_full_name: string;
+  syllabus: RoadmapSyllabusNode[];
+  stage_target: number;
+  logical_stage_target: number;
+  curriculum_mode: "single_track" | "multi_track" | string;
+  generated_stage_count: number;
+  generated_at: string;
+};
+
+export type StageHydrationResponse = {
+  job_id: string;
+  stage_id: string;
+  detail: RepoTimelineStage;
+  quality_score: number;
+  hydrated_at: string;
+};
+
+export type HydrateNextResponse = {
+  status: RoadmapGenerationJobStatus;
+  generated_stages: number;
+  total_planned_stages: number;
+  timeline: RepoTimelineStage[];
+  updated_at: string;
+  last_error: string | null;
 };
 
 export type RoadmapCatalogPage = {
@@ -395,6 +454,100 @@ export const repoService = {
     return apiClient<ProgressiveGenerationJobResponse>(env.apiBaseUrl, {
       path: API_ROUTES.roadmapJobContinue(jobId),
       method: "POST",
+      authToken,
+    });
+  },
+
+  generateSyllabus(
+    repoUrl: string,
+    authToken?: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<ApiClientResponse<SyllabusGenerateResponse>> {
+    if (!repoUrl.trim()) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "Repository URL is required.",
+      });
+    }
+
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+
+    return apiClient<SyllabusGenerateResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.generateSyllabus,
+      method: "POST",
+      body: {
+        repo_url: repoUrl,
+        force_refresh: options?.forceRefresh ?? false,
+      },
+      authToken,
+    });
+  },
+
+  getSyllabus(
+    owner: string,
+    repo: string
+  ): Promise<ApiClientResponse<SyllabusResponse>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<SyllabusResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.syllabus(owner, repo),
+      cache: "no-store",
+    });
+  },
+
+  hydrateNextRoadmapChunk(
+    jobId: string,
+    authToken?: string,
+    options?: { chunkSize?: number }
+  ): Promise<ApiClientResponse<HydrateNextResponse>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+
+    return apiClient<HydrateNextResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.roadmapJobHydrateNext(jobId),
+      method: "POST",
+      body: {
+        chunk_size: options?.chunkSize ?? 3,
+      },
+      authToken,
+    });
+  },
+
+  hydrateRoadmapStage(
+    stageId: string,
+    jobId: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<StageHydrationResponse>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<StageHydrationResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.hydrateStage(stageId),
+      method: "POST",
+      body: {
+        job_id: jobId,
+      },
       authToken,
     });
   },
@@ -710,6 +863,35 @@ export const repoService = {
     return apiClient<GlobalUsage>(env.apiBaseUrl, {
       path: API_ROUTES.usageGlobal,
       cache: "no-store",
+    });
+  },
+
+  submitBugReport(
+    payload: {
+      title: string;
+      description: string;
+      routePath?: string;
+      userAgent?: string;
+    },
+    authToken?: string
+  ): Promise<ApiClientResponse<null>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<null>(env.apiBaseUrl, {
+      path: API_ROUTES.bugReport,
+      method: "POST",
+      body: {
+        title: payload.title,
+        description: payload.description,
+        route_path: payload.routePath ?? "",
+        user_agent: payload.userAgent ?? "",
+      },
+      authToken,
     });
   },
 };
