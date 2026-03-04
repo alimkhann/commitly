@@ -1261,17 +1261,102 @@ function parseGeminiJsonResponse(payload: Record<string, unknown>) {
     throw new Error("Gemini returned empty text");
   }
 
-  try {
-    return JSON.parse(cleaned) as Record<string, unknown>;
-  } catch {
-    const firstBrace = cleaned.indexOf("{");
-    const lastBrace = cleaned.lastIndexOf("}");
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      const sliced = cleaned.slice(firstBrace, lastBrace + 1).trim();
-      return JSON.parse(sliced) as Record<string, unknown>;
-    }
-    throw new Error("Gemini returned malformed JSON");
+  const parsed = tryParseLooseJsonObject(cleaned);
+  if (parsed) {
+    return parsed;
   }
+  throw new Error("Gemini returned malformed JSON");
+}
+
+function tryParseLooseJsonObject(raw: string) {
+  const candidates: string[] = [];
+  const cleaned = raw.trim();
+  if (!cleaned) {
+    return null;
+  }
+  candidates.push(cleaned);
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(cleaned.slice(firstBrace, lastBrace + 1).trim());
+  }
+
+  const withoutTrailingCommas = cleaned.replace(/,\s*([}\]])/g, "$1");
+  if (withoutTrailingCommas !== cleaned) {
+    candidates.push(withoutTrailingCommas);
+  }
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate)) {
+      continue;
+    }
+    seen.add(candidate);
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      const balanced = autoCloseJson(candidate);
+      if (!balanced || seen.has(balanced)) {
+        continue;
+      }
+      seen.add(balanced);
+      try {
+        const parsed = JSON.parse(balanced);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+function autoCloseJson(input: string) {
+  const stack: string[] = [];
+  let inString = false;
+  let escaping = false;
+  for (let idx = 0; idx < input.length; idx += 1) {
+    const ch = input[idx];
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      const open = stack.at(-1);
+      if ((ch === "}" && open === "{") || (ch === "]" && open === "[")) {
+        stack.pop();
+      }
+    }
+  }
+  if (stack.length === 0) {
+    return input;
+  }
+  let suffix = "";
+  for (let idx = stack.length - 1; idx >= 0; idx -= 1) {
+    suffix += stack[idx] === "{" ? "}" : "]";
+  }
+  return `${input}${suffix}`;
 }
 
 function extractGeminiText(payload: Record<string, unknown>) {
@@ -1426,6 +1511,12 @@ async function callGeminiJson(options: {
     } catch (error) {
       const raw = extractGeminiText(payload);
       if (raw.length > 0) {
+        const locallyRepaired = tryParseLooseJsonObject(raw);
+        if (locallyRepaired) {
+          return { payload, parsed: locallyRepaired, usage: usageTotals };
+        }
+      }
+      if (raw.length > 0) {
         const repairPayload = await callGemini({
           prompt:
             `Repair the following malformed JSON and return only valid JSON with identical structure and meaning.\n\n${raw}`,
@@ -1439,6 +1530,13 @@ async function callGeminiJson(options: {
           const repaired = parseGeminiJsonResponse(repairPayload);
           return { payload: repairPayload, parsed: repaired, usage: usageTotals };
         } catch {
+          const repairedRaw = extractGeminiText(repairPayload);
+          if (repairedRaw.length > 0) {
+            const locallyRepaired = tryParseLooseJsonObject(repairedRaw);
+            if (locallyRepaired) {
+              return { payload: repairPayload, parsed: locallyRepaired, usage: usageTotals };
+            }
+          }
           // Fall through to retry with stricter instruction.
         }
       }
@@ -1856,6 +1954,85 @@ function normalizeTimeline(timelineRaw: unknown, stageBudget: number, commits: A
   };
 
   return [setupStage, ...stages.map((stage, idx) => ({ ...stage, index: idx + 1 }))];
+}
+
+function toSafeSegment(text: string, fallback: string) {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36);
+  return normalized || fallback;
+}
+
+function buildDeterministicStageDetail(
+  node: RoadmapSyllabusNode,
+  repoFullName: string,
+) {
+  const slug = toSafeSegment(node.title, `stage-${node.index}`);
+  const docFile = `docs/stages/${node.id}.md`;
+  const featureDir = `src/modules/${slug}`;
+  const stageGoals = node.goals.length > 0
+    ? node.goals
+    : [`Build ${node.title} from scratch`, "Verify behavior with local checks"];
+  const stageCheckpoints = node.checkpoints.length > 0
+    ? node.checkpoints
+    : [
+      `${node.title} works from your own implementation`,
+      "Smoke checks complete locally",
+    ];
+
+  return {
+    id: node.id,
+    index: node.index,
+    title: node.title,
+    summary: sanitizeInstructionText(
+      node.summary || `Build ${node.title} as an independent milestone from scratch.`,
+    ),
+    status: "not-started",
+    eta: node.difficulty === "hard" ? "120m" : node.difficulty === "medium" ? "90m" : "60m",
+    category: node.category,
+    difficulty: node.difficulty,
+    goals: stageGoals,
+    prerequisites: node.prerequisites,
+    checkpoints: stageCheckpoints,
+    tasks: [
+      {
+        label: `Define ${node.title} scope and acceptance checks`,
+        steps: [
+          `Create ${docFile} with a short scope for ${node.title}.`,
+          `Write acceptance checks based on these goals: ${stageGoals.join("; ")}.`,
+          "Add at least one edge case and one failure case to your checklist.",
+        ],
+        files: [docFile],
+        commands: ["mkdir -p docs/stages", `touch ${docFile}`],
+      },
+      {
+        label: `Implement ${node.title} in your own workspace`,
+        steps: [
+          `Create a fresh module under ${featureDir}.`,
+          "Implement core behavior using small functions and explicit input/output contracts.",
+          "Wire the module into your app entrypoint and expose a runnable path.",
+        ],
+        files: [`${featureDir}/index.ts`, `${featureDir}/service.ts`, "src/app.ts"],
+        commands: ["mkdir -p src/modules", `mkdir -p ${featureDir}`, "pnpm dev || npm run dev"],
+      },
+      {
+        label: `Verify ${node.title} with tests and checks`,
+        steps: [
+          `Add tests for ${featureDir}/index.ts covering happy path and at least one edge case.`,
+          "Run lint and tests, then update your stage notes with the final verification result.",
+          `If behavior differs from ${repoFullName}, adjust your implementation but keep your own architecture choices.`,
+        ],
+        files: [`${featureDir}/index.test.ts`, "README.md", docFile],
+        commands: ["pnpm test || npm test", "pnpm lint || npm run lint"],
+      },
+    ],
+    code_examples: [],
+    resources: [],
+    optional_peeks: node.optional_peeks,
+    commit_window: [],
+  };
 }
 
 async function getGlobalUsage(supabase: SupabaseClient): Promise<GlobalUsage> {
@@ -3096,7 +3273,7 @@ async function getOrCreateProgressiveJob(
         last_error: null,
         progress_percent: computeProgressPercent(0, 1, "ingest"),
         current_phase: "ingest",
-        phase_message: "Queued. Start continue generation to run ingest.",
+        phase_message: "Queued. Preparing ingest artifacts...",
       })
       .select("*")
       .single();
@@ -3415,17 +3592,38 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     lastError: null,
   });
 
-  const result = await callGeminiJson({
-    prompt,
-    maxOutputTokens: usageSnapshot.mode === "low" ? 1400 : 2200,
-    responseMimeType: "application/json",
-    temperature: 0.2,
-    models: GEMINI_MODELS_HYDRATOR,
-  });
+  let usageMeta = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+  let usedDeterministicFallback = false;
+  let hydratedSourceTimeline: unknown = [];
+  try {
+    const result = await callGeminiJson({
+      prompt,
+      maxOutputTokens: usageSnapshot.mode === "low" ? 1400 : 2200,
+      responseMimeType: "application/json",
+      temperature: 0.2,
+      models: GEMINI_MODELS_HYDRATOR,
+    });
+    usageMeta = { ...result.usage };
+    hydratedSourceTimeline = result.parsed.timeline;
+  } catch {
+    usedDeterministicFallback = true;
+    await updateGenerationJobPhase(supabase, jobId, {
+      phase: "hydrate",
+      status: "running",
+      generatedStages,
+      totalStages: totalPlannedStages,
+      message: "Model output malformed. Recovering with deterministic stage scaffolds...",
+      lastError: null,
+    });
+    hydratedSourceTimeline = chunkNodes.map((node) =>
+      buildDeterministicStageDetail(node, String(jobRow.repo_full_name)));
+  }
 
-  const usageMeta = { ...result.usage };
-  const parsed = result.parsed;
-  const hydrated = normalizeTimeline(parsed.timeline, chunkNodes.length, commitRefs).filter((stage) => stage.id !== "stage-setup");
+  const hydrated = normalizeTimeline(hydratedSourceTimeline, chunkNodes.length, commitRefs).filter((stage) => stage.id !== "stage-setup");
   const hydratedByIndex = new Map(hydrated.map((stage) => [Number(stage.index), stage]));
   const initialStages = chunkNodes.map((node, idx) => {
     const candidate = hydratedByIndex.get(idx + 1) ?? hydrated[idx];
@@ -3504,7 +3702,30 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     }
   }
 
-  const remainingFailures = chunkNodes
+  let remainingFailures = chunkNodes
+    .map((node) => ({
+      node,
+      validated: validationByNodeId.get(node.id),
+    }))
+    .filter((item) => !(item.validated?.ok ?? false));
+  if (remainingFailures.length > 0) {
+    await updateGenerationJobPhase(supabase, jobId, {
+      phase: "validate",
+      status: "running",
+      generatedStages,
+      totalStages: totalPlannedStages,
+      message: "Applying deterministic recovery for low-quality stages...",
+      lastError: null,
+    });
+    for (const failed of remainingFailures) {
+      const recovered = buildDeterministicStageDetail(failed.node, String(jobRow.repo_full_name));
+      const validated = validateHydratedStageQuality(recovered, failed.node);
+      stageByNodeId.set(failed.node.id, recovered);
+      validationByNodeId.set(failed.node.id, validated);
+    }
+  }
+
+  remainingFailures = chunkNodes
     .map((node) => ({
       node,
       validated: validationByNodeId.get(node.id),
@@ -3651,6 +3872,7 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
       chunk_size: stagesToGenerate,
       stage_start: stageStart,
       stage_end: stageEnd,
+      hydration_fallback: usedDeterministicFallback,
       global_remaining: usageSnapshot.globalUsage.remaining,
       user_remaining: usageSnapshot.userUsage.remaining,
     },
@@ -3709,7 +3931,7 @@ async function handleGenerateRoadmapProgressive(context: AuthedRouteContext) {
       repo_full_name: String(job.repo_full_name),
       progress_percent: Number(job.progress_percent ?? computeProgressPercent(currentGenerated, Math.max(totalPlanned, 1), "ingest")),
       current_phase: String(job.current_phase ?? "ingest"),
-      phase_message: String(job.phase_message ?? "Queued. Start continue generation to begin ingest."),
+      phase_message: String(job.phase_message ?? "Queued. Preparing ingest artifacts..."),
     };
 
     return toJsonResponse({
@@ -4250,7 +4472,7 @@ async function handleTranslateStages(context: RouteContext) {
             ...toTranslatableStagePayload(item.stage),
           })),
         );
-        const result = await callGeminiAndParseJson({
+        const result = await callGeminiJson({
           prompt,
           maxOutputTokens: 2200,
           responseMimeType: "application/json",

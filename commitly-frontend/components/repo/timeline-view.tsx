@@ -324,9 +324,10 @@ export default function TimelineView() {
           currentStatus !== "failed" &&
           stepCount < 28
         ) {
+          const activeToken = (await getToken?.()) ?? token ?? undefined;
           const chunkResponse = await repoService.hydrateNextRoadmapChunk(
             startResponse.data.job_id,
-            token ?? undefined,
+            activeToken,
             {
               chunkSize: currentStatus === "queued" ? 4 : 3,
             }
@@ -345,7 +346,7 @@ export default function TimelineView() {
 
           const statusResponse = await repoService.getRoadmapJob(
             startResponse.data.job_id,
-            token ?? undefined
+            activeToken
           );
           if (!(statusResponse.ok && statusResponse.data)) {
             break;
