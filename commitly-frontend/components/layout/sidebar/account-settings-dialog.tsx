@@ -5,8 +5,16 @@ import { dark } from "@clerk/themes";
 import { Archive, GitBranch, SlidersHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { mapGithubOAuthError } from "@/lib/services/error-messages";
 import { githubService } from "@/lib/services/github";
 
@@ -19,15 +27,28 @@ export default function AccountSettingsDialog({
   open,
   onOpenChange,
 }: AccountSettingsDialogProps) {
+  const { theme } = usePreferences();
+  const [isDarkMode, setIsDarkMode] = useState(true);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      setIsDarkMode(theme === "dark" || (theme === "system" && media.matches));
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="mx-auto max-w-4xl border border-border/70 bg-[#0b0f14] p-0 shadow-2xl">
+      <DialogContent className="mx-auto max-w-4xl border border-border/70 bg-card p-0 shadow-2xl">
         <UserProfile
           appearance={{
-            baseTheme: dark,
+            baseTheme: isDarkMode ? dark : undefined,
             variables: {
-              colorBackground: "#0b0f14",
-              colorText: "#f5f6fb",
+              colorBackground: isDarkMode ? "#0b1020" : "#ffffff",
+              colorText: isDarkMode ? "#f5f6fb" : "#111827",
               borderRadius: "0.3rem",
             },
             elements: {},
@@ -62,21 +83,63 @@ export default function AccountSettingsDialog({
 }
 
 function GeneralPreferences() {
+  const { theme, language, setTheme, setLanguage, saving, t, languageNames } =
+    usePreferences();
+
   return (
     <div className="space-y-5 py-6 text-foreground text-sm">
-      <section className="rounded-2xl border border-border/60 bg-[#0d1117] p-6">
+      <section className="rounded-2xl border border-border/60 bg-card p-6">
         <div className="space-y-3">
           <div>
-            <p className="font-medium text-base text-white">Preferences</p>
-            <p className="text-white/60 text-xs">
-              Theme, language, and notifications are currently managed by your
-              system and Clerk profile defaults. No local-only toggles are
-              shown here to avoid fake settings.
-            </p>
+            <p className="font-medium text-base text-foreground">{t("settings_preferences", "Preferences")}</p>
+            <p className="text-muted-foreground text-xs">{t("preferences_description", "Choose your theme and language. Changes persist on your account.")}</p>
           </div>
-          <p className="text-white/40 text-xs">
-            We’ll expose persistent account preferences once backend support is
-            live.
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-muted-foreground text-xs" htmlFor="theme-preference">
+                {t("theme", "Theme")}
+              </label>
+              <Select
+                onValueChange={(value) =>
+                  setTheme(value as "system" | "light" | "dark")
+                }
+                value={theme}
+              >
+                <SelectTrigger id="theme-preference">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">{t("theme_system", "System")}</SelectItem>
+                  <SelectItem value="light">{t("theme_light", "Light")}</SelectItem>
+                  <SelectItem value="dark">{t("theme_dark", "Dark")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-muted-foreground text-xs" htmlFor="language-preference">
+                {t("language", "Language")}
+              </label>
+              <Select
+                onValueChange={(value) =>
+                  setLanguage(value as "en" | "zh-HK" | "kz" | "ru")
+                }
+                value={language}
+              >
+                <SelectTrigger id="language-preference">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(languageNames).map(([code, label]) => (
+                    <SelectItem key={code} value={code}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            {saving ? t("saving", "Saving...") : t("saved", "Saved")}
           </p>
         </div>
       </section>
@@ -185,7 +248,7 @@ function GithubConnectionPreferences() {
       <div className="rounded-3xl border border-border/60 bg-background/60 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
-            <p className="font-medium text-base text-white">GitHub</p>
+            <p className="font-medium text-base text-foreground">GitHub</p>
             {(() => {
               let statusText =
                 "Connect to generate roadmaps from your repositories.";
@@ -194,7 +257,7 @@ function GithubConnectionPreferences() {
               } else if (loading) {
                 statusText = "Checking your GitHub connection...";
               }
-              return <p className="text-white/60 text-xs">{statusText}</p>;
+              return <p className="text-muted-foreground text-xs">{statusText}</p>;
             })()}
             {error && <p className="text-destructive text-xs">{error}</p>}
           </div>
@@ -246,10 +309,10 @@ function ArchivedRepositoriesPreferences() {
       {archivedRepos.length === 0 ? (
         <div className="rounded-3xl border border-border/60 bg-background/60 p-6 text-center">
           <Archive className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="font-medium text-base text-white">
+          <p className="font-medium text-base text-foreground">
             No archived repositories
           </p>
-          <p className="mt-1 text-white/60 text-xs">
+          <p className="mt-1 text-muted-foreground text-xs">
             Repositories you archive will appear here. You can unarchive them
             anytime.
           </p>
@@ -265,15 +328,15 @@ function ArchivedRepositoriesPreferences() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate font-medium text-base text-white">
+                    <p className="truncate font-medium text-base text-foreground">
                       {repo.repo_full_name}
                     </p>
                     {repo.repo?.description && (
-                      <p className="line-clamp-2 text-white/60 text-xs">
+                      <p className="line-clamp-2 text-muted-foreground text-xs">
                         {repo.repo.description}
                       </p>
                     )}
-                    <p className="text-white/40 text-xs">
+                    <p className="text-muted-foreground text-xs">
                       Archived repositories are read-only
                     </p>
                   </div>

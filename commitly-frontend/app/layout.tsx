@@ -1,7 +1,6 @@
 import "@/styles/globals.css";
 
 import { ClerkProvider } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
@@ -9,6 +8,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { type ReactNode, Suspense } from "react";
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper";
 import { LayoutProvider } from "@/components/providers/layout-provider";
+import { PreferencesProvider } from "@/components/providers/preferences-provider";
 import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider";
 
 const inter = Inter({
@@ -42,40 +42,42 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider
       appearance={{
-        theme: dark,
         variables: {
-          colorBackground: "#050507",
+          colorBackground: "hsl(var(--background))",
+          colorText: "hsl(var(--foreground))",
           borderRadius: "0.3rem",
         },
         elements: {
-          card: "text-foreground border border-border bg-[#0d1117] shadow-xl",
-          formFieldInput: "bg-[#090d12] border-border",
-          headerTitle: "text-white",
-          headerSubtitle: "text-white/70",
+          card: "text-foreground border border-border bg-background shadow-xl",
+          formFieldInput: "bg-background border-border",
+          headerTitle: "text-foreground",
+          headerSubtitle: "text-muted-foreground",
           socialButtonsBlockButton:
-            "text-foreground border border-border hover:bg-white/5 transition-colors",
+            "text-foreground border border-border hover:bg-accent transition-colors",
           formButtonPrimary:
             "bg-primary text-primary-foreground hover:bg-primary/85 transition-colors",
           footerActionLink: "text-primary hover:text-primary/80",
         },
       }}
     >
-      <html className="dark" lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body
           className={`${inter.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
         >
-          <RoadmapCatalogProvider>
-            <LayoutProvider>
-              <div className="flex h-screen w-full overflow-hidden">
-                <Suspense fallback={null}>
-                  <SidebarWrapper />
-                </Suspense>
-                <main className="relative flex h-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
-                  {children}
-                </main>
-              </div>
-            </LayoutProvider>
-          </RoadmapCatalogProvider>
+          <PreferencesProvider>
+            <RoadmapCatalogProvider>
+              <LayoutProvider>
+                <div className="flex h-screen w-full overflow-hidden">
+                  <Suspense fallback={null}>
+                    <SidebarWrapper />
+                  </Suspense>
+                  <main className="relative flex h-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
+                    {children}
+                  </main>
+                </div>
+              </LayoutProvider>
+            </RoadmapCatalogProvider>
+          </PreferencesProvider>
           <Analytics />
           <SpeedInsights />
         </body>

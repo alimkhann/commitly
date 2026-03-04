@@ -3,6 +3,7 @@
 import { Eye, Filter, GitBranch, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 import { type RoadmapResponseBody, repoService } from "@/lib/services/repos";
 
 export default function SearchPage() {
+  const { t } = usePreferences();
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<
     "all" | "intro" | "easy" | "medium" | "hard"
@@ -43,6 +45,14 @@ export default function SearchPage() {
 
   const backendConfigured = repoService.isBackendConfigured();
   const normalizedQuery = query.trim().toLowerCase();
+  const quickTestRepos = [
+    "vercel/ms",
+    "sindresorhus/ky",
+    "upstash/redis-js",
+    "umami-software/umami",
+    "dubinc/dub",
+    "calcom/cal.com",
+  ];
 
   const matchesDifficulty = (
     candidate: string | null | undefined,
@@ -149,18 +159,20 @@ export default function SearchPage() {
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">
       <div className="space-y-2">
         <p className="font-medium text-primary text-sm uppercase tracking-[0.3em]">
-          Repo directory
+          {t("roadmap_catalog", "Roadmap catalog")}
         </p>
-        <h1 className="font-semibold text-3xl">Search repositories</h1>
+        <h1 className="font-semibold text-3xl">{t("search_roadmaps_title", "Search roadmaps")}</h1>
         <p className="text-base text-muted-foreground">
-          Filter by difficulty, language, or keywords to jump into an existing
-          timeline.
+          {t(
+            "search_roadmaps_subtitle",
+            "Filter by difficulty, language, or keywords to find a roadmap and start reading immediately."
+          )}
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-border/70 bg-[#0d1117] p-6">
+      <div className="grid gap-4 rounded-2xl border border-border/70 bg-card p-6">
         <div className="flex flex-col gap-4 lg:flex-row">
-          <div className="flex flex-1 items-center gap-3 rounded-xl border border-border/70 bg-[#090d12] px-3 py-2">
+          <div className="flex flex-1 items-center gap-3 rounded-xl border border-border/70 bg-background px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               className="border-0 bg-transparent text-base focus-visible:ring-0"
@@ -187,10 +199,10 @@ export default function SearchPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Filter className="h-4 w-4" />
-            Showing {publicRepoList.length} public repositories
+            {t("public_results", "Showing public roadmaps")}: {publicRepoList.length}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm">Sort by:</span>
+            <span className="text-muted-foreground text-sm">{t("sort_by", "Sort by")}:</span>
             <Select
               onValueChange={(value: string) =>
                 setSortBy(value as typeof sortBy)
@@ -201,29 +213,58 @@ export default function SearchPage() {
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="newest">🆕 Newest</SelectItem>
-                <SelectItem value="trending">🔥 Trending</SelectItem>
-                <SelectItem value="most_viewed">👁️ Most Viewed</SelectItem>
-                <SelectItem value="most_synced">⭐ Most Synced</SelectItem>
-                <SelectItem value="highest_rated">⭐ Highest Rated</SelectItem>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="trending">Trending</SelectItem>
+                <SelectItem value="most_viewed">Most viewed</SelectItem>
+                <SelectItem value="most_synced">Most saved</SelectItem>
+                <SelectItem value="highest_rated">Highest rated</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
+      <section className="space-y-3 rounded-2xl border border-border/70 bg-card p-5">
+        <div className="flex items-center justify-between">
+          <p className="font-medium text-sm">{t("quick_test_repos", "Quick test repos")}</p>
+          <p className="text-muted-foreground text-xs">
+            GitHub examples for generation QA
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {quickTestRepos.map((repo) => {
+            const slug = repo.replace("/", "-");
+            const repoUrl = `https://github.com/${repo}`;
+            return (
+              <Button
+                asChild
+                className="h-8 rounded-lg px-3 text-xs"
+                key={repo}
+                variant="outline"
+              >
+                <Link
+                  href={`/repo/${slug}?view=timeline&fullName=${encodeURIComponent(repo)}&repoUrl=${encodeURIComponent(repoUrl)}&intent=generate`}
+                >
+                  {repo}
+                </Link>
+              </Button>
+            );
+          })}
+        </div>
+      </section>
+
       {!!syncedMatches.length && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-lg">Your repositories</h2>
+            <h2 className="font-semibold text-lg">{t("your_library", "Your library")}</h2>
             {loading && (
-              <p className="text-muted-foreground text-xs">Refreshing…</p>
+              <p className="text-muted-foreground text-xs">{t("loading", "Loading…")}</p>
             )}
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {syncedMatches.map((repo) => (
               <Card
-                className="flex flex-col border-border/70 bg-[#0d1117]"
+                className="flex flex-col border-border/70 bg-card"
                 key={repo.slug}
               >
                 <CardHeader className="space-y-1">
@@ -246,8 +287,8 @@ export default function SearchPage() {
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
                   <div className="flex items-center gap-2">
                     <GitBranch className="h-4 w-4" />
-                    <span>
-                      {repo.repo?.language ?? "Unknown"} •{" "}
+                      <span>
+                      {repo.repo?.language ?? t("language_unknown", "Unknown")} •{" "}
                       {new Date(
                         syncedMap.get(repo.repo_full_name)?.generated_at ??
                           nowIso
@@ -259,7 +300,7 @@ export default function SearchPage() {
                       <Link
                         href={`/repo/${repo.slug}?view=timeline&fullName=${repo.repo?.full_name ?? repo.repo_full_name}`}
                       >
-                        Open timeline
+                        Read roadmap
                       </Link>
                     </Button>
                   </div>
@@ -272,9 +313,9 @@ export default function SearchPage() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-lg">Public repositories</h2>
+          <h2 className="font-semibold text-lg">{t("public_catalog", "Public catalog")}</h2>
           {publicLoading && (
-            <p className="text-muted-foreground text-xs">Loading…</p>
+            <p className="text-muted-foreground text-xs">{t("loading", "Loading…")}</p>
           )}
           {publicMeta && (
             <p className="text-muted-foreground text-xs">
@@ -286,6 +327,22 @@ export default function SearchPage() {
         {publicError && (
           <p className="text-destructive text-sm">{publicError}</p>
         )}
+        {!publicLoading && !publicError && publicRepoList.length === 0 && (
+          <div className="rounded-xl border border-border/70 bg-card p-5 text-muted-foreground text-sm">
+            <p>{t("no_results", "No results for your current filters.")}</p>
+            <Button
+              className="mt-3"
+              onClick={() => {
+                setDifficulty("all");
+                setQuery("");
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("clear_filters", "Clear filters")}
+            </Button>
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {publicRepoList.map((repo) => {
             const identity = repoService.buildIdentityFromFullName(
@@ -293,7 +350,7 @@ export default function SearchPage() {
             );
             return (
               <Card
-                className="flex flex-col border-border/70 bg-[#0d1117]"
+                className="flex flex-col border-border/70 bg-card"
                 key={identity.slug}
               >
                 <CardHeader className="space-y-1">
@@ -351,7 +408,7 @@ export default function SearchPage() {
                       <Link
                         href={`/repo/${identity.slug}?view=timeline&fullName=${repo.repo.full_name}`}
                       >
-                        Open timeline
+                        Read roadmap
                       </Link>
                     </Button>
                   </div>

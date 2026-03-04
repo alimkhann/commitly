@@ -22,7 +22,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
     : `/repo/${repoId}?view=guide`;
 
   return (
-    <div className="inline-flex items-center rounded-full border border-border/70 bg-[#0d1117] p-1 text-sm">
+    <div className="inline-flex items-center rounded-full border border-border/70 bg-card p-1 text-sm">
       <Link
         className={cn(
           "rounded-full px-6 py-2 font-medium transition-colors",

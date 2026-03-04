@@ -32,7 +32,17 @@ const API_ROUTES = {
   chat: "/api/v1/roadmap/chat",
   usageGlobal: "/api/v1/usage/global",
   bugReport: "/api/v1/feedback/bug",
+  preferences: "/api/v1/preferences",
+  adminCatalogSoftReset: "/api/v1/admin/catalog/soft-reset",
 };
+
+export type RoadmapGenerationPhase =
+  | "ingest"
+  | "syllabus"
+  | "hydrate"
+  | "validate"
+  | "persist"
+  | "complete";
 
 export type RepoIdentity = {
   owner: string;
@@ -71,6 +81,9 @@ export type RoadmapResponseBody = {
   generated_at: string;
   job_state?: RoadmapGenerationJobStatus | string;
   last_generated_stage?: number;
+  progress_percent?: number;
+  current_phase?: RoadmapGenerationPhase | string;
+  phase_message?: string | null;
 };
 
 export type RoadmapGenerationJobStatus =
@@ -87,6 +100,9 @@ export type ProgressiveGenerationStartResponse = {
   initial_timeline: RepoTimelineStage[];
   generated_stages: number;
   total_planned_stages: number;
+  progress_percent: number;
+  current_phase: RoadmapGenerationPhase | string;
+  phase_message: string | null;
 };
 
 export type ProgressiveGenerationJobResponse = {
@@ -95,6 +111,9 @@ export type ProgressiveGenerationJobResponse = {
   total_planned_stages: number;
   last_error: string | null;
   updated_at: string;
+  progress_percent: number;
+  current_phase: RoadmapGenerationPhase | string;
+  phase_message: string | null;
 };
 
 export type RoadmapSyllabusNode = {
@@ -148,6 +167,15 @@ export type HydrateNextResponse = {
   timeline: RepoTimelineStage[];
   updated_at: string;
   last_error: string | null;
+  progress_percent: number;
+  current_phase: RoadmapGenerationPhase | string;
+  phase_message: string | null;
+};
+
+export type UserPreferences = {
+  theme: "system" | "light" | "dark";
+  language: "en" | "zh-HK" | "kz" | "ru";
+  updated_at?: string | null;
 };
 
 export type RoadmapCatalogPage = {
@@ -892,6 +920,67 @@ export const repoService = {
         user_agent: payload.userAgent ?? "",
       },
       authToken,
+    });
+  },
+
+  getPreferences(authToken?: string): Promise<ApiClientResponse<UserPreferences>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<UserPreferences>(env.apiBaseUrl, {
+      path: API_ROUTES.preferences,
+      cache: "no-store",
+      authToken,
+    });
+  },
+
+  updatePreferences(
+    payload: Partial<UserPreferences>,
+    authToken?: string
+  ): Promise<ApiClientResponse<UserPreferences>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<UserPreferences>(env.apiBaseUrl, {
+      path: API_ROUTES.preferences,
+      method: "PUT",
+      body: payload,
+      authToken,
+    });
+  },
+
+  softResetCatalog(
+    adminSecret: string,
+    options?: { segment?: string; keepRepos?: string[] }
+  ): Promise<ApiClientResponse<{ ok: boolean; catalog_segment: string; remaining_visible: number }>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<
+      { ok: boolean; catalog_segment: string; remaining_visible: number },
+      { catalog_segment: string; keep_repos?: string[] }
+    >(env.apiBaseUrl, {
+      path: API_ROUTES.adminCatalogSoftReset,
+      method: "POST",
+      headers: {
+        "x-admin-secret": adminSecret,
+      },
+      body: {
+        catalog_segment: options?.segment ?? "default",
+        ...(Array.isArray(options?.keepRepos) ? { keep_repos: options.keepRepos } : {}),
+      },
     });
   },
 };

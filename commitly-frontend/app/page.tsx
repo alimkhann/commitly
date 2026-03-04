@@ -152,12 +152,12 @@ export default function Home() {
         </div>
 
         <form
-          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/70 bg-[#0d1117] p-6 shadow-[0_12px_40px_rgba(0,0,0,0.32)]"
+          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6 shadow-[0_12px_40px_rgba(0,0,0,0.32)]"
           onSubmit={handleSubmit}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <Input
-              className="h-11 flex-1 border-border/70 bg-[#070b10] text-base"
+              className="h-11 flex-1 border-border/70 bg-background text-base"
               disabled={!isSignedIn || isSubmitting || !githubConnected}
               onChange={(event) => setRepoLink(event.target.value)}
               placeholder="https://github.com/your-org/your-repo"
@@ -201,7 +201,7 @@ export default function Home() {
         </form>
 
         {globalUsage && (
-          <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/70 bg-[#0d1117] px-5 py-4 text-left">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/70 bg-card px-5 py-4 text-left">
             <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
               Shared AI token pool
             </p>

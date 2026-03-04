@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import TabSwitch from "@/components/navigation/tab-switch";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import {
   AlertDialog,
@@ -67,6 +68,7 @@ export default function TimelineView() {
     refreshUserRepos,
     unarchive,
   } = useRoadmapCatalog();
+  const { t } = usePreferences();
   const repoId = params.repoId as string;
   const cachedRecord = getBySlug(repoId);
   const fullNameParam = searchParams?.get("fullName") ?? null;
@@ -119,6 +121,8 @@ export default function TimelineView() {
   const [handledGeneration, setHandledGeneration] = useState(false);
   const [generationStatus, setGenerationStatus] =
     useState<string>("Initializing...");
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0);
   const [progressiveJobId, setProgressiveJobId] = useState<string | null>(null);
   const [progressiveStatus, setProgressiveStatus] =
     useState<RoadmapGenerationJobStatus | null>(null);
@@ -127,6 +131,18 @@ export default function TimelineView() {
   const [isContinuingGeneration, setIsContinuingGeneration] = useState(false);
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setDisplayProgress((prev) => {
+        if (Math.abs(prev - generationProgress) <= 1) {
+          return generationProgress;
+        }
+        return prev + (generationProgress > prev ? 1 : -1);
+      });
+    }, 25);
+    return () => window.clearInterval(timer);
+  }, [generationProgress]);
 
   useEffect(() => {
     if (!identity || roadmap || isGenerating) {
@@ -226,7 +242,8 @@ export default function TimelineView() {
         setIsGenerating(true);
         setError(null);
         setIsAuthError(false);
-        setGenerationStatus("Starting progressive generation...");
+        setGenerationStatus(t("generation_preparing", "Preparing generation..."));
+        setGenerationProgress(2);
         const token = await getToken?.();
 
         const startResponse = await repoService.generateRoadmapProgressive(
@@ -246,13 +263,60 @@ export default function TimelineView() {
         }
 
         setProgressiveJobId(startResponse.data.job_id);
-        setProgressiveStatus(startResponse.data.status);
-        setGeneratedStages(startResponse.data.generated_stages);
-        setTotalPlannedStages(startResponse.data.total_planned_stages);
+        const applyProgressSnapshot = (
+          snapshot: {
+            status: RoadmapGenerationJobStatus;
+            generated_stages: number;
+            total_planned_stages: number;
+            progress_percent?: number;
+            phase_message?: string | null;
+            current_phase?: string | null;
+          }
+        ) => {
+          setProgressiveStatus(snapshot.status);
+          setGeneratedStages(snapshot.generated_stages);
+          setTotalPlannedStages(snapshot.total_planned_stages);
+          setGenerationProgress(
+            Math.max(
+              0,
+              Math.min(
+                100,
+                snapshot.progress_percent ??
+                  Math.round(
+                    (snapshot.generated_stages /
+                      Math.max(1, snapshot.total_planned_stages)) *
+                      100
+                  )
+              )
+            )
+          );
+          setGenerationStatus(
+            snapshot.phase_message?.trim() ||
+              `Generated ${snapshot.generated_stages}/${snapshot.total_planned_stages} stages`
+          );
+        };
 
-        setGenerationStatus(
-          `Generated ${startResponse.data.generated_stages}/${startResponse.data.total_planned_stages} stages`
-        );
+        applyProgressSnapshot(startResponse.data);
+
+        let currentStatus = startResponse.data.status;
+        let pollCount = 0;
+        while (
+          !cancelled &&
+          (currentStatus === "queued" || currentStatus === "running") &&
+          pollCount < 40
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          const statusResponse = await repoService.getRoadmapJob(
+            startResponse.data.job_id,
+            token ?? undefined
+          );
+          if (!(statusResponse.ok && statusResponse.data)) {
+            break;
+          }
+          applyProgressSnapshot(statusResponse.data);
+          currentStatus = statusResponse.data.status;
+          pollCount += 1;
+        }
 
         const cached = await repoService.getCachedRoadmap(
           resolvedIdentity.owner,
@@ -265,6 +329,7 @@ export default function TimelineView() {
         }
 
         setHandledGeneration(true);
+        setGenerationProgress(100);
         router.replace(
           `/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(
             resolvedIdentity.fullName
@@ -310,6 +375,7 @@ export default function TimelineView() {
     repoId,
     router,
     handledGeneration,
+    t,
   ]);
 
   const activeRoadmap = roadmap;
@@ -361,7 +427,7 @@ export default function TimelineView() {
 
   const handleImplement = useCallback(async () => {
     if (!(identity && isSignedIn)) {
-      setActionError("Sign in to implement this roadmap.");
+      setActionError("Sign in to save this roadmap to your library.");
       return;
     }
     setIsSyncing(true);
@@ -375,7 +441,7 @@ export default function TimelineView() {
     if (response.ok) {
       await refreshUserRepos();
     } else {
-      setActionError(response.error ?? "Unable to sync repository.");
+      setActionError(response.error ?? "Unable to save roadmap to your library.");
     }
     setIsSyncing(false);
   }, [getToken, identity, isSignedIn, refreshUserRepos]);
@@ -407,6 +473,10 @@ export default function TimelineView() {
         jobId = bootstrap.data.job_id;
         setProgressiveJobId(jobId);
         setProgressiveStatus(bootstrap.data.status);
+        setGenerationProgress(bootstrap.data.progress_percent ?? 0);
+        if (bootstrap.data.phase_message) {
+          setGenerationStatus(bootstrap.data.phase_message);
+        }
       }
 
       const continued = await repoService.continueRoadmapJob(
@@ -420,6 +490,10 @@ export default function TimelineView() {
       setProgressiveStatus(continued.data.status);
       setGeneratedStages(continued.data.generated_stages);
       setTotalPlannedStages(continued.data.total_planned_stages);
+      setGenerationProgress(continued.data.progress_percent ?? 0);
+      if (continued.data.phase_message) {
+        setGenerationStatus(continued.data.phase_message);
+      }
 
       const refreshed = await repoService.getCachedRoadmap(
         identity.owner,
@@ -574,6 +648,7 @@ export default function TimelineView() {
   if (showFullScreenLoading) {
     return (
       <GenerationLoadingCard
+        progress={displayProgress}
         repoName={identity?.fullName ?? "Repository"}
         status={generationStatus}
       />
@@ -585,23 +660,23 @@ export default function TimelineView() {
       <AlertDialog onOpenChange={setDesyncOpen} open={desyncOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desync this repository?</AlertDialogTitle>
+            <AlertDialogTitle>Remove from library?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to desync? This removes your personal
-              implementation state. The public timeline will remain available.
+              This removes the roadmap from your personal library. The public
+              timeline will remain available.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDesync}>
-              Confirm desync
+              {t("confirm_remove", "Confirm remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col">
-          <p className="text-muted-foreground text-sm">Timeline</p>
+          <p className="text-muted-foreground text-sm">{t("timeline", "Timeline")}</p>
           <h1 className="font-semibold text-2xl">{headerTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -612,7 +687,9 @@ export default function TimelineView() {
               size="sm"
               variant="secondary"
             >
-              {isContinuingGeneration ? "Continuing…" : "Continue generation"}
+              {isContinuingGeneration
+                ? t("continuing_generation", "Continuing…")
+                : t("continue_generation", "Continue generation")}
             </Button>
           )}
           {!syncedState && identity && (
@@ -621,7 +698,9 @@ export default function TimelineView() {
               onClick={handleImplement}
               size="sm"
             >
-              {isSyncing ? "Syncing…" : "Implement"}
+              {isSyncing
+                ? t("saving", "Saving...")
+                : t("save_to_library", "Save to library")}
             </Button>
           )}
           {syncedState && !syncedState.is_archived && (
@@ -630,7 +709,7 @@ export default function TimelineView() {
               size="sm"
               variant="outline"
             >
-              Desync
+              {t("remove_from_library", "Remove from library")}
             </Button>
           )}
           {syncedState && syncedState.is_archived && (
@@ -649,7 +728,7 @@ export default function TimelineView() {
       )}
 
       {(showLoadingState || error) && (
-        <section className="rounded-2xl border border-border/70 border-dashed bg-[#0d1117] p-6 text-muted-foreground text-sm">
+        <section className="rounded-2xl border border-border/70 border-dashed bg-card p-6 text-muted-foreground text-sm">
           {showLoadingState && (
             <p className="flex items-center gap-2">
               <Clock3 className="h-4 w-4" /> Generating timeline…
@@ -686,10 +765,10 @@ export default function TimelineView() {
       )}
 
       {activeRoadmap && (
-        <section className="rounded-2xl border border-border/70 bg-[#0d1117] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
+        <section className="rounded-2xl border border-border/70 bg-card p-6 shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
           <div className="flex flex-wrap items-center gap-4">
             <Badge className="text-xs uppercase" variant="outline">
-              {activeRoadmap.repo.language ?? "Unknown language"}
+              {activeRoadmap.repo.language ?? t("language_unknown", "Unknown")}
             </Badge>
             {activeRoadmap.repo.difficulty && (
               <Badge className="text-xs uppercase" variant="outline">
@@ -706,12 +785,13 @@ export default function TimelineView() {
             )}
             {syncedState && (
               <Badge className="text-xs uppercase" variant="accent">
-                Synced
+                {t("in_library", "In library")}
               </Badge>
             )}
             {roadmapJobState !== "completed" && (
               <Badge className="text-xs uppercase" variant="secondary">
-                {completedStages}/{plannedStages || completedStages} stages
+                {completedStages}/{plannedStages || completedStages}{" "}
+                {t("stages", "stages")}
               </Badge>
             )}
           </div>
@@ -774,51 +854,30 @@ export default function TimelineView() {
       )}
 
       {activeRoadmap && (
-        <>
-          <div className="-mx-2 sticky top-20 z-10 mb-8 overflow-x-auto px-2 py-2 md:static md:mx-0 md:mb-10 md:overflow-visible md:p-0">
-            <div className="flex flex-nowrap gap-2 md:flex-wrap">
-              {timelineStages.map((stage) => (
-                <Button
-                  className="h-7 shrink-0 rounded-full text-xs"
-                  key={stage.id}
-                  onClick={() =>
-                    document
-                      .getElementById(stage.id)
-                      ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                  }
-                  size="sm"
-                  variant="outline"
-                >
-                  <span className="mr-1.5 font-mono text-muted-foreground">
-                    {stage.id}
-                  </span>
-                  {stage.title.length > 20
-                    ? `${stage.title.slice(0, 20)}…`
-                    : stage.title}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <TimelineCanvas
-            isSignedIn={isSignedIn}
-            repoSlug={repoId}
-            stages={timelineStages}
-            statusIcon={statusIcon}
-          />
-        </>
+        <TimelineCanvas
+          isSignedIn={isSignedIn}
+          repoSlug={repoId}
+          stages={timelineStages}
+          statusIcon={statusIcon}
+          t={t}
+        />
       )}
 
       {!activeRoadmap && fetchState === "idle" && !isGenerating && (
-        <div className="rounded-2xl border border-border/70 bg-[#0d1117] p-6 text-muted-foreground text-sm">
-          No timeline available yet for this repository. Generate one from the
-          home page to get started.
+        <div className="rounded-2xl border border-border/70 bg-card p-6 text-muted-foreground text-sm">
+          {t(
+            "no_roadmap_available",
+            "No timeline available yet for this repository. Generate one from the home page to get started."
+          )}
         </div>
       )}
 
       {!isSignedIn && (
-        <p className="rounded-2xl border border-border/70 border-dashed bg-[#0d1117] px-4 py-3 text-center text-muted-foreground text-sm">
-          Signed-out view shows read-only tasks. Sign in to personalize progress
-          and sync to the sidebar.
+        <p className="rounded-2xl border border-border/70 border-dashed bg-card px-4 py-3 text-center text-muted-foreground text-sm">
+          {t(
+            "signed_out_readonly",
+            "Signed-out view shows read-only roadmap details. Sign in to save this roadmap to your library."
+          )}
         </p>
       )}
     </div>
@@ -830,45 +889,100 @@ function TimelineCanvas({
   statusIcon,
   isSignedIn,
   repoSlug,
+  t,
 }: {
   stages: RepoTimelineStage[];
   statusIcon: Record<RepoTimelineStage["status"], JSX.Element>;
   isSignedIn: boolean;
   repoSlug: string;
+  t: (key: string, fallback?: string) => string;
 }) {
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(
+    stages[0]?.id ?? null
+  );
+  const resolvedSelectedStageId = useMemo(() => {
+    if (stages.length === 0) {
+      return null;
+    }
+    if (selectedStageId && stages.some((stage) => stage.id === selectedStageId)) {
+      return selectedStageId;
+    }
+    return stages[0].id;
+  }, [selectedStageId, stages]);
+
+  const selectedStage = useMemo(
+    () =>
+      stages.find((stage) => stage.id === resolvedSelectedStageId) ??
+      stages[0] ??
+      null,
+    [resolvedSelectedStageId, stages]
+  );
+  const selectedIndex = useMemo(
+    () =>
+      selectedStage
+        ? Math.max(
+            1,
+            stages.findIndex((stage) => stage.id === selectedStage.id) + 1
+          )
+        : 1,
+    [selectedStage, stages]
+  );
+
+  if (!selectedStage) {
+    return null;
+  }
+
   return (
-    <section className="relative mx-auto w-full max-w-5xl px-2">
-      <div className="-translate-x-1/2 pointer-events-none absolute inset-y-0 left-1/2 hidden w-px bg-border/50 md:block" />
-      <div className="grid gap-y-16 md:grid-cols-[1fr_40px_1fr] md:gap-x-8">
-        {stages.map((stage, index) => {
-          const align = index % 2 === 0 ? "left" : "right";
-          const isCurrent = isSignedIn && stage.status === "in-progress";
-          return (
-            <div className="grid md:contents" id={stage.id} key={stage.id}>
-              <div
+    <section className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <aside className="rounded-2xl border border-border/70 bg-card p-3">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="text-muted-foreground text-xs uppercase tracking-wide">
+            {t("stage_rail_label", "Stage rail")}
+          </p>
+          <Badge className="text-[10px]" variant="outline">
+            {stages.length} {t("stages", "stages")}
+          </Badge>
+        </div>
+        <div className="space-y-1.5">
+          {stages.map((stage, index) => {
+            const isSelected = stage.id === selectedStage.id;
+            return (
+              <button
                 className={cn(
-                  "md:col-start-1",
-                  align === "right" && "md:col-start-3",
-                  "col-span-1"
+                  "flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition-colors",
+                  isSelected
+                    ? "border-primary/50 bg-primary/10"
+                    : "border-border/60 bg-background hover:border-border"
                 )}
+                key={stage.id}
+                onClick={() => setSelectedStageId(stage.id)}
+                type="button"
               >
-                <TimelineNodeCard
-                  align={align}
-                  index={index + 1}
-                  isCurrent={isCurrent}
-                  isSignedIn={isSignedIn}
-                  repoSlug={repoSlug}
-                  stage={stage}
-                  statusIcon={statusIcon[stage.status]}
-                />
-              </div>
-              <div className="relative hidden md:col-start-2 md:flex md:items-center md:justify-center">
-                <div className="h-full w-px bg-border/50" />
-                <span className="absolute h-4 w-4 rounded-full border border-border bg-background" />
-              </div>
-            </div>
-          );
-        })}
+                <span className="mt-0.5 font-mono text-[10px] text-muted-foreground uppercase">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-sm">{stage.title}</p>
+                  <p className="truncate text-muted-foreground text-xs">
+                    {stage.summary}
+                  </p>
+                </div>
+                <span className="mt-0.5 shrink-0">{statusIcon[stage.status]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+      <div>
+        <TimelineNodeCard
+          align="left"
+          index={selectedIndex}
+          isCurrent={isSignedIn && selectedStage.status === "in-progress"}
+          isSignedIn={isSignedIn}
+          repoSlug={repoSlug}
+          stage={selectedStage}
+          statusIcon={statusIcon[selectedStage.status]}
+        />
       </div>
     </section>
   );
@@ -919,7 +1033,7 @@ function TimelineNodeCard({
       <Collapsible>
         <Card
           className={cn(
-            "border-border/70 bg-[#0d1117] shadow-[0_8px_24px_rgba(0,0,0,0.22)] transition-all hover:border-border",
+            "border-border/70 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.22)] transition-all hover:border-border",
             isCurrent && "ring-1 ring-primary/40"
           )}
         >
@@ -1046,7 +1160,7 @@ function TimelineNodeCard({
                     const task = normalizeTask(rawTask, idx);
                     return (
                       <div
-                        className="rounded-lg border border-border/70 bg-[#090d12] p-3.5 transition-colors hover:bg-[#0b1118]"
+                        className="rounded-lg border border-border/70 bg-background p-3.5 transition-colors hover:bg-muted"
                         key={idx}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -1201,13 +1315,15 @@ function TimelineNodeCard({
 function GenerationLoadingCard({
   repoName,
   status,
+  progress,
 }: {
   repoName: string;
   status?: string;
+  progress: number;
 }) {
   return (
     <div className="flex flex-1 items-center justify-center px-6 py-20">
-      <div className="w-full max-w-2xl rounded-2xl border border-border/70 bg-[#0d1117] p-8 text-center">
+      <div className="w-full max-w-2xl rounded-2xl border border-border/70 bg-card p-8 text-center">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
           <Clock3 className="h-7 w-7 text-primary" />
         </div>
@@ -1218,14 +1334,13 @@ function GenerationLoadingCard({
           {status ||
             "Analyzing commit history, identifying key milestones, and structuring your learning path. This may take up to a minute."}
         </p>
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#111827]">
-          <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/70" />
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary/70 transition-[width] duration-200 ease-out"
+            style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+          />
         </div>
-        <div className="flex items-center justify-center gap-1.5 pt-3">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70 [animation-delay:0ms]" />
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/60 [animation-delay:200ms]" />
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/50 [animation-delay:400ms]" />
-        </div>
+        <p className="pt-3 text-muted-foreground text-xs">{Math.round(progress)}%</p>
       </div>
     </div>
   );

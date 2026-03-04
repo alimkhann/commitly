@@ -110,7 +110,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isCollapsed
                     ? "flex-col bg-transparent hover:bg-muted/30"
-                    : "justify-between bg-[#111827] hover:bg-[#141b26]"
+                    : "justify-between bg-card hover:bg-muted"
                 )}
                 disabled={!(isLoaded && isSignedIn)}
                 type="button"
@@ -143,7 +143,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             <DropdownMenuPortal>
               <DropdownMenuContent
                 align="center"
-                className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/70 bg-[#0d1117] p-3 shadow-2xl"
+                className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/70 bg-popover p-3 shadow-2xl"
                 side="top"
                 sideOffset={16}
               >
@@ -162,7 +162,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                     Help & resources
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
-                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/70 bg-[#0d1117] shadow-xl">
+                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/70 bg-popover shadow-xl">
                       <DropdownMenuItem
                         onClick={() => router.push("/help-center")}
                       >
@@ -233,11 +233,11 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
               </SignUpButton>
             </div>
           ) : (
-            <div className="rounded-2xl border border-border/70 bg-[#0d1117] p-4 text-center">
+            <div className="rounded-2xl border border-border/70 bg-card p-4 text-center">
               <p className="font-semibold text-sm">Sign in to track progress</p>
               <p className="mt-1 text-muted-foreground text-xs">
-                Sync repo timelines, save task states, and unlock the workspace
-                menu.
+                Save roadmaps to your library, keep your reading history, and
+                unlock the workspace menu.
               </p>
               <div className="mt-4 flex flex-col gap-2">
                 <SignInButton mode="modal">

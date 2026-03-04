@@ -16,6 +16,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { useLayout } from "@/components/providers/layout-provider";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import {
   AlertDialog,
@@ -60,6 +61,7 @@ export default function Sidebar() {
   } = useRoadmapCatalog();
 
   const { isLeftSidebarCollapsed: collapsed, toggleLeftSidebar: toggleCollapse } = useLayout();
+  const { t } = usePreferences();
 
   const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
   const [archivingRepo, setArchivingRepo] = useState<string | null>(null);
@@ -129,7 +131,7 @@ export default function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col overflow-y-auto bg-[#0b0f14]"
+        "flex h-full w-full flex-col overflow-y-auto bg-background"
       )}
     >
       <div className="flex flex-1 flex-col gap-6 p-4">
@@ -185,20 +187,20 @@ export default function Sidebar() {
           <Button
             asChild
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-[#111822] text-base text-white transition-colors hover:bg-[#162030]",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-card text-base text-foreground transition-colors hover:bg-muted",
               collapsed && "justify-center px-0"
             )}
             size="lg"
           >
             <Link href="/">
               <Hammer className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
-              {!collapsed && <span>New repo roadmap</span>}
+              {!collapsed && <span>{t("new_repo_roadmap", "New repo roadmap")}</span>}
             </Link>
           </Button>
           <Button
             asChild
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-[#0f141d] text-base text-white/90 transition-colors hover:bg-[#141b26]",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-card text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
               collapsed && "justify-center px-0"
             )}
             size="lg"
@@ -206,7 +208,7 @@ export default function Sidebar() {
           >
             <Link href="/search">
               <Search className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
-              {!collapsed && <span>Search repos</span>}
+              {!collapsed && <span>{t("search_roadmaps", "Search roadmaps")}</span>}
             </Link>
           </Button>
         </div>
@@ -215,7 +217,7 @@ export default function Sidebar() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                Your repositories
+                {t("your_library", "Your library")}
               </p>
               {loading && (
                 <Badge className="font-normal text-[11px]" variant="outline">
@@ -226,8 +228,8 @@ export default function Sidebar() {
             <ScrollArea className="h-full max-h-[45vh]">
               <div className="flex flex-col gap-2">
                 {aggregatedRows.length === 0 && !loading ? (
-                  <div className="rounded-xl border border-border/70 bg-[#090d12] px-4 py-6 text-muted-foreground text-sm">
-                    Generate a roadmap to pin it here.
+                  <div className="rounded-xl border border-border/70 bg-background px-4 py-6 text-muted-foreground text-sm">
+                    {t("save_to_library", "Save to library")} to add a roadmap.
                   </div>
                 ) : (
                   aggregatedRows.map((row) => (
@@ -443,23 +445,21 @@ function SidebarRepoRow({
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Unlink className="mr-2 h-3.5 w-3.5" />
-                      Desync
+                      Remove from library
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Desync this repository?
-                      </AlertDialogTitle>
+                      <AlertDialogTitle>Remove from library?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes your personal implementation state. The
+                        This removes the roadmap from your personal library. The
                         public timeline will remain available.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={() => onDesync(repoFullName)}>
-                        Confirm desync
+                        Confirm remove
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

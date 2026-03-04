@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { AlertTriangle, Paperclip } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { repoService } from "@/lib/services/repos";
 
@@ -25,7 +24,6 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
   const { getToken, isSignedIn } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [includeScreenshot, setIncludeScreenshot] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -121,37 +119,8 @@ export default function ReportBug({ open, onOpenChange }: ReportBugProps) {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border border-muted border-dashed px-3 py-3 text-muted-foreground text-sm">
-            <div className="flex items-center gap-2">
-              <Paperclip className="h-4 w-4" />
-              <div>
-                <p className="font-medium text-foreground">Attachment</p>
-                <p className="text-muted-foreground text-xs">
-                  Drop screenshots or logs (optional)
-                </p>
-              </div>
-            </div>
-            <Button disabled size="sm" variant="outline">
-              Browse files
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3">
-            <div>
-              <p className="font-medium text-sm">Include last screenshot</p>
-              <p className="text-muted-foreground text-xs">
-                We&rsquo;ll only capture the active commitly tab.
-              </p>
-            </div>
-            <Switch
-              aria-label="Include screenshot"
-              checked={includeScreenshot}
-              onCheckedChange={setIncludeScreenshot}
-            />
-          </div>
-          <p className="text-muted-foreground text-xs">
-            File upload is coming next. For now, include links in the
-            description if needed.
+          <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+            Include links, screenshots, or logs directly in the description for now.
           </p>
           {submitError && <p className="text-destructive text-sm">{submitError}</p>}
           {submitted && (

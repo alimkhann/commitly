@@ -201,7 +201,7 @@ export default function GuideChat() {
   return (
     <div className="flex h-full flex-col">
       {stageContext && (
-        <div className="border-b border-border/70 bg-[#0d1117] p-4">
+        <div className="border-b border-border/70 bg-card p-4">
           <div className="space-y-2">
             <Badge variant="outline">Context: {stageContext.title}</Badge>
             <p className="line-clamp-2 text-muted-foreground text-xs">
@@ -214,7 +214,7 @@ export default function GuideChat() {
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex flex-col gap-6">
           {messages.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/70 bg-[#0d1117] p-6 text-center text-muted-foreground text-sm">
+            <div className="rounded-xl border border-dashed border-border/70 bg-card p-6 text-center text-muted-foreground text-sm">
               Ask for a walkthrough or context about this stage.
             </div>
           ) : (
@@ -274,7 +274,7 @@ export default function GuideChat() {
                   ) : (
                     <div className="ml-auto max-w-[85%]">
                       {editingMessageId === messageItem.id ? (
-                        <div className="flex flex-col gap-2 rounded-xl bg-[#111827] p-2 shadow-sm">
+                        <div className="flex flex-col gap-2 rounded-xl bg-muted p-2 shadow-sm">
                           <Textarea
                             className="min-h-[60px] resize-none border-none bg-transparent focus-visible:ring-0"
                             onChange={(e) => setEditContent(e.target.value)}
@@ -352,9 +352,9 @@ export default function GuideChat() {
         </div>
       </div>
 
-      <div className="border-t border-border/70 bg-[#0d1117] p-4">
+      <div className="border-t border-border/70 bg-card p-4">
         <form
-          className="relative flex items-end gap-2 rounded-xl border border-border/70 bg-[#090d12] p-2"
+          className="relative flex items-end gap-2 rounded-xl border border-border/70 bg-background p-2"
           onSubmit={handleSubmit}
         >
           <Textarea

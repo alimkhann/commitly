@@ -20,7 +20,7 @@ export default function PlansPage() {
   const paidPlansWaitlistUrl = "https://commitly.one";
 
   return (
-    <main className="min-h-screen w-full bg-[#070b10] px-6 py-12 text-white">
+    <main className="min-h-screen w-full bg-background px-6 py-12 text-foreground">
       <div className="mx-auto flex max-w-6xl flex-col gap-10">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
@@ -44,7 +44,7 @@ export default function PlansPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {plans.map((plan) => (
             <Card
-              className={`flex flex-col border border-border/60 bg-[#0d1117] ${
+              className={`flex flex-col border border-border/60 bg-card ${
                 plan.highlighted ? "ring-2 ring-primary" : ""
               }`}
               key={plan.id}

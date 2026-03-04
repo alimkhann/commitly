@@ -28,7 +28,7 @@ function GithubOAuthResultContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
-      <div className="max-w-md rounded-2xl border border-border/70 bg-[#0d1117] p-8 text-center shadow-xl">
+      <div className="max-w-md rounded-2xl border border-border/70 bg-card p-8 text-center shadow-xl">
         <h1 className="font-semibold text-2xl">{title}</h1>
         {isError ? (
           <p className="mt-3 text-muted-foreground text-sm">
