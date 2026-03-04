@@ -16,6 +16,15 @@ type GlobalUsage = {
   reset_at: string;
 };
 
+type UserSoftUsage = {
+  daily_limit: number;
+  used: number;
+  remaining: number;
+  reset_at: string;
+};
+
+type RoadmapGenerationJobStatus = "queued" | "running" | "partial_ready" | "completed" | "failed";
+
 type RepoIdentity = {
   owner: string;
   repo: string;
@@ -49,6 +58,10 @@ const CLERK_AUTHORIZED_PARTIES = (Deno.env.get("CLERK_AUTHORIZED_PARTIES") ?? ""
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const CLERK_FALLBACK_AUTHORIZED_PARTIES = [
+  "https://app.commitly.one",
+  "https://commitly-frontend.vercel.app",
+];
 
 const GITHUB_API_BASE = (Deno.env.get("GITHUB_API_BASE") ?? "https://api.github.com").replace(/\/$/, "");
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN") ?? "";
@@ -62,6 +75,7 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
 
 const GLOBAL_DAILY_TOKEN_LIMIT = Number(Deno.env.get("GLOBAL_DAILY_TOKEN_LIMIT") ?? "2500000");
+const USER_DAILY_TOKEN_SOFT_LIMIT = Number(Deno.env.get("USER_DAILY_TOKEN_SOFT_LIMIT") ?? "120000");
 
 const jwks = CLERK_JWKS_URL ? createRemoteJWKSet(new URL(CLERK_JWKS_URL)) : null;
 
@@ -96,8 +110,8 @@ function toNoContentResponse(status = 204) {
   });
 }
 
-function routeError(status: number, detail: string) {
-  return toJsonResponse({ detail }, status);
+function routeError(status: number, detail: string, code?: string) {
+  return toJsonResponse(code ? { detail, code } : { detail }, status);
 }
 
 function createSupabaseAdminClient() {
@@ -167,7 +181,26 @@ async function verifyClerkToken(token: string): Promise<JWTPayload> {
   if (CLERK_AUTHORIZED_PARTIES.length > 0) {
     const azpRaw = payload.azp;
     const azp = typeof azpRaw === "string" ? azpRaw.replace(/\/$/, "") : "";
-    if (!azp || !CLERK_AUTHORIZED_PARTIES.includes(azp)) {
+    const normalizedAzp = (() => {
+      if (!azp) {
+        return "";
+      }
+      try {
+        return new URL(azp).origin.replace(/\/$/, "");
+      } catch {
+        return azp;
+      }
+    })();
+    const authorizedParties = new Set(
+      [...CLERK_AUTHORIZED_PARTIES, ...CLERK_FALLBACK_AUTHORIZED_PARTIES].map((value) => {
+        try {
+          return new URL(value).origin.replace(/\/$/, "");
+        } catch {
+          return value.replace(/\/$/, "");
+        }
+      }),
+    );
+    if (!normalizedAzp || !authorizedParties.has(normalizedAzp)) {
       throw new Error("Unauthorized party");
     }
   }
@@ -190,6 +223,17 @@ async function getAuthedUserId(req: Request, required = true) {
     throw new Error("User ID missing in token");
   }
   return userId;
+}
+
+function mapAuthErrorCode(detail: string) {
+  const normalized = detail.toLowerCase();
+  if (normalized.includes("unauthorized party")) {
+    return "unauthorized_party";
+  }
+  if (normalized.includes("missing authentication token")) {
+    return "missing_token";
+  }
+  return "invalid_token";
 }
 
 async function sha256(input: string) {
@@ -491,6 +535,8 @@ function mapRoadmapRow(row: Record<string, unknown>, forceCachedValue?: boolean)
     timeline: Array.isArray(row.timeline) ? row.timeline : [],
     cached: forceCachedValue ?? Boolean(row.cached),
     generated_at: (row.generated_at as string) ?? new Date().toISOString(),
+    job_state: typeof row.job_state === "string" ? row.job_state : "completed",
+    last_generated_stage: Number(row.last_generated_stage ?? 0),
   };
 }
 
@@ -655,6 +701,69 @@ async function getGlobalUsage(supabase: SupabaseClient): Promise<GlobalUsage> {
   };
 }
 
+async function getUserSoftUsage(supabase: SupabaseClient, userId: string | null): Promise<UserSoftUsage> {
+  const fallbackLimit = Math.max(Number.isFinite(USER_DAILY_TOKEN_SOFT_LIMIT) ? USER_DAILY_TOKEN_SOFT_LIMIT : 120_000, 1);
+  if (!userId) {
+    return {
+      daily_limit: fallbackLimit,
+      used: 0,
+      remaining: fallbackLimit,
+      reset_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+
+  const { data, error } = await supabase.rpc("get_user_soft_token_budget", {
+    p_user_id: userId,
+    p_daily_limit: fallbackLimit,
+  });
+
+  if (error || !Array.isArray(data) || data.length === 0) {
+    return {
+      daily_limit: fallbackLimit,
+      used: 0,
+      remaining: fallbackLimit,
+      reset_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
+
+  const row = data[0] as Record<string, unknown>;
+  return {
+    daily_limit: Number(row.daily_limit ?? fallbackLimit),
+    used: Number(row.used ?? 0),
+    remaining: Number(row.remaining ?? fallbackLimit),
+    reset_at: String(row.reset_at ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
+  };
+}
+
+function modeFromRemaining(remaining: number, dailyLimit: number): "normal" | "low" | "critical" {
+  if (remaining <= 0) {
+    return "critical";
+  }
+  if (remaining <= Math.max(1, Math.floor(dailyLimit * 0.15))) {
+    return "low";
+  }
+  return "normal";
+}
+
+async function resolveUsageMode(supabase: SupabaseClient, userId: string | null) {
+  const globalUsage = await getGlobalUsage(supabase);
+  const userUsage = await getUserSoftUsage(supabase, userId);
+  const userMode = modeFromRemaining(userUsage.remaining, userUsage.daily_limit);
+
+  const mode: "normal" | "low" | "critical" =
+    globalUsage.mode === "critical" || userMode === "critical"
+      ? "critical"
+      : globalUsage.mode === "low" || userMode === "low"
+        ? "low"
+        : "normal";
+
+  return {
+    mode,
+    globalUsage,
+    userUsage,
+  };
+}
+
 async function recordTokenUsage(supabase: SupabaseClient, params: {
   kind: string;
   userId: string | null;
@@ -674,6 +783,14 @@ async function recordTokenUsage(supabase: SupabaseClient, params: {
     p_metadata: params.metadata ?? {},
     p_daily_limit: GLOBAL_DAILY_TOKEN_LIMIT,
   });
+
+  if (params.userId) {
+    await supabase.rpc("record_user_soft_token_usage", {
+      p_user_id: params.userId,
+      p_total_tokens: Math.max(0, Math.floor(params.totalTokens)),
+      p_daily_limit: USER_DAILY_TOKEN_SOFT_LIMIT,
+    });
+  }
 }
 
 function getRepoSlug(fullName: string) {
@@ -730,12 +847,12 @@ async function generateRoadmapInternal(options: {
     }
   }
 
-  const usage = await getGlobalUsage(supabase);
-  if (usage.mode === "critical") {
-    throw new Error("Global token budget depleted. Please try again after reset.");
+  const usageSnapshot = await resolveUsageMode(supabase, userId);
+  if (usageSnapshot.mode === "critical") {
+    throw new Error("Token budget is depleted. Please try again after reset.");
   }
 
-  const generationMode = usage.mode === "low" ? "low" : "normal";
+  const generationMode = usageSnapshot.mode === "low" ? "low" : "normal";
   const commitLimit = generationMode === "low" ? 40 : 80;
   const maxOutputTokens = generationMode === "low" ? 2048 : 4096;
   const shouldReview = generationMode === "normal";
@@ -892,6 +1009,8 @@ async function generateRoadmapInternal(options: {
     sync_count: repoSummary.sync_count,
     rating_count: repoSummary.rating_count,
     rating_sum: repoSummary.rating_sum,
+    job_state: "completed",
+    last_generated_stage: Math.max(normalizedTimeline.length - 1, 0),
   };
 
   const { data: upserted, error: upsertError } = await supabase
@@ -918,12 +1037,14 @@ async function generateRoadmapInternal(options: {
     promptTokens,
     completionTokens,
     totalTokens,
-    metadata: {
-      repo_full_name: identity.fullName,
-      mode: generationMode,
-      stage_budget: stageBudget,
-      commit_sample: commitLimit,
-    },
+      metadata: {
+        repo_full_name: identity.fullName,
+        mode: generationMode,
+        global_remaining: usageSnapshot.globalUsage.remaining,
+        user_remaining: usageSnapshot.userUsage.remaining,
+        stage_budget: stageBudget,
+        commit_sample: commitLimit,
+      },
   });
 
   await supabase
@@ -1096,7 +1217,7 @@ async function handleGenerateRoadmap(context: AuthedRouteContext) {
     return toJsonResponse(result as unknown as JsonObject);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Roadmap generation failed";
-    if (message.includes("Global token budget depleted")) {
+    if (message.includes("Token budget is depleted")) {
       return routeError(429, message);
     }
     if (message.includes("Connect GitHub")) {
@@ -1150,6 +1271,553 @@ async function handleGenerateRoadmapStream(context: AuthedRouteContext) {
       Connection: "keep-alive",
     },
   });
+}
+
+function buildRoadmapChunkPrompt(options: {
+  repoName: string;
+  description: string;
+  language: string;
+  topics: string[];
+  commitsContext: string;
+  stageStart: number;
+  stageEnd: number;
+  existingTitles: string[];
+}) {
+  const {
+    repoName,
+    description,
+    language,
+    topics,
+    commitsContext,
+    stageStart,
+    stageEnd,
+    existingTitles,
+  } = options;
+  const chunkCount = Math.max(stageEnd - stageStart + 1, 1);
+  const existingLabel = existingTitles.length > 0
+    ? existingTitles.map((title, idx) => `stage-${idx + 1}: ${title}`).join("\n")
+    : "none";
+
+  return `You are Commitly, an expert engineering mentor creating STRICT beginner roadmap chunks.
+
+Repository: ${repoName}
+Description: ${description || "N/A"}
+Language: ${language || "Unknown"}
+Topics: ${topics.join(", ") || "None"}
+Already generated stages:
+${existingLabel}
+
+Commit context (oldest to newest):
+${commitsContext}
+
+TASK
+Generate exactly ${chunkCount} NEW beginner-friendly stages for stage numbers ${stageStart}-${stageEnd}.
+Do not repeat previously generated stages.
+
+HARD REQUIREMENTS
+1) Never tell the learner to clone/copy this repository.
+2) Keep each stage concrete and practical.
+3) Each stage must include:
+- 1-3 goals
+- 3-6 tasks
+- explicit prerequisites/checkpoints where needed
+4) Every task must use this schema:
+{
+  "label": "Task title",
+  "steps": ["step 1", "step 2"],
+  "files": ["path/file.ts"],
+  "commands": ["npm run dev"]
+}
+5) Status must always be "not-started".
+
+Return ONLY JSON:
+{
+  "timeline": [
+    {
+      "id": "stage-${stageStart}",
+      "index": ${stageStart},
+      "title": "...",
+      "summary": "...",
+      "status": "not-started",
+      "eta": "45m",
+      "category": "setup|feature|refactor|testing|ops|perf|docs|style|chore|other",
+      "difficulty": "intro|easy|medium|hard",
+      "goals": ["..."],
+      "prerequisites": ["..."],
+      "checkpoints": ["..."],
+      "tasks": [{"label":"...","steps":["..."],"files":["..."],"commands":["..."]}],
+      "code_examples": [{"file":"...","language":"...","description":"...","snippet":"..."}],
+      "resources": [{"label":"...","href":"..."}],
+      "commit_window": ["sha1","sha2"]
+    }
+  ]
+}`;
+}
+
+function normalizeTimelineChunk(
+  timelineRaw: unknown,
+  chunkSize: number,
+  commits: Array<{ sha: string }>,
+  stageOffset: number,
+) {
+  const normalized = normalizeTimeline(timelineRaw, chunkSize, commits).filter((stage) => stage.id !== "stage-setup");
+  return normalized.map((stage, idx) => ({
+    ...stage,
+    id: `stage-${stageOffset + idx + 1}`,
+    index: stageOffset + idx + 1,
+  }));
+}
+
+function mapRepoSummaryToRoadmapRow(repoSummary: Record<string, unknown>) {
+  return {
+    primary_language: String(repoSummary.primary_language ?? repoSummary.language ?? ""),
+    languages: Array.isArray(repoSummary.languages) ? repoSummary.languages : null,
+    topics: Array.isArray(repoSummary.topics) ? repoSummary.topics : [],
+    difficulty: String(repoSummary.difficulty ?? "easy"),
+    star_count: Number(repoSummary.star_count ?? repoSummary.stars ?? 0),
+    fork_count: Number(repoSummary.fork_count ?? 0),
+    last_pushed_at: String(repoSummary.last_pushed_at ?? "") || null,
+    license: String(repoSummary.license ?? "") || null,
+    contributor_count: Number(repoSummary.contributor_count ?? 0),
+    view_count: Number(repoSummary.view_count ?? 0),
+    sync_count: Number(repoSummary.sync_count ?? 0),
+    rating_count: Number(repoSummary.rating_count ?? 0),
+    rating_sum: Number(repoSummary.rating_sum ?? 0),
+  };
+}
+
+async function upsertProgressiveRoadmapRow(options: {
+  supabase: SupabaseClient;
+  repoFullName: string;
+  repoSummary: Record<string, unknown>;
+  timeline: Record<string, unknown>[];
+  jobState: RoadmapGenerationJobStatus;
+  lastGeneratedStage: number;
+}) {
+  const { supabase, repoFullName, repoSummary, timeline, jobState, lastGeneratedStage } = options;
+  const mapped = mapRepoSummaryToRoadmapRow(repoSummary);
+  const rowToStore = {
+    repo_full_name: repoFullName,
+    repo_summary: repoSummary,
+    timeline,
+    cached: false,
+    generated_at: new Date().toISOString(),
+    primary_language: mapped.primary_language,
+    languages: mapped.languages,
+    topics: mapped.topics,
+    difficulty: mapped.difficulty,
+    star_count: mapped.star_count,
+    fork_count: mapped.fork_count,
+    last_pushed_at: mapped.last_pushed_at,
+    license: mapped.license,
+    contributor_count: mapped.contributor_count,
+    view_count: mapped.view_count,
+    sync_count: mapped.sync_count,
+    rating_count: mapped.rating_count,
+    rating_sum: mapped.rating_sum,
+    job_state: jobState,
+    last_generated_stage: lastGeneratedStage,
+  };
+
+  const { data, error } = await supabase
+    .from("generated_roadmaps")
+    .upsert(rowToStore, { onConflict: "repo_full_name" })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to persist progressive roadmap: ${error.message}`);
+  }
+
+  return data as Record<string, unknown>;
+}
+
+async function getOrCreateProgressiveJob(context: AuthedRouteContext, repoUrl: string, forceRefresh: boolean) {
+  const identity = parseRepoUrl(repoUrl);
+  const { supabase, userId } = context;
+
+  if (!forceRefresh) {
+    const { data: existingJob } = await supabase
+      .from("roadmap_generation_jobs")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("repo_full_name", identity.fullName)
+      .in("status", ["queued", "running", "partial_ready"])
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingJob) {
+      return existingJob as Record<string, unknown>;
+    }
+  }
+
+  const usageSnapshot = await resolveUsageMode(supabase, userId);
+  if (usageSnapshot.mode === "critical") {
+    throw new Error("Token budget is depleted. Please try again after reset.");
+  }
+
+  const githubToken = await getGitHubTokenForUser(supabase, userId);
+  const repo = await githubRequest<Record<string, unknown>>(`/repos/${identity.fullName}`, githubToken);
+  const commitLimit = usageSnapshot.mode === "low" ? 40 : 80;
+  const commits = await githubRequest<Array<Record<string, unknown>>>(
+    `/repos/${identity.fullName}/commits?sha=${encodeURIComponent(String(repo.default_branch ?? "main"))}&per_page=${commitLimit}`,
+    githubToken,
+  );
+
+  if (commits.length === 0) {
+    throw new Error("Repository does not contain commits");
+  }
+
+  const commitsChronological = [...commits].reverse();
+  const commitContextLines = commitsChronological
+    .map((commit) => {
+      const sha = String(commit.sha ?? "").slice(0, 7);
+      const message = String((commit.commit as Record<string, unknown> | undefined)?.message ?? "").split("\n")[0];
+      return `${sha}: ${message}`;
+    })
+    .slice(0, commitLimit);
+
+  const stageBudget = Math.min(12, Math.max(6, Math.floor(commits.length / 20) + 6));
+  const setupStage = normalizeTimeline([], 0, commitsChronological.map((commit) => ({ sha: String(commit.sha ?? "") })));
+  const { data: existingRoadmap } = await supabase
+    .from("generated_roadmaps")
+    .select("*")
+    .eq("repo_full_name", identity.fullName)
+    .maybeSingle();
+
+  const existingTimeline = existingRoadmap && Array.isArray(existingRoadmap.timeline)
+    ? (existingRoadmap.timeline as Record<string, unknown>[])
+    : null;
+  const existingGeneratedStages = existingRoadmap
+    ? Math.max(0, Number(existingRoadmap.last_generated_stage ?? (existingTimeline ? Math.max(existingTimeline.length - 1, 0) : 0)))
+    : 0;
+  const resumeFromPartial = Boolean(existingRoadmap && existingRoadmap.job_state === "partial_ready" && existingTimeline && existingTimeline.length > 0 && !forceRefresh);
+
+  const repoSummary = {
+    full_name: identity.fullName,
+    description: String(repo.description ?? ""),
+    language: String(repo.language ?? ""),
+    stars: Number(repo.stargazers_count ?? 0),
+    default_branch: String(repo.default_branch ?? "main"),
+    html_url: String(repo.html_url ?? `https://github.com/${identity.fullName}`),
+    owner_avatar_url: String((repo.owner as Record<string, unknown> | undefined)?.avatar_url ?? ""),
+    primary_language: String(repo.language ?? ""),
+    languages: null,
+    topics: Array.isArray(repo.topics) ? repo.topics : [],
+    difficulty: "easy",
+    star_count: Number(repo.stargazers_count ?? 0),
+    fork_count: Number(repo.forks_count ?? 0),
+    last_pushed_at: String(repo.pushed_at ?? ""),
+    license: String((repo.license as Record<string, unknown> | undefined)?.name ?? ""),
+    contributor_count: 0,
+    view_count: Number(existingRoadmap?.view_count ?? 0),
+    sync_count: Number(existingRoadmap?.sync_count ?? 0),
+    rating_count: Number(existingRoadmap?.rating_count ?? 0),
+    rating_sum: Number(existingRoadmap?.rating_sum ?? 0),
+  };
+
+  const initialTimeline = resumeFromPartial
+    ? (existingTimeline as Record<string, unknown>[])
+    : setupStage;
+  const generatedStages = resumeFromPartial ? existingGeneratedStages : 0;
+  const initialStatus: RoadmapGenerationJobStatus = generatedStages >= stageBudget
+    ? "completed"
+    : generatedStages > 0
+      ? "partial_ready"
+      : "queued";
+
+  const { data: createdJob, error: createError } = await supabase
+    .from("roadmap_generation_jobs")
+    .insert({
+      user_id: userId,
+      repo_full_name: identity.fullName,
+      repo_url: repoUrl,
+      status: initialStatus,
+      generated_stages: generatedStages,
+      total_planned_stages: stageBudget,
+      stage_budget: stageBudget,
+      mode: usageSnapshot.mode,
+      initial_timeline: initialTimeline,
+      repo_summary: repoSummary,
+      commit_context: commitContextLines,
+      last_error: null,
+    })
+    .select("*")
+    .single();
+
+  if (createError || !createdJob) {
+    throw new Error(createError?.message ?? "Failed to initialize roadmap generation job");
+  }
+
+  return createdJob as Record<string, unknown>;
+}
+
+async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId: string, chunkSize: number) {
+  const { supabase, userId } = context;
+  const { data: jobRow, error: jobError } = await supabase
+    .from("roadmap_generation_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (jobError) {
+    throw new Error(jobError.message);
+  }
+  if (!jobRow) {
+    throw new Error("Roadmap generation job not found");
+  }
+
+  const status = String(jobRow.status ?? "queued") as RoadmapGenerationJobStatus;
+  if (status === "completed") {
+    return {
+      status,
+      generated_stages: Number(jobRow.generated_stages ?? 0),
+      total_planned_stages: Number(jobRow.total_planned_stages ?? 0),
+      timeline: Array.isArray(jobRow.initial_timeline) ? jobRow.initial_timeline : [],
+      repo_full_name: String(jobRow.repo_full_name),
+    };
+  }
+
+  const usageSnapshot = await resolveUsageMode(supabase, userId);
+  if (usageSnapshot.mode === "critical") {
+    await supabase
+      .from("roadmap_generation_jobs")
+      .update({
+        status: "failed",
+        last_error: "Token budget is depleted. Please try again after reset.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+    throw new Error("Token budget is depleted. Please try again after reset.");
+  }
+
+  const totalPlannedStages = Number(jobRow.total_planned_stages ?? 0);
+  const generatedStages = Number(jobRow.generated_stages ?? 0);
+  const stageStart = generatedStages + 1;
+  const stageEnd = Math.min(totalPlannedStages, generatedStages + chunkSize);
+  const stagesToGenerate = Math.max(stageEnd - stageStart + 1, 0);
+
+  if (stagesToGenerate <= 0) {
+    await supabase
+      .from("roadmap_generation_jobs")
+      .update({
+        status: "completed",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    return {
+      status: "completed" as RoadmapGenerationJobStatus,
+      generated_stages: generatedStages,
+      total_planned_stages: totalPlannedStages,
+      timeline: Array.isArray(jobRow.initial_timeline) ? jobRow.initial_timeline : [],
+      repo_full_name: String(jobRow.repo_full_name),
+    };
+  }
+
+  const currentTimeline = Array.isArray(jobRow.initial_timeline) ? (jobRow.initial_timeline as Record<string, unknown>[]) : [];
+  const existingTitles = currentTimeline
+    .filter((stage) => typeof stage === "object" && stage !== null && String((stage as Record<string, unknown>).id ?? "").startsWith("stage-"))
+    .map((stage) => String((stage as Record<string, unknown>).title ?? ""))
+    .filter(Boolean);
+
+  const repoSummary = (jobRow.repo_summary ?? {}) as Record<string, unknown>;
+  const commitContextLines = Array.isArray(jobRow.commit_context)
+    ? (jobRow.commit_context as unknown[]).map((line) => String(line))
+    : [];
+  const commitRefs = commitContextLines.map((line) => ({ sha: line.split(":")[0] ?? "" }));
+
+  const prompt = buildRoadmapChunkPrompt({
+    repoName: String(jobRow.repo_full_name),
+    description: String(repoSummary.description ?? ""),
+    language: String(repoSummary.language ?? repoSummary.primary_language ?? ""),
+    topics: Array.isArray(repoSummary.topics) ? repoSummary.topics.map((topic) => String(topic)) : [],
+    commitsContext: commitContextLines.join("\n"),
+    stageStart,
+    stageEnd,
+    existingTitles,
+  });
+
+  await supabase
+    .from("roadmap_generation_jobs")
+    .update({
+      status: "running",
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId);
+
+  const result = await callGemini({
+    prompt,
+    maxOutputTokens: usageSnapshot.mode === "low" ? 1600 : 2800,
+    responseMimeType: "application/json",
+    temperature: 0.2,
+  });
+
+  const usageMeta = extractUsageMetadata(result);
+  const parsed = parseGeminiJsonResponse(result);
+  const normalizedChunk = normalizeTimelineChunk(parsed.timeline, stagesToGenerate, commitRefs, generatedStages);
+  const nextTimeline = [...currentTimeline, ...normalizedChunk];
+  const nextGeneratedStages = generatedStages + normalizedChunk.length;
+  const nextStatus: RoadmapGenerationJobStatus = nextGeneratedStages >= totalPlannedStages ? "completed" : "partial_ready";
+
+  const { data: updatedJob, error: updateError } = await supabase
+    .from("roadmap_generation_jobs")
+    .update({
+      status: nextStatus,
+      generated_stages: nextGeneratedStages,
+      initial_timeline: nextTimeline,
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId)
+    .select("*")
+    .single();
+
+  if (updateError || !updatedJob) {
+    throw new Error(updateError?.message ?? "Failed to update generation job");
+  }
+
+  await supabase.from("roadmap_generation_chunks").insert({
+    job_id: jobId,
+    chunk_index: Math.floor(generatedStages / Math.max(chunkSize, 1)) + 1,
+    stage_start: stageStart,
+    stage_end: stageEnd,
+    stages_generated: normalizedChunk.length,
+    timeline_chunk: normalizedChunk,
+    prompt_tokens: usageMeta.promptTokens,
+    completion_tokens: usageMeta.completionTokens,
+    total_tokens: usageMeta.totalTokens,
+  });
+
+  const roadmapRow = await upsertProgressiveRoadmapRow({
+    supabase,
+    repoFullName: String(jobRow.repo_full_name),
+    repoSummary,
+    timeline: nextTimeline,
+    jobState: nextStatus,
+    lastGeneratedStage: nextGeneratedStages,
+  });
+
+  const fallbackTokens = estimateTokenUsage(prompt) + estimateTokenUsage(JSON.stringify(normalizedChunk));
+  await recordTokenUsage(supabase, {
+    kind: "roadmap_generate_progressive",
+    userId,
+    endpoint: "/api/v1/roadmap/generate-progressive",
+    promptTokens: usageMeta.promptTokens || estimateTokenUsage(prompt),
+    completionTokens: usageMeta.completionTokens || estimateTokenUsage(JSON.stringify(normalizedChunk)),
+    totalTokens: usageMeta.totalTokens || fallbackTokens,
+    metadata: {
+      repo_full_name: String(jobRow.repo_full_name),
+      mode: usageSnapshot.mode,
+      chunk_size: stagesToGenerate,
+      stage_start: stageStart,
+      stage_end: stageEnd,
+      global_remaining: usageSnapshot.globalUsage.remaining,
+      user_remaining: usageSnapshot.userUsage.remaining,
+    },
+  });
+
+  return {
+    status: nextStatus,
+    generated_stages: nextGeneratedStages,
+    total_planned_stages: totalPlannedStages,
+    timeline: nextTimeline,
+    repo_full_name: String(jobRow.repo_full_name),
+    roadmap: mapRoadmapRow(roadmapRow, false),
+  };
+}
+
+async function handleGenerateRoadmapProgressive(context: AuthedRouteContext) {
+  const body = await readJsonBody(context.req);
+  const repoUrl = typeof body.repo_url === "string" ? body.repo_url : "";
+  const forceRefresh = Boolean(body.force_refresh);
+
+  if (!repoUrl) {
+    return routeError(400, "repo_url is required");
+  }
+
+  try {
+    const job = await getOrCreateProgressiveJob(context, repoUrl, forceRefresh);
+    const jobId = String(job.id);
+    const currentGenerated = Number(job.generated_stages ?? 0);
+    const totalPlanned = Number(job.total_planned_stages ?? 0);
+    let snapshot = {
+      status: String(job.status ?? "queued") as RoadmapGenerationJobStatus,
+      generated_stages: currentGenerated,
+      total_planned_stages: totalPlanned,
+      timeline: Array.isArray(job.initial_timeline) ? job.initial_timeline : [],
+      repo_full_name: String(job.repo_full_name),
+    };
+
+    if (snapshot.status === "queued" || snapshot.generated_stages === 0) {
+      snapshot = await runProgressiveGenerationChunk(context, jobId, snapshot.status === "queued" ? 4 : 3);
+    }
+
+    return toJsonResponse({
+      job_id: jobId,
+      repo_full_name: snapshot.repo_full_name,
+      status: snapshot.status,
+      initial_timeline: snapshot.timeline,
+      generated_stages: snapshot.generated_stages,
+      total_planned_stages: snapshot.total_planned_stages,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Progressive roadmap generation failed";
+    if (message.includes("Token budget is depleted")) {
+      return routeError(429, message, "token_budget_exhausted");
+    }
+    if (message.includes("Connect GitHub")) {
+      return routeError(403, message, "github_not_connected");
+    }
+    return routeError(502, message, "progressive_generation_failed");
+  }
+}
+
+async function handleRoadmapJobStatus(context: AuthedRouteContext, jobId: string) {
+  const { data, error } = await context.supabase
+    .from("roadmap_generation_jobs")
+    .select("id,status,generated_stages,total_planned_stages,last_error,updated_at")
+    .eq("id", jobId)
+    .eq("user_id", context.userId)
+    .maybeSingle();
+
+  if (error) {
+    return routeError(500, error.message);
+  }
+  if (!data) {
+    return routeError(404, "Roadmap generation job not found", "job_not_found");
+  }
+
+  return toJsonResponse({
+    status: data.status,
+    generated_stages: data.generated_stages,
+    total_planned_stages: data.total_planned_stages,
+    last_error: data.last_error,
+    updated_at: data.updated_at,
+  });
+}
+
+async function handleRoadmapJobContinue(context: AuthedRouteContext, jobId: string) {
+  try {
+    const snapshot = await runProgressiveGenerationChunk(context, jobId, 3);
+    return toJsonResponse({
+      status: snapshot.status,
+      generated_stages: snapshot.generated_stages,
+      total_planned_stages: snapshot.total_planned_stages,
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unable to continue roadmap generation";
+    return routeError(
+      detail.includes("not found") ? 404 : 502,
+      detail,
+      detail.includes("not found") ? "job_not_found" : "continue_generation_failed",
+    );
+  }
 }
 
 async function handleRoadmapView(context: RouteContext, owner: string, repo: string) {
@@ -1439,8 +2107,15 @@ async function handleGetRating(context: AuthedRouteContext, owner: string, repo:
 }
 
 async function handleChat(context: RouteContext) {
-  const usage = await getGlobalUsage(context.supabase);
-  if (usage.mode === "critical") {
+  let userId: string | null = null;
+  try {
+    userId = await getAuthedUserId(context.req, false);
+  } catch {
+    userId = null;
+  }
+
+  const usageSnapshot = await resolveUsageMode(context.supabase, userId);
+  if (usageSnapshot.mode === "critical") {
     return toTextResponse(`0:${JSON.stringify("Token budget is exhausted right now. Please try again later.")}\n`, 200, {
       "X-Vercel-AI-Data-Stream": "v1",
       "Cache-Control": "no-cache",
@@ -1503,10 +2178,10 @@ async function handleChat(context: RouteContext) {
     repoName: repoFullName,
     roadmapSummary,
     userQuery,
-    mode: usage.mode,
+    mode: usageSnapshot.mode,
   });
 
-  const maxOutputTokens = usage.mode === "low" ? 768 : 1200;
+  const maxOutputTokens = usageSnapshot.mode === "low" ? 768 : 1200;
 
   try {
     const result = await callGemini({
@@ -1521,14 +2196,16 @@ async function handleChat(context: RouteContext) {
     const fallbackTokens = estimateTokenUsage(prompt) + estimateTokenUsage(responseText);
     await recordTokenUsage(context.supabase, {
       kind: "chat",
-      userId: null,
+      userId,
       endpoint: "/api/v1/roadmap/chat",
       promptTokens: usageMeta.promptTokens || estimateTokenUsage(prompt),
       completionTokens: usageMeta.completionTokens || estimateTokenUsage(responseText),
       totalTokens: usageMeta.totalTokens || fallbackTokens,
       metadata: {
         repo_full_name: repoFullName,
-        mode: usage.mode,
+        mode: usageSnapshot.mode,
+        global_remaining: usageSnapshot.globalUsage.remaining,
+        user_remaining: usageSnapshot.userUsage.remaining,
       },
     });
 
@@ -1736,12 +2413,38 @@ async function handleGitHubOAuthDelete(context: AuthedRouteContext) {
   return toNoContentResponse();
 }
 
+function mapOAuthCallbackErrorCode(rawMessage: string) {
+  const message = rawMessage.toLowerCase();
+  if (message.includes("redirect_uri")) {
+    return "redirect_uri_mismatch";
+  }
+  if (message.includes("state")) {
+    return "invalid_state";
+  }
+  if (message.includes("unauthorized party")) {
+    return "unauthorized_party";
+  }
+  return "oauth_callback_failed";
+}
+
+function buildOAuthErrorRedirect(target: string, code: string, detail: string) {
+  const separator = target.includes("?") ? "&" : "?";
+  return `${target}${separator}status=error&error=${encodeURIComponent(code)}&detail=${encodeURIComponent(detail)}`;
+}
+
 async function handleGitHubOAuthCallback(context: RouteContext) {
   const state = context.url.searchParams.get("state") ?? "";
   const code = context.url.searchParams.get("code") ?? "";
+  const fallbackRedirect = GITHUB_OAUTH_SUCCESS_REDIRECT || "/";
 
   if (!(state && code)) {
-    return routeError(400, "state and code are required");
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        Location: buildOAuthErrorRedirect(fallbackRedirect, "invalid_request", "state and code are required"),
+      },
+    });
   }
 
   const now = new Date().toISOString();
@@ -1753,7 +2456,13 @@ async function handleGitHubOAuthCallback(context: RouteContext) {
     .maybeSingle();
 
   if (stateError || !stateRow) {
-    return routeError(400, "Invalid or expired OAuth state");
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        Location: buildOAuthErrorRedirect(fallbackRedirect, "invalid_state", "Invalid or expired OAuth state"),
+      },
+    });
   }
 
   try {
@@ -1791,7 +2500,16 @@ async function handleGitHubOAuthCallback(context: RouteContext) {
       },
     });
   } catch (error) {
-    return routeError(400, error instanceof Error ? error.message : "OAuth callback failed");
+    const detail = error instanceof Error ? error.message : "OAuth callback failed";
+    const errorCode = mapOAuthCallbackErrorCode(detail);
+    const redirectTarget = stateRow.redirect || fallbackRedirect;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        Location: buildOAuthErrorRedirect(redirectTarget, errorCode, detail),
+      },
+    });
   }
 }
 
@@ -1807,7 +2525,8 @@ async function withAuth(context: RouteContext, handler: (authedContext: AuthedRo
     const userId = await getAuthedUserId(context.req, true);
     return await handler({ ...context, userId: userId! });
   } catch (error) {
-    return routeError(401, error instanceof Error ? error.message : "Invalid authentication token");
+    const detail = error instanceof Error ? error.message : "Invalid authentication token";
+    return routeError(401, detail, mapAuthErrorCode(detail));
   }
 }
 
@@ -1859,6 +2578,9 @@ Deno.serve(async (req) => {
     }
     if (path === "/api/v1/roadmap/generate/stream" && req.method === "GET") {
       return await withAuth(context, handleGenerateRoadmapStream);
+    }
+    if (path === "/api/v1/roadmap/generate-progressive" && req.method === "POST") {
+      return await withAuth(context, handleGenerateRoadmapProgressive);
     }
     if (path === "/api/v1/roadmap/user-repos" && req.method === "GET") {
       return await withAuth(context, (authContext) => handleListUserRepos(authContext, false));
@@ -1932,6 +2654,18 @@ Deno.serve(async (req) => {
       const owner = decodeURIComponent(viewPathMatch[1]);
       const repo = decodeURIComponent(viewPathMatch[2]);
       return await handleRoadmapView(context, owner, repo);
+    }
+
+    const jobStatusMatch = path.match(/^\/api\/v1\/roadmap\/jobs\/([^/]+)$/);
+    if (jobStatusMatch && req.method === "GET") {
+      const jobId = decodeURIComponent(jobStatusMatch[1]);
+      return await withAuth(context, (authContext) => handleRoadmapJobStatus(authContext, jobId));
+    }
+
+    const jobContinueMatch = path.match(/^\/api\/v1\/roadmap\/jobs\/([^/]+)\/continue$/);
+    if (jobContinueMatch && req.method === "POST") {
+      const jobId = decodeURIComponent(jobContinueMatch[1]);
+      return await withAuth(context, (authContext) => handleRoadmapJobContinue(authContext, jobId));
     }
 
     return routeError(404, `No route found for ${req.method} ${path}`);
