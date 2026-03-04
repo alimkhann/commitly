@@ -41,6 +41,7 @@ import {
 import { StarRating } from "@/components/ui/star-rating";
 import type { CodeExample, RepoTimelineStage } from "@/data/repos";
 import {
+  type RoadmapGenerationJobStatus,
   type RepoIdentity,
   type RoadmapResponseBody,
   repoService,
@@ -118,6 +119,12 @@ export default function TimelineView() {
   const [handledGeneration, setHandledGeneration] = useState(false);
   const [generationStatus, setGenerationStatus] =
     useState<string>("Initializing...");
+  const [progressiveJobId, setProgressiveJobId] = useState<string | null>(null);
+  const [progressiveStatus, setProgressiveStatus] =
+    useState<RoadmapGenerationJobStatus | null>(null);
+  const [generatedStages, setGeneratedStages] = useState(0);
+  const [totalPlannedStages, setTotalPlannedStages] = useState(0);
+  const [isContinuingGeneration, setIsContinuingGeneration] = useState(false);
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
 
@@ -211,6 +218,7 @@ export default function TimelineView() {
       return;
     }
 
+    const resolvedIdentity = identity;
     const repoUrl = repoUrlParam;
 
     async function runGeneration() {
@@ -218,40 +226,56 @@ export default function TimelineView() {
         setIsGenerating(true);
         setError(null);
         setIsAuthError(false);
+        setGenerationStatus("Starting progressive generation...");
         const token = await getToken?.();
 
-        const stream = repoService.generateRoadmapStream(
+        const startResponse = await repoService.generateRoadmapProgressive(
           repoUrl,
           token ?? undefined,
           { forceRefresh: true }
         );
 
-        for await (const event of stream) {
-          if (cancelled) break;
-
-          if (event.type === "progress") {
-            setGenerationStatus(event.message);
-          } else if (event.type === "result") {
-            const roadmapData = event.data;
-            setRoadmap(roadmapData);
-            upsertRoadmap(roadmapData, true);
-            setFetchState("idle");
-            setHandledGeneration(true);
-            router.replace(`/repo/${repoId}?view=timeline`);
-            break;
-          } else if (event.type === "error") {
-            throw new Error(event.message);
-          }
+        if (!(startResponse.ok && startResponse.data)) {
+          throw new Error(
+            startResponse.error ?? "Failed to start roadmap generation."
+          );
         }
+
+        if (cancelled) {
+          return;
+        }
+
+        setProgressiveJobId(startResponse.data.job_id);
+        setProgressiveStatus(startResponse.data.status);
+        setGeneratedStages(startResponse.data.generated_stages);
+        setTotalPlannedStages(startResponse.data.total_planned_stages);
+
+        setGenerationStatus(
+          `Generated ${startResponse.data.generated_stages}/${startResponse.data.total_planned_stages} stages`
+        );
+
+        const cached = await repoService.getCachedRoadmap(
+          resolvedIdentity.owner,
+          resolvedIdentity.repoName
+        );
+        if (cached.ok && cached.data) {
+          setRoadmap(cached.data);
+          upsertRoadmap(cached.data, true);
+          setFetchState("idle");
+        }
+
+        setHandledGeneration(true);
+        router.replace(`/repo/${repoId}?view=timeline`);
       } catch (err) {
         if (cancelled) return;
         console.error("Generation error:", err);
-        // Check if it's an auth error from the stream (might need better error handling in service)
         if (err instanceof Error && err.message.includes("401")) {
           setIsAuthError(true);
           setError(
             "GitHub authentication failed. Please reconnect your account."
           );
+        } else if (err instanceof Error && err.message.includes("Token budget")) {
+          setError(err.message);
         } else {
           setError(
             err instanceof Error
@@ -285,6 +309,22 @@ export default function TimelineView() {
   ]);
 
   const activeRoadmap = roadmap;
+
+  useEffect(() => {
+    if (!activeRoadmap) {
+      return;
+    }
+    const roadmapStatus =
+      (activeRoadmap.job_state as RoadmapGenerationJobStatus | undefined) ??
+      "completed";
+    setProgressiveStatus(roadmapStatus);
+    if (!generatedStages) {
+      setGeneratedStages(activeRoadmap.last_generated_stage ?? 0);
+    }
+    if (!totalPlannedStages) {
+      setTotalPlannedStages(Math.max(activeRoadmap.timeline.length - 1, 0));
+    }
+  }, [activeRoadmap, generatedStages, totalPlannedStages]);
 
   const [desyncOpen, setDesyncOpen] = useState(false);
 
@@ -335,6 +375,72 @@ export default function TimelineView() {
     }
     setIsSyncing(false);
   }, [getToken, identity, isSignedIn, refreshUserRepos]);
+
+  const handleContinueGeneration = useCallback(async () => {
+    if (!(identity && isSignedIn)) {
+      setActionError("Sign in to continue generation.");
+      return;
+    }
+
+    setIsContinuingGeneration(true);
+    setActionError(null);
+
+    try {
+      const token = await getToken?.();
+      let jobId = progressiveJobId;
+
+      if (!jobId) {
+        const bootstrap = await repoService.generateRoadmapProgressive(
+          `https://github.com/${identity.fullName}`,
+          token ?? undefined,
+          { forceRefresh: false }
+        );
+        if (!(bootstrap.ok && bootstrap.data)) {
+          throw new Error(
+            bootstrap.error ?? "Unable to resume generation job."
+          );
+        }
+        jobId = bootstrap.data.job_id;
+        setProgressiveJobId(jobId);
+        setProgressiveStatus(bootstrap.data.status);
+      }
+
+      const continued = await repoService.continueRoadmapJob(
+        jobId,
+        token ?? undefined
+      );
+      if (!(continued.ok && continued.data)) {
+        throw new Error(continued.error ?? "Unable to continue generation.");
+      }
+
+      setProgressiveStatus(continued.data.status);
+      setGeneratedStages(continued.data.generated_stages);
+      setTotalPlannedStages(continued.data.total_planned_stages);
+
+      const refreshed = await repoService.getCachedRoadmap(
+        identity.owner,
+        identity.repoName
+      );
+      if (refreshed.ok && refreshed.data) {
+        setRoadmap(refreshed.data);
+        upsertRoadmap(refreshed.data, true);
+      }
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "Unable to continue roadmap generation."
+      );
+    } finally {
+      setIsContinuingGeneration(false);
+    }
+  }, [
+    getToken,
+    identity,
+    isSignedIn,
+    progressiveJobId,
+    upsertRoadmap,
+  ]);
 
   // Fetch user rating when identity and auth are available
   useEffect(() => {
@@ -446,6 +552,21 @@ export default function TimelineView() {
     (isGenerating || (!handledGeneration && shouldGenerate && isSignedIn)) &&
     fetchState !== "error";
 
+  const roadmapJobState =
+    progressiveStatus ??
+    ((activeRoadmap?.job_state as RoadmapGenerationJobStatus | undefined) ??
+      "completed");
+  const completedStages =
+    generatedStages ||
+    activeRoadmap?.last_generated_stage ||
+    Math.max((activeRoadmap?.timeline.length ?? 1) - 1, 0);
+  const plannedStages =
+    totalPlannedStages || Math.max((activeRoadmap?.timeline.length ?? 1) - 1, 0);
+  const canContinueGeneration =
+    Boolean(activeRoadmap && identity && isSignedIn) &&
+    roadmapJobState !== "completed" &&
+    roadmapJobState !== "failed";
+
   if (showFullScreenLoading) {
     return (
       <GenerationLoadingCard
@@ -480,6 +601,16 @@ export default function TimelineView() {
           <h1 className="font-semibold text-2xl">{headerTitle}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {canContinueGeneration && (
+            <Button
+              disabled={isContinuingGeneration}
+              onClick={handleContinueGeneration}
+              size="sm"
+              variant="secondary"
+            >
+              {isContinuingGeneration ? "Continuing…" : "Continue generation"}
+            </Button>
+          )}
           {!syncedState && identity && (
             <Button
               disabled={!isSignedIn || isSyncing}
@@ -514,7 +645,7 @@ export default function TimelineView() {
       )}
 
       {(showLoadingState || error) && (
-        <section className="rounded-2xl border border-border/60 border-dashed bg-card/60 p-6 text-muted-foreground text-sm">
+        <section className="rounded-2xl border border-border/70 border-dashed bg-[#0d1117] p-6 text-muted-foreground text-sm">
           {showLoadingState && (
             <p className="flex items-center gap-2">
               <Clock3 className="h-4 w-4" /> Generating timeline…
@@ -551,7 +682,7 @@ export default function TimelineView() {
       )}
 
       {activeRoadmap && (
-        <section className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-black/30 shadow-xl">
+        <section className="rounded-2xl border border-border/70 bg-[#0d1117] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
           <div className="flex flex-wrap items-center gap-4">
             <Badge className="text-xs uppercase" variant="outline">
               {activeRoadmap.repo.language ?? "Unknown language"}
@@ -572,6 +703,11 @@ export default function TimelineView() {
             {syncedState && (
               <Badge className="text-xs uppercase" variant="accent">
                 Synced
+              </Badge>
+            )}
+            {roadmapJobState !== "completed" && (
+              <Badge className="text-xs uppercase" variant="secondary">
+                {completedStages}/{plannedStages || completedStages} stages
               </Badge>
             )}
           </div>
@@ -669,14 +805,14 @@ export default function TimelineView() {
       )}
 
       {!activeRoadmap && fetchState === "idle" && !isGenerating && (
-        <div className="rounded-2xl border border-border/60 bg-card/50 p-6 text-muted-foreground text-sm">
+        <div className="rounded-2xl border border-border/70 bg-[#0d1117] p-6 text-muted-foreground text-sm">
           No timeline available yet for this repository. Generate one from the
           home page to get started.
         </div>
       )}
 
       {!isSignedIn && (
-        <p className="rounded-2xl border border-border/60 border-dashed bg-card/60 px-4 py-3 text-center text-muted-foreground text-sm">
+        <p className="rounded-2xl border border-border/70 border-dashed bg-[#0d1117] px-4 py-3 text-center text-muted-foreground text-sm">
           Signed-out view shows read-only tasks. Sign in to personalize progress
           and sync to the sidebar.
         </p>
@@ -779,7 +915,7 @@ function TimelineNodeCard({
       <Collapsible>
         <Card
           className={cn(
-            "border-border/60 bg-card/70 shadow-black/25 shadow-lg transition-all hover:border-border/80",
+            "border-border/70 bg-[#0d1117] shadow-[0_8px_24px_rgba(0,0,0,0.22)] transition-all hover:border-border",
             isCurrent && "ring-1 ring-primary/40"
           )}
         >
@@ -906,7 +1042,7 @@ function TimelineNodeCard({
                     const task = normalizeTask(rawTask, idx);
                     return (
                       <div
-                        className="rounded-lg border border-border/50 bg-background/40 p-3.5 transition-colors hover:bg-background/60"
+                        className="rounded-lg border border-border/70 bg-[#090d12] p-3.5 transition-colors hover:bg-[#0b1118]"
                         key={idx}
                       >
                         <div className="flex items-start justify-between gap-2">

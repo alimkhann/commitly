@@ -15,7 +15,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
   const isGuide = view === "guide";
 
   return (
-    <div className="inline-flex items-center rounded-full border border-border bg-card/60 p-1 text-sm shadow-black/20 shadow-lg backdrop-blur">
+    <div className="inline-flex items-center rounded-full border border-border/70 bg-[#0d1117] p-1 text-sm">
       <Link
         className={cn(
           "rounded-full px-6 py-2 font-medium transition-colors",

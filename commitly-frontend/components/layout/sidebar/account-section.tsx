@@ -110,7 +110,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isCollapsed
                     ? "flex-col bg-transparent hover:bg-muted/30"
-                    : "justify-between bg-card/50 hover:bg-muted/30"
+                    : "justify-between bg-[#111827] hover:bg-[#141b26]"
                 )}
                 disabled={!(isLoaded && isSignedIn)}
                 type="button"
@@ -143,7 +143,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             <DropdownMenuPortal>
               <DropdownMenuContent
                 align="center"
-                className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/60 bg-card/95 p-3 shadow-2xl backdrop-blur"
+                className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/70 bg-[#0d1117] p-3 shadow-2xl"
                 side="top"
                 sideOffset={16}
               >
@@ -162,7 +162,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                     Help & resources
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
-                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/60 bg-card/95 shadow-xl backdrop-blur">
+                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/70 bg-[#0d1117] shadow-xl">
                       <DropdownMenuItem
                         onClick={() => router.push("/help-center")}
                       >
@@ -233,7 +233,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
               </SignUpButton>
             </div>
           ) : (
-            <div className="rounded-2xl border border-border/60 bg-card/80 p-4 text-center shadow-inner">
+            <div className="rounded-2xl border border-border/70 bg-[#0d1117] p-4 text-center">
               <p className="font-semibold text-sm">Sign in to track progress</p>
               <p className="mt-1 text-muted-foreground text-xs">
                 Sync repo timelines, save task states, and unlock the workspace

@@ -134,9 +134,9 @@ export default function SearchPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-black/25 shadow-xl backdrop-blur-lg">
+      <div className="grid gap-4 rounded-2xl border border-border/70 bg-[#0d1117] p-6">
         <div className="flex flex-col gap-4 lg:flex-row">
-          <div className="flex flex-1 items-center gap-3 rounded-xl border border-border/60 bg-background px-3 py-2">
+          <div className="flex flex-1 items-center gap-3 rounded-xl border border-border/70 bg-[#090d12] px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               className="border-0 bg-transparent text-base focus-visible:ring-0"
@@ -199,7 +199,7 @@ export default function SearchPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {syncedMatches.map((repo) => (
               <Card
-                className="flex flex-col border-border/60 bg-card/70 shadow-black/20 shadow-lg"
+                className="flex flex-col border-border/70 bg-[#0d1117]"
                 key={repo.slug}
               >
                 <CardHeader className="space-y-1">
@@ -269,7 +269,7 @@ export default function SearchPage() {
             );
             return (
               <Card
-                className="flex flex-col border-border/60 bg-card/70 shadow-black/20 shadow-lg"
+                className="flex flex-col border-border/70 bg-[#0d1117]"
                 key={identity.slug}
               >
                 <CardHeader className="space-y-1">

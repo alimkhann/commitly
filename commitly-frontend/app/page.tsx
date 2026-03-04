@@ -7,6 +7,7 @@ import type { GlobalUsage } from "@/lib/services/repos";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { mapGithubOAuthError } from "@/lib/services/error-messages";
 import { githubService } from "@/lib/services/github";
 import { repoService } from "@/lib/services/repos";
 
@@ -128,7 +129,9 @@ export default function Home() {
     if (response.ok && response.data) {
       window.location.href = response.data.authorize_url;
     } else if (response.error) {
-      setError(response.error);
+      const errorCode =
+        "errorCode" in response ? response.errorCode : undefined;
+      setError(mapGithubOAuthError(errorCode, response.error));
     }
   };
 
@@ -136,32 +139,32 @@ export default function Home() {
     <div className="relative flex w-full flex-1 items-center justify-center overflow-hidden px-6 py-12 lg:px-16">
       <section className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-10 py-16 text-center">
         <div className="space-y-4">
-          <p className="text-primary/80 text-sm uppercase tracking-[0.3em]">
+          <p className="text-muted-foreground text-xs uppercase tracking-[0.28em]">
             Repo-first learning
           </p>
           <h1 className="font-semibold text-4xl leading-tight tracking-tight sm:text-5xl">
             Hey, builder. Ready to learn?
           </h1>
-          <p className="text-lg">
+          <p className="text-muted-foreground text-lg">
             Drop a GitHub repo and we&apos;ll draft a roadmap that mirrors how
             the authors shipped it.
           </p>
         </div>
 
         <form
-          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-3xl border border-border bg-card/70 p-6 shadow-2xl shadow-black/30"
+          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/70 bg-[#0d1117] p-6 shadow-[0_12px_40px_rgba(0,0,0,0.32)]"
           onSubmit={handleSubmit}
         >
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <Input
-              className="flex-1 text-base"
+              className="h-11 flex-1 border-border/70 bg-[#070b10] text-base"
               disabled={!isSignedIn || isSubmitting || !githubConnected}
               onChange={(event) => setRepoLink(event.target.value)}
               placeholder="https://github.com/your-org/your-repo"
               value={repoLink}
             />
             <Button
-              className="font-semibold text-base disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-11 font-semibold text-base disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!isSignedIn || isSubmitting || !githubConnected}
               size="lg"
               type="submit"
@@ -183,7 +186,7 @@ export default function Home() {
                 <Button
                   onClick={handleConnectGithub}
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                 >
                   Connect GitHub
                 </Button>
@@ -198,7 +201,7 @@ export default function Home() {
         </form>
 
         {globalUsage && (
-          <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/60 bg-card/40 px-5 py-4 text-left">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/70 bg-[#0d1117] px-5 py-4 text-left">
             <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
               Shared AI token pool
             </p>

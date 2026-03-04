@@ -88,7 +88,7 @@ export function ResizableLayout({
             minSize={20}
             maxSize={isFullscreen ? 100 : 80}
             className={cn(
-              "bg-card/50 backdrop-blur-xl transition-all duration-300 ease-in-out",
+              "bg-[#0d1117] transition-all duration-300 ease-in-out",
               isFullscreen && "absolute inset-0 z-50 h-full w-full"
             )}
           >

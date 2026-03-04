@@ -218,7 +218,7 @@ export default function GuideView() {
       <div className="flex-1 overflow-y-auto px-4 py-6 lg:px-8">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <div className="rounded-2xl border border-border/60 border-dashed bg-card/40 p-8">
+            <div className="rounded-2xl border border-border/70 border-dashed bg-[#0d1117] p-8">
               <p className="text-muted-foreground text-sm">
                 No guide activity yet. Ask for a walkthrough to start the conversation.
               </p>
@@ -285,7 +285,7 @@ export default function GuideView() {
                     )}
                   >
                     {editingMessageId === messageItem.id ? (
-                      <div className="flex w-full flex-col gap-2 rounded-3xl bg-card p-2 shadow-sm">
+                      <div className="flex w-full flex-col gap-2 rounded-3xl bg-[#111827] p-2 shadow-sm">
                         <Textarea
                           className="min-h-[60px] resize-none border-none bg-transparent focus-visible:ring-0"
                           onChange={(e) => setEditContent(e.target.value)}
@@ -389,7 +389,7 @@ export default function GuideView() {
 
       <div className="shrink-0 pb-4">
         <form
-          className="flex w-full items-end gap-3 rounded-3xl border border-border/60 bg-card/80 p-2 shadow-2xl backdrop-blur-md"
+          className="flex w-full items-end gap-3 rounded-3xl border border-border/70 bg-[#0d1117] p-2"
           onSubmit={handleSubmit}
         >
           <Textarea
@@ -421,7 +421,7 @@ export default function GuideView() {
   if (hasStage && stageContext) {
     return (
       <div className="flex h-full w-full flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/5 bg-card/20 px-6 py-3 backdrop-blur-xl">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border/70 bg-[#0d1117] px-6 py-3">
           <div className="space-y-0.5">
             <p className="text-muted-foreground text-[10px] uppercase tracking-wider">
               Guide
@@ -435,7 +435,7 @@ export default function GuideView() {
             {renderChatInterface()}
           </Panel>
           <PanelResizeHandle className="w-px bg-border/10 hover:bg-border/50 transition-colors" />
-          <Panel defaultSize={40} minSize={20} className="bg-card/10">
+          <Panel defaultSize={40} minSize={20} className="bg-[#0d1117]">
             <div className="h-full overflow-y-auto p-6">
               <div className="space-y-8">
                 <div>
@@ -475,7 +475,7 @@ export default function GuideView() {
                         return (
                           <div
                             key={idx}
-                            className="rounded-xl border border-border/50 bg-background/40 p-4"
+                            className="rounded-xl border border-border/70 bg-[#090d12] p-4"
                           >
                             <p className="font-medium text-sm">{task.label}</p>
                             {task.steps.length > 0 && (

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { mapGithubOAuthError } from "@/lib/services/error-messages";
 import { githubService } from "@/lib/services/github";
 
 type AccountSettingsDialogProps = {
@@ -207,7 +208,9 @@ function GithubConnectionPreferences() {
       const token = (await getToken?.()) ?? undefined;
       const response = await githubService.disconnect(token);
       if (!response.ok && response.error) {
-        setError(response.error);
+        const errorCode =
+          "errorCode" in response ? response.errorCode : undefined;
+        setError(mapGithubOAuthError(errorCode, response.error));
       }
       setConnected(false);
       setGithubLogin(null);
@@ -228,12 +231,16 @@ function GithubConnectionPreferences() {
       const token = (await getToken?.()) ?? undefined;
       const response = await githubService.start(
         token,
-        typeof window !== "undefined" ? window.location.href : undefined
+        typeof window !== "undefined"
+          ? `${window.location.origin}/oauth/github`
+          : undefined
       );
       if (response.ok && "data" in response && response.data) {
         window.location.href = response.data.authorize_url;
       } else if ("error" in response && response.error) {
-        setError(response.error);
+        const errorCode =
+          "errorCode" in response ? response.errorCode : undefined;
+        setError(mapGithubOAuthError(errorCode, response.error));
       }
     } catch {
       setError("Failed to start GitHub OAuth");

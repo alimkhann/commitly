@@ -7,7 +7,6 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { type ReactNode, Suspense } from "react";
-import HomeBackground from "@/components/layout/home-background";
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper";
 import { LayoutProvider } from "@/components/providers/layout-provider";
 import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider";
@@ -67,7 +66,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           <RoadmapCatalogProvider>
             <LayoutProvider>
-              <HomeBackground />
               <div className="flex h-screen w-full overflow-hidden">
                 <Suspense fallback={null}>
                   <SidebarWrapper />

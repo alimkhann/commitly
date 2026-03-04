@@ -129,7 +129,7 @@ export default function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-full w-full flex-col overflow-y-auto bg-card/25 backdrop-blur-2xl"
+        "flex h-full w-full flex-col overflow-y-auto bg-[#0b0f14]"
       )}
     >
       <div className="flex flex-1 flex-col gap-6 p-4">
@@ -185,7 +185,7 @@ export default function Sidebar() {
           <Button
             asChild
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl border border-white/10 bg-white/10 text-base text-white transition-colors hover:bg-white/15",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-[#111822] text-base text-white transition-colors hover:bg-[#162030]",
               collapsed && "justify-center px-0"
             )}
             size="lg"
@@ -198,7 +198,7 @@ export default function Sidebar() {
           <Button
             asChild
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl border border-white/5 bg-white/5 text-base text-white/90 transition-colors hover:bg-white/10",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-[#0f141d] text-base text-white/90 transition-colors hover:bg-[#141b26]",
               collapsed && "justify-center px-0"
             )}
             size="lg"
@@ -226,7 +226,7 @@ export default function Sidebar() {
             <ScrollArea className="h-full max-h-[45vh]">
               <div className="flex flex-col gap-2">
                 {aggregatedRows.length === 0 && !loading ? (
-                  <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-muted-foreground text-sm">
+                  <div className="rounded-xl border border-border/70 bg-[#090d12] px-4 py-6 text-muted-foreground text-sm">
                     Generate a roadmap to pin it here.
                   </div>
                 ) : (

@@ -36,7 +36,7 @@ export default function SidebarWrapper() {
     <>
       <Button
         aria-label="Open sidebar"
-        className="fixed left-4 top-4 z-40 h-10 w-10 border border-border/60 bg-card/80 backdrop-blur-lg lg:hidden"
+        className="fixed left-4 top-4 z-40 h-10 w-10 border border-border/70 bg-[#0d1117] lg:hidden"
         onClick={() => setMobileOpen(true)}
         size="icon"
         variant="secondary"
@@ -55,7 +55,7 @@ export default function SidebarWrapper() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[86vw] max-w-[320px] border-white/10 border-r bg-card/30 backdrop-blur-xl transition-transform lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-[86vw] max-w-[320px] border-r border-border/70 bg-[#0b0f14] transition-transform lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -64,7 +64,7 @@ export default function SidebarWrapper() {
 
       <aside
         className={cn(
-          "hidden h-full shrink-0 border-white/10 border-r bg-card/20 backdrop-blur-xl lg:flex",
+          "hidden h-full shrink-0 border-r border-border/70 bg-[#0b0f14] lg:flex",
           isLeftSidebarCollapsed ? "w-[80px]" : "w-[300px]"
         )}
       >

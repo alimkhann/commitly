@@ -16,8 +16,8 @@ export default function RightSidebar() {
   }
 
   return (
-    <div className="flex h-full flex-col border-l border-white/10 bg-card/20 backdrop-blur-xl">
-      <div className="flex items-center justify-between border-b border-white/10 p-4">
+    <div className="flex h-full flex-col border-l border-border/70 bg-[#0d1117]">
+      <div className="flex items-center justify-between border-b border-border/70 p-4">
         <h2 className="font-semibold text-sm">Guide Chat</h2>
         <div className="flex items-center gap-1">
           <Button

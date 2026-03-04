@@ -6,6 +6,9 @@ import { env } from "@/lib/config/env";
 const API_ROUTES = {
   generateRoadmap: "/api/v1/roadmap/generate",
   generateRoadmapStream: "/api/v1/roadmap/generate/stream",
+  generateRoadmapProgressive: "/api/v1/roadmap/generate-progressive",
+  roadmapJob: (jobId: string) => `/api/v1/roadmap/jobs/${jobId}`,
+  roadmapJobContinue: (jobId: string) => `/api/v1/roadmap/jobs/${jobId}/continue`,
   catalog: "/api/v1/roadmap/catalog",
   cached: (owner: string, repo: string) =>
     `/api/v1/roadmap/cached/${owner}/${repo}`,
@@ -60,6 +63,32 @@ export type RoadmapResponseBody = {
   timeline: RepoTimelineStage[];
   cached: boolean;
   generated_at: string;
+  job_state?: RoadmapGenerationJobStatus | string;
+  last_generated_stage?: number;
+};
+
+export type RoadmapGenerationJobStatus =
+  | "queued"
+  | "running"
+  | "partial_ready"
+  | "completed"
+  | "failed";
+
+export type ProgressiveGenerationStartResponse = {
+  job_id: string;
+  repo_full_name: string;
+  status: RoadmapGenerationJobStatus;
+  initial_timeline: RepoTimelineStage[];
+  generated_stages: number;
+  total_planned_stages: number;
+};
+
+export type ProgressiveGenerationJobResponse = {
+  status: RoadmapGenerationJobStatus;
+  generated_stages: number;
+  total_planned_stages: number;
+  last_error: string | null;
+  updated_at: string;
 };
 
 export type RoadmapCatalogPage = {
@@ -298,6 +327,74 @@ export const repoService = {
         repo_url: repoUrl,
         force_refresh: options?.forceRefresh ?? false,
       },
+      authToken,
+    });
+  },
+
+  generateRoadmapProgressive(
+    repoUrl: string,
+    authToken?: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<ApiClientResponse<ProgressiveGenerationStartResponse>> {
+    if (!repoUrl.trim()) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "Repository URL is required.",
+      });
+    }
+
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+
+    return apiClient<ProgressiveGenerationStartResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.generateRoadmapProgressive,
+      method: "POST",
+      body: {
+        repo_url: repoUrl,
+        force_refresh: options?.forceRefresh ?? false,
+      },
+      authToken,
+    });
+  },
+
+  getRoadmapJob(
+    jobId: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<ProgressiveGenerationJobResponse>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<ProgressiveGenerationJobResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.roadmapJob(jobId),
+      authToken,
+      cache: "no-store",
+    });
+  },
+
+  continueRoadmapJob(
+    jobId: string,
+    authToken?: string
+  ): Promise<ApiClientResponse<ProgressiveGenerationJobResponse>> {
+    if (!env.apiBaseUrl) {
+      return Promise.resolve({
+        ok: false,
+        status: 0,
+        error: "API base URL missing",
+      });
+    }
+    return apiClient<ProgressiveGenerationJobResponse>(env.apiBaseUrl, {
+      path: API_ROUTES.roadmapJobContinue(jobId),
+      method: "POST",
       authToken,
     });
   },
