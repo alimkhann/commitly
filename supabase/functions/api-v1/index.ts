@@ -2888,7 +2888,7 @@ async function persistSyllabus(options: {
       ingest.commitClusters,
     );
   } catch (error) {
-    const failureReason = error instanceof Error ? error.message : "Unknown syllabus normalization failure";
+    let failureReason = error instanceof Error ? error.message : "Unknown syllabus normalization failure";
     const repairPrompt = buildSyllabusRepairPrompt({
       repoName: String(ingest.repoSummary.full_name ?? ""),
       readmeExcerpt: ingest.readmeExcerpt,
@@ -2897,19 +2897,29 @@ async function persistSyllabus(options: {
       failureReason,
       previousSyllabus: syllabusResult.parsed.syllabus,
     });
-    const repairResult = await callGeminiJson({
-      prompt: repairPrompt,
-      maxOutputTokens: ingest.complexity.mode === "multi_track" ? 3600 : 2800,
-      responseMimeType: "application/json",
-      temperature: 0.1,
-      models: GEMINI_MODELS_REPAIR,
-      retries: 2,
-    });
-    nodes = normalizeSyllabusNodes(
-      repairResult.parsed.syllabus,
-      stageTarget,
-      ingest.commitClusters,
-    );
+    for (const model of GEMINI_MODELS_REPAIR) {
+      try {
+        const repairResult = await callGeminiJson({
+          prompt: repairPrompt,
+          maxOutputTokens: ingest.complexity.mode === "multi_track" ? 3600 : 2800,
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          models: [model],
+          retries: 1,
+        });
+        nodes = normalizeSyllabusNodes(
+          repairResult.parsed.syllabus,
+          stageTarget,
+          ingest.commitClusters,
+        );
+        break;
+      } catch (repairError) {
+        failureReason = repairError instanceof Error ? repairError.message : String(repairError);
+      }
+    }
+    if (nodes.length === 0) {
+      throw new Error(`Syllabus quality failed after repair retries. ${failureReason}`);
+    }
   }
 
   const { data: syllabusRow, error: syllabusError } = await supabase
