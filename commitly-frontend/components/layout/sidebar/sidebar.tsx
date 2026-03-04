@@ -367,6 +367,7 @@ function SidebarRepoRow({
   const isDesyncing = desyncingRepo === repoFullName;
   const isArchiving = archivingRepo === repoFullName;
   const isLoading = isDesyncing || isArchiving;
+  const timelineHref = `/repo/${slug}?view=timeline&fullName=${encodeURIComponent(fullName)}`;
 
   if (collapsed) {
     return (
@@ -382,7 +383,7 @@ function SidebarRepoRow({
           size="icon"
           variant="ghost"
         >
-          <Link href={`/repo/${slug}?view=timeline`} title={fullName}>
+          <Link href={timelineHref} title={fullName}>
             <span className="font-bold text-xs">
               {fullName.substring(0, 2).toUpperCase()}
             </span>
@@ -403,7 +404,7 @@ function SidebarRepoRow({
     >
       <Link
         className="flex-1 truncate pr-2"
-        href={`/repo/${slug}?view=timeline`}
+        href={timelineHref}
         title={fullName}
       >
         {fullName}

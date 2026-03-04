@@ -265,7 +265,11 @@ export default function TimelineView() {
         }
 
         setHandledGeneration(true);
-        router.replace(`/repo/${repoId}?view=timeline`);
+        router.replace(
+          `/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(
+            resolvedIdentity.fullName
+          )}`
+        );
       } catch (err) {
         if (cancelled) return;
         console.error("Generation error:", err);

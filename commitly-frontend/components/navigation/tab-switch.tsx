@@ -12,7 +12,14 @@ type TabSwitchProps = {
 export default function TabSwitch({ repoId }: TabSwitchProps) {
   const searchParams = useSearchParams();
   const view = searchParams.get("view");
+  const fullName = searchParams.get("fullName");
   const isGuide = view === "guide";
+  const timelineHref = fullName
+    ? `/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(fullName)}`
+    : `/repo/${repoId}?view=timeline`;
+  const guideHref = fullName
+    ? `/repo/${repoId}?view=guide&fullName=${encodeURIComponent(fullName)}`
+    : `/repo/${repoId}?view=guide`;
 
   return (
     <div className="inline-flex items-center rounded-full border border-border/70 bg-[#0d1117] p-1 text-sm">
@@ -23,7 +30,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
             ? "bg-primary text-primary-foreground"
             : "text-muted-foreground hover:text-foreground"
         )}
-        href={`/repo/${repoId}?view=timeline`}
+        href={timelineHref}
         replace
       >
         Timeline
@@ -35,7 +42,7 @@ export default function TabSwitch({ repoId }: TabSwitchProps) {
             ? "bg-primary text-primary-foreground"
             : "text-muted-foreground hover:text-foreground"
         )}
-        href={`/repo/${repoId}?view=guide`}
+        href={guideHref}
         replace
       >
         Guide

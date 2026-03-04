@@ -520,7 +520,11 @@ export default function GuideView() {
                 ) : null}
 
                 <Button asChild variant="outline" className="w-full">
-                  <Link href={`/repo/${repoId}?view=timeline#${stageContext.id}`}>
+                  <Link
+                    href={`/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(
+                      activeData.name
+                    )}#${stageContext.id}`}
+                  >
                     View full stage details
                   </Link>
                 </Button>

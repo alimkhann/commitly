@@ -227,7 +227,7 @@ export const repoService = {
   },
 
   getRepoUrl(identity: RepoIdentity): string {
-    return `/repo/${identity.slug}?view=timeline`;
+    return `/repo/${identity.slug}?view=timeline&fullName=${encodeURIComponent(identity.fullName)}`;
   },
 
   isBackendConfigured(): boolean {
