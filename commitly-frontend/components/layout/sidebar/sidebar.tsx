@@ -230,7 +230,7 @@ export default function Sidebar() {
               <div className="flex flex-col gap-2">
                 {aggregatedRows.length === 0 && !loading ? (
                   <div className="rounded-xl border border-border/70 bg-background px-4 py-6 text-muted-foreground text-sm">
-                    {t("save_to_library", "Save to library")} to add a roadmap.
+                    {t("library_empty_hint", "Save to library to add a roadmap.")}
                   </div>
                 ) : (
                   aggregatedRows.map((row) => (
