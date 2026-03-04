@@ -72,7 +72,19 @@ const GITHUB_OAUTH_SCOPE = Deno.env.get("GITHUB_OAUTH_SCOPE") ?? "read:user publ
 const GITHUB_OAUTH_SUCCESS_REDIRECT = Deno.env.get("GITHUB_OAUTH_SUCCESS_REDIRECT") ?? "/";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-pro";
+const GEMINI_MODEL_CANDIDATES = Array.from(
+  new Set(
+    [
+      GEMINI_MODEL,
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-flash-latest",
+      "gemini-3-flash-preview",
+    ].filter((model) => typeof model === "string" && model.trim().length > 0),
+  ),
+);
 
 const GLOBAL_DAILY_TOKEN_LIMIT = Number(Deno.env.get("GLOBAL_DAILY_TOKEN_LIMIT") ?? "2500000");
 const USER_DAILY_TOKEN_SOFT_LIMIT = Number(Deno.env.get("USER_DAILY_TOKEN_SOFT_LIMIT") ?? "120000");
@@ -169,14 +181,28 @@ function getBearerToken(req: Request) {
 }
 
 async function verifyClerkToken(token: string): Promise<JWTPayload> {
-  if (!(jwks && CLERK_ISSUER && CLERK_AUDIENCE)) {
+  if (!(jwks && CLERK_ISSUER)) {
     throw new Error("Clerk JWT verification is not configured");
   }
 
-  const { payload } = await jwtVerify(token, jwks, {
-    issuer: CLERK_ISSUER,
-    audience: CLERK_AUDIENCE,
-  });
+  let payload: JWTPayload;
+  try {
+    const verified = await jwtVerify(token, jwks, {
+      issuer: CLERK_ISSUER,
+      ...(CLERK_AUDIENCE ? { audience: CLERK_AUDIENCE } : {}),
+    });
+    payload = verified.payload;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "JWT verification failed";
+    if (CLERK_AUDIENCE && detail.toLowerCase().includes("missing required \"aud\" claim")) {
+      const verified = await jwtVerify(token, jwks, {
+        issuer: CLERK_ISSUER,
+      });
+      payload = verified.payload;
+    } else {
+      throw error;
+    }
+  }
 
   if (CLERK_AUTHORIZED_PARTIES.length > 0) {
     const azpRaw = payload.azp;
@@ -277,11 +303,13 @@ function parseRepoUrl(repoUrl: string): RepoIdentity {
   };
 }
 
-async function githubRequest<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+async function githubRequest<T>(path: string, token: string | null | undefined, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/vnd.github+json");
   headers.set("X-GitHub-Api-Version", "2022-11-28");
-  headers.set("Authorization", `Bearer ${token}`);
+  if (typeof token === "string" && token.length > 0) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
 
   const response = await fetch(`${GITHUB_API_BASE}${path}`, {
     ...init,
@@ -294,6 +322,13 @@ async function githubRequest<T>(path: string, token: string, init: RequestInit =
   }
 
   return (await response.json()) as T;
+}
+
+function isGitHubBadCredentialsError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.includes("GitHub API 401") && error.message.toLowerCase().includes("bad credentials");
 }
 
 function buildRoadmapPrompt(options: {
@@ -320,7 +355,7 @@ TASK
 Generate exactly ${stageBudget} beginner-friendly roadmap stages to rebuild this project from scratch.
 
 HARD REQUIREMENTS
-1) Never tell the learner to clone/copy this repository.
+1) Never tell the learner to run "git clone", fork this repo, or copy existing source code.
 2) Keep each stage concrete and practical.
 3) Each stage must include:
 - 1-3 goals
@@ -367,6 +402,7 @@ Improve this JSON timeline by:
 - removing vague steps
 - keeping beginner specificity
 - ensuring tasks are actionable and concise
+- removing any instruction that asks the learner to clone/fork/copy an existing repository
 - preserving schema exactly
 
 Return ONLY JSON with key "timeline".
@@ -422,7 +458,17 @@ function parseGeminiJsonResponse(payload: Record<string, unknown>) {
     throw new Error("Gemini returned empty text");
   }
 
-  return JSON.parse(cleaned) as Record<string, unknown>;
+  try {
+    return JSON.parse(cleaned) as Record<string, unknown>;
+  } catch {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      const sliced = cleaned.slice(firstBrace, lastBrace + 1).trim();
+      return JSON.parse(sliced) as Record<string, unknown>;
+    }
+    throw new Error("Gemini returned malformed JSON");
+  }
 }
 
 function extractGeminiText(payload: Record<string, unknown>) {
@@ -440,6 +486,10 @@ function extractGeminiText(payload: Record<string, unknown>) {
     }
   }
   return text.trim();
+}
+
+function hasGeminiUsablePayload(payload: Record<string, unknown>) {
+  return extractGeminiText(payload).length > 0;
 }
 
 function extractUsageMetadata(payload: Record<string, unknown>) {
@@ -473,36 +523,113 @@ async function callGemini(options: {
     throw new Error("GEMINI_API_KEY is not configured");
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: options.prompt }],
-          },
-        ],
-        generationConfig: {
-          temperature: options.temperature ?? 0.2,
-          topP: 0.8,
-          maxOutputTokens: options.maxOutputTokens,
-          ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {}),
+  let lastError: Error | null = null;
+  for (const model of GEMINI_MODEL_CANDIDATES) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    },
-  );
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: options.prompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: options.temperature ?? 0.2,
+            topP: 0.8,
+            maxOutputTokens: options.maxOutputTokens,
+            ...(options.responseMimeType ? { responseMimeType: options.responseMimeType } : {}),
+          },
+        }),
+      },
+    );
 
-  if (!response.ok) {
+    if (response.ok) {
+      const payload = (await response.json()) as Record<string, unknown>;
+      if (hasGeminiUsablePayload(payload)) {
+        return payload;
+      }
+
+      lastError = new Error(`Gemini API 200 (${model}): empty candidate payload`);
+      continue;
+    }
+
     const body = await response.text();
-    throw new Error(`Gemini API ${response.status}: ${body || response.statusText}`);
+    lastError = new Error(`Gemini API ${response.status} (${model}): ${body || response.statusText}`);
+    if (response.status !== 404) {
+      throw lastError;
+    }
   }
 
-  return (await response.json()) as Record<string, unknown>;
+  throw lastError ?? new Error("Gemini API request failed");
+}
+
+async function callGeminiJson(options: {
+  prompt: string;
+  maxOutputTokens: number;
+  responseMimeType?: string;
+  temperature?: number;
+  retries?: number;
+}) {
+  const retries = Math.max(0, Math.floor(options.retries ?? 2));
+  let prompt = options.prompt;
+  let lastError: Error | null = null;
+  const usageTotals = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+
+  const addUsage = (payload: Record<string, unknown>) => {
+    const usage = extractUsageMetadata(payload);
+    usageTotals.promptTokens += usage.promptTokens;
+    usageTotals.completionTokens += usage.completionTokens;
+    usageTotals.totalTokens += usage.totalTokens;
+  };
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const payload = await callGemini({
+      prompt,
+      maxOutputTokens: options.maxOutputTokens,
+      responseMimeType: options.responseMimeType,
+      temperature: options.temperature,
+    });
+    addUsage(payload);
+
+    try {
+      const parsed = parseGeminiJsonResponse(payload);
+      return { payload, parsed, usage: usageTotals };
+    } catch (error) {
+      const raw = extractGeminiText(payload);
+      if (raw.length > 0) {
+        const repairPayload = await callGemini({
+          prompt:
+            `Repair the following malformed JSON and return only valid JSON with identical structure and meaning.\n\n${raw}`,
+          maxOutputTokens: options.maxOutputTokens,
+          responseMimeType: "application/json",
+          temperature: 0,
+        });
+        addUsage(repairPayload);
+        try {
+          const repaired = parseGeminiJsonResponse(repairPayload);
+          return { payload: repairPayload, parsed: repaired, usage: usageTotals };
+        } catch {
+          // Fall through to retry with stricter instruction.
+        }
+      }
+
+      lastError = error instanceof Error ? error : new Error("Failed to parse Gemini JSON payload");
+      prompt =
+        `${options.prompt}\n\nIMPORTANT: Return only valid, complete JSON. Do not include markdown fences or extra prose.`;
+    }
+  }
+
+  throw lastError ?? new Error("Failed to parse Gemini JSON response");
 }
 
 function estimateTokenUsage(text: string) {
@@ -615,19 +742,42 @@ function normalizeTimeline(timelineRaw: unknown, stageBudget: number, commits: A
           .filter(Boolean)
         : [];
 
+      const stageTitle = typeof stage.title === "string" && stage.title.trim().length > 0
+        ? stage.title.trim()
+        : `Stage ${idx + 1}`;
+      const safeSummary = typeof stage.summary === "string" && stage.summary.trim().length > 0
+        ? stage.summary
+        : `Build ${stageTitle} with a concrete, testable outcome.`;
+      const safeGoals = goals.length > 0
+        ? goals.slice(0, 3)
+        : [`Complete ${stageTitle} with working files and verifiable output.`];
+      const safeTasks = tasks.length > 0
+        ? tasks
+        : [
+          {
+            label: `Implement ${stageTitle}`,
+            steps: [
+              `Create the minimal files needed to ship ${stageTitle}.`,
+              "Run the project locally and verify the feature works end-to-end.",
+            ],
+            files: ["README.md"],
+            commands: ["npm run dev"],
+          },
+        ];
+
       return {
         id: `stage-${idx + 1}`,
         index: idx + 1,
-        title: typeof stage.title === "string" ? stage.title : `Stage ${idx + 1}`,
-        summary: typeof stage.summary === "string" ? stage.summary : "",
+        title: stageTitle,
+        summary: safeSummary,
         status: "not-started",
         eta: typeof stage.eta === "string" ? stage.eta : "45m",
         category: typeof stage.category === "string" ? stage.category : "feature",
         difficulty: typeof stage.difficulty === "string" ? stage.difficulty : "easy",
-        goals: goals.slice(0, 3),
+        goals: safeGoals,
         prerequisites: prerequisites.slice(0, 5),
         checkpoints: checkpoints.slice(0, 5),
-        tasks,
+        tasks: safeTasks,
         code_examples: codeExamples,
         resources,
         commit_window: Array.isArray(stage.commit_window)
@@ -773,23 +923,69 @@ async function recordTokenUsage(supabase: SupabaseClient, params: {
   totalTokens: number;
   metadata?: JsonObject;
 }) {
-  await supabase.rpc("record_token_usage", {
+  const safePromptTokens = Math.max(0, Math.floor(params.promptTokens));
+  const safeCompletionTokens = Math.max(0, Math.floor(params.completionTokens));
+  const safeTotalTokens = Math.max(0, Math.floor(params.totalTokens));
+
+  const usageResult = await supabase.rpc("record_token_usage", {
     p_kind: params.kind,
     p_user_id: params.userId,
     p_endpoint: params.endpoint,
-    p_prompt_tokens: Math.max(0, Math.floor(params.promptTokens)),
-    p_completion_tokens: Math.max(0, Math.floor(params.completionTokens)),
-    p_total_tokens: Math.max(0, Math.floor(params.totalTokens)),
+    p_prompt_tokens: safePromptTokens,
+    p_completion_tokens: safeCompletionTokens,
+    p_total_tokens: safeTotalTokens,
     p_metadata: params.metadata ?? {},
     p_daily_limit: GLOBAL_DAILY_TOKEN_LIMIT,
   });
 
+  if (usageResult.error) {
+    // Fallback path when RPC is unavailable/misconfigured.
+    console.error("record_token_usage RPC failed, using table fallback:", usageResult.error.message);
+    const budgetDate = new Date().toISOString().slice(0, 10);
+    const { data: existingBudget } = await supabase
+      .from("global_token_budget")
+      .select("used,daily_limit")
+      .eq("budget_date", budgetDate)
+      .maybeSingle();
+
+    const previousUsed = Number(existingBudget?.used ?? 0);
+    const resolvedDailyLimit = Math.max(Number(existingBudget?.daily_limit ?? GLOBAL_DAILY_TOKEN_LIMIT) || GLOBAL_DAILY_TOKEN_LIMIT, 1);
+
+    await supabase
+      .from("global_token_budget")
+      .upsert(
+        {
+          budget_date: budgetDate,
+          daily_limit: resolvedDailyLimit,
+          used: previousUsed + safeTotalTokens,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "budget_date" },
+      );
+
+    await supabase
+      .from("token_usage_events")
+      .insert({
+        kind: params.kind,
+        user_id: params.userId,
+        endpoint: params.endpoint,
+        prompt_tokens: safePromptTokens,
+        completion_tokens: safeCompletionTokens,
+        total_tokens: safeTotalTokens,
+        metadata: params.metadata ?? {},
+      });
+  }
+
   if (params.userId) {
-    await supabase.rpc("record_user_soft_token_usage", {
+    const userSoftResult = await supabase.rpc("record_user_soft_token_usage", {
       p_user_id: params.userId,
-      p_total_tokens: Math.max(0, Math.floor(params.totalTokens)),
+      p_total_tokens: safeTotalTokens,
       p_daily_limit: USER_DAILY_TOKEN_SOFT_LIMIT,
     });
+
+    if (userSoftResult.error) {
+      console.error("record_user_soft_token_usage RPC failed:", userSoftResult.error.message);
+    }
   }
 }
 
@@ -817,12 +1013,26 @@ async function getGitHubTokenForUser(supabase: SupabaseClient, userId: string) {
     .eq("clerk_user_id", userId)
     .maybeSingle();
 
-  const token = data?.access_token ?? GITHUB_TOKEN;
-  if (!(typeof token === "string" && token.length > 0)) {
-    throw new Error("Connect GitHub to generate a roadmap");
+  const userToken = typeof data?.access_token === "string" && data.access_token.length > 0 ? data.access_token : null;
+  if (userToken) {
+    try {
+      await githubRequest<Record<string, unknown>>("/user", userToken);
+      return userToken;
+    } catch (error) {
+      if (isGitHubBadCredentialsError(error)) {
+        // Stale OAuth token (common after OAuth app config changes). Remove it so reconnect flow is clean.
+        await supabase.from("github_credentials").delete().eq("clerk_user_id", userId);
+      } else {
+        throw error;
+      }
+    }
   }
 
-  return token;
+  if (typeof GITHUB_TOKEN === "string" && GITHUB_TOKEN.length > 0) {
+    return GITHUB_TOKEN;
+  }
+
+  return null;
 }
 
 async function generateRoadmapInternal(options: {
@@ -897,28 +1107,28 @@ async function generateRoadmapInternal(options: {
   });
 
   await onProgress?.("Generating beginner roadmap...");
-  const firstPass = await callGemini({
+  const firstPassResult = await callGeminiJson({
     prompt: roadmapPrompt,
     maxOutputTokens,
     responseMimeType: "application/json",
     temperature: 0.2,
   });
 
-  let timelinePayload = parseGeminiJsonResponse(firstPass).timeline;
-  let totalUsage = extractUsageMetadata(firstPass);
+  let timelinePayload = firstPassResult.parsed.timeline;
+  let totalUsage = firstPassResult.usage;
 
   if (shouldReview) {
     await onProgress?.("Refining roadmap quality...");
     const reviewPrompt = buildRoadmapReviewPrompt(timelinePayload);
-    const secondPass = await callGemini({
+    const secondPassResult = await callGeminiJson({
       prompt: reviewPrompt,
       maxOutputTokens: 2048,
       responseMimeType: "application/json",
       temperature: 0.1,
     });
 
-    timelinePayload = parseGeminiJsonResponse(secondPass).timeline;
-    const reviewUsage = extractUsageMetadata(secondPass);
+    timelinePayload = secondPassResult.parsed.timeline;
+    const reviewUsage = secondPassResult.usage;
     totalUsage = {
       promptTokens: totalUsage.promptTokens + reviewUsage.promptTokens,
       completionTokens: totalUsage.completionTokens + reviewUsage.completionTokens,
@@ -1649,15 +1859,15 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     })
     .eq("id", jobId);
 
-  const result = await callGemini({
+  const result = await callGeminiJson({
     prompt,
     maxOutputTokens: usageSnapshot.mode === "low" ? 1600 : 2800,
     responseMimeType: "application/json",
     temperature: 0.2,
   });
 
-  const usageMeta = extractUsageMetadata(result);
-  const parsed = parseGeminiJsonResponse(result);
+  const usageMeta = result.usage;
+  const parsed = result.parsed;
   const normalizedChunk = normalizeTimelineChunk(parsed.timeline, stagesToGenerate, commitRefs, generatedStages);
   const nextTimeline = [...currentTimeline, ...normalizedChunk];
   const nextGeneratedStages = generatedStages + normalizedChunk.length;
