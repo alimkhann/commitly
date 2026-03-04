@@ -333,7 +333,9 @@ export default function TimelineView() {
             activeToken
           );
           if (!(statusResponse.ok && statusResponse.data)) {
-            break;
+            stepCount += 1;
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            continue;
           }
           applyProgressSnapshot(statusResponse.data);
           currentStatus = statusResponse.data.status;
