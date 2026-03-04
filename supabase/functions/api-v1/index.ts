@@ -213,7 +213,7 @@ function extractApiPath(pathname: string) {
 
 function normalizePath(pathname: string) {
   let next = pathname.replace("/api/v1/api/v1/", "/api/v1/");
-  if (pathname.length > 1 && pathname.endsWith("/")) {
+  if (next.length > 1 && next.endsWith("/")) {
     next = next.slice(0, -1);
   }
   return next;
@@ -873,6 +873,64 @@ Return ONLY JSON:
 }`;
 }
 
+function buildSyllabusRepairPrompt(options: {
+  repoName: string;
+  readmeExcerpt: string;
+  commitClusters: RepoIngestSnapshot["commitClusters"];
+  stageTarget: number;
+  failureReason: string;
+  previousSyllabus: unknown;
+}) {
+  const clusterLines = options.commitClusters
+    .slice(0, 10)
+    .map((cluster) => `${cluster.theme}: ${cluster.samples.slice(0, 3).join(" | ")}`)
+    .join("\n");
+
+  return `You are Commitly Syllabus Repair engine.
+
+Your previous syllabus output failed strict quality validation.
+Repository: ${options.repoName}
+Target stages: ${options.stageTarget}
+Failure reason:
+${options.failureReason}
+
+Readme context:
+${options.readmeExcerpt || "N/A"}
+
+Commit theme references:
+${clusterLines || "N/A"}
+
+Previous invalid syllabus JSON:
+${JSON.stringify(options.previousSyllabus)}
+
+Hard rules:
+1) Return EXACTLY ${options.stageTarget} stages.
+2) Never use template titles like "Stage 2" or "Module 3".
+3) Every title must be specific to a subsystem or milestone.
+4) Every stage needs concrete summary, goals, and checkpoints.
+5) Never instruct clone/fork/copy/inspect-existing-code as core workflow.
+6) Learner always builds from scratch in their own workspace.
+
+Return ONLY JSON:
+{
+  "syllabus": [
+    {
+      "id": "stage-1",
+      "index": 1,
+      "title": "...",
+      "summary": "...",
+      "category": "setup|feature|refactor|testing|ops|perf|docs|style|chore|other",
+      "difficulty": "intro|easy|medium|hard",
+      "goals": ["..."],
+      "prerequisites": ["..."],
+      "checkpoints": ["..."],
+      "source_themes": ["..."],
+      "optional_peeks": ["..."]
+    }
+  ]
+}`;
+}
+
 function buildStageHydrationPrompt(options: {
   repoName: string;
   readmeExcerpt: string;
@@ -1002,117 +1060,101 @@ Return ONLY JSON:
 }`;
 }
 
+function isTemplateStageTitle(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return /^stage\s*\d+$/i.test(normalized) ||
+    /^module\s*\d+$/i.test(normalized) ||
+    /^part\s*\d+$/i.test(normalized);
+}
+
 function normalizeSyllabusNodes(
   syllabusRaw: unknown,
   targetCount: number,
   clusters: RepoIngestSnapshot["commitClusters"],
 ) {
   const rawList = Array.isArray(syllabusRaw) ? syllabusRaw : [];
-  const topThemes = clusters.slice(0, 6).map((cluster) => cluster.theme).filter(Boolean);
-  const safeThemes = topThemes.length > 0 ? topThemes : ["core-product-flows", "api-and-backend", "ui-and-ux"];
-  const toThemeLabel = (theme: string) =>
-    theme
-      .replace(/[-_]/g, " ")
-      .split(" ")
-      .filter(Boolean)
-      .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-      .join(" ");
-  const buildThemeTitle = (idx: number) => {
-    const theme = safeThemes[idx % safeThemes.length];
-    return `${toThemeLabel(theme)} Foundations`;
-  };
-  const ensureUniqueTitle = (candidate: string, idx: number, used: Set<string>) => {
-    let next = candidate.trim();
-    if (!next) {
-      next = buildThemeTitle(idx);
-    }
-    const normalized = next.toLowerCase();
-    if (!used.has(normalized)) {
-      used.add(normalized);
-      return next;
-    }
-    const theme = toThemeLabel(safeThemes[idx % safeThemes.length]);
-    const withTheme = `${next} · ${theme}`;
-    if (!used.has(withTheme.toLowerCase())) {
-      used.add(withTheme.toLowerCase());
-      return withTheme;
-    }
-    const withIndex = `${next} ${idx + 1}`;
-    used.add(withIndex.toLowerCase());
-    return withIndex;
-  };
-  const isTemplateTitle = (value: string) => /^stage\s*\d+$/i.test(value.trim());
+  const topThemes = clusters.slice(0, 8).map((cluster) => cluster.theme).filter(Boolean);
+  const safeThemes = topThemes.length > 0 ? topThemes : ["core-product-flows"];
+  const issues: string[] = [];
+  const normalized: RoadmapSyllabusNode[] = [];
   const seenTitles = new Set<string>();
-  const normalized = rawList
-    .slice(0, targetCount)
-    .map((rawNode, idx) => {
-      const node = (rawNode && typeof rawNode === "object") ? (rawNode as Record<string, unknown>) : {};
-      const incomingTitle = typeof node.title === "string" ? node.title.trim() : "";
-      const baseTitle = incomingTitle.length > 0 && !isTemplateTitle(incomingTitle)
-        ? incomingTitle
-        : buildThemeTitle(idx);
-      const title = ensureUniqueTitle(baseTitle, idx, seenTitles);
-      const summary = typeof node.summary === "string" && node.summary.trim().length > 0
-        ? node.summary.trim()
-        : `Build ${title} from scratch and verify it with concrete checks.`;
-      const goals = Array.isArray(node.goals)
-        ? node.goals.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 3)
-        : [];
-      const prerequisites = Array.isArray(node.prerequisites)
-        ? node.prerequisites.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 5)
-        : [];
-      const checkpoints = Array.isArray(node.checkpoints)
-        ? node.checkpoints.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 6)
-        : [];
-      const sourceThemes = Array.isArray(node.source_themes)
-        ? node.source_themes.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 5)
-        : [];
-      const optionalPeeks = Array.isArray(node.optional_peeks)
-        ? node.optional_peeks.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 4)
-        : [];
-      return {
-        id: `stage-${idx + 1}`,
-        index: idx + 1,
-        title,
-        summary,
-        category: typeof node.category === "string" ? node.category : "feature",
-        difficulty: typeof node.difficulty === "string" ? node.difficulty : "easy",
-        goals: goals.length > 0 ? goals : [`Complete ${title} with a working implementation.`],
-        prerequisites,
-        checkpoints: checkpoints.length > 0 ? checkpoints : [`${title} runs locally and passes basic checks.`],
-        source_themes: sourceThemes.length > 0 ? sourceThemes : safeThemes.slice(idx % Math.max(safeThemes.length, 1), (idx % Math.max(safeThemes.length, 1)) + 2),
-        optional_peeks: optionalPeeks,
-      } satisfies RoadmapSyllabusNode;
-    });
 
-  const filled = [...normalized];
-  while (filled.length < targetCount) {
-    const idx = filled.length;
-    const title = ensureUniqueTitle(buildThemeTitle(idx), idx, seenTitles);
-    filled.push({
-      id: `stage-${idx + 1}`,
+  if (rawList.length < targetCount) {
+    issues.push(`expected ${targetCount} stages, got ${rawList.length}`);
+  }
+
+  for (let idx = 0; idx < targetCount; idx += 1) {
+    const rawNode = rawList[idx];
+    const node = (rawNode && typeof rawNode === "object") ? (rawNode as Record<string, unknown>) : {};
+    const title = typeof node.title === "string" ? node.title.trim() : "";
+    const summary = typeof node.summary === "string" ? node.summary.trim() : "";
+    const goals = Array.isArray(node.goals)
+      ? node.goals.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 4)
+      : [];
+    const prerequisites = Array.isArray(node.prerequisites)
+      ? node.prerequisites.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 6)
+      : [];
+    const checkpoints = Array.isArray(node.checkpoints)
+      ? node.checkpoints.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 6)
+      : [];
+    const sourceThemes = Array.isArray(node.source_themes)
+      ? node.source_themes.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 5)
+      : safeThemes.slice(0, 3);
+    const optionalPeeks = Array.isArray(node.optional_peeks)
+      ? node.optional_peeks.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 4)
+      : [];
+
+    if (!title) {
+      issues.push(`stage ${idx + 1}: missing title`);
+      continue;
+    }
+    if (isTemplateStageTitle(title)) {
+      issues.push(`stage ${idx + 1}: template title "${title}"`);
+      continue;
+    }
+    const normalizedTitle = title.toLowerCase();
+    if (seenTitles.has(normalizedTitle)) {
+      issues.push(`stage ${idx + 1}: duplicate title "${title}"`);
+      continue;
+    }
+    seenTitles.add(normalizedTitle);
+
+    if (!summary || /^build\s+stage\s+\d+/i.test(summary)) {
+      issues.push(`stage ${idx + 1}: template or empty summary`);
+      continue;
+    }
+    if (goals.length < 2) {
+      issues.push(`stage ${idx + 1}: requires at least 2 goals`);
+      continue;
+    }
+    if (checkpoints.length < 2) {
+      issues.push(`stage ${idx + 1}: requires at least 2 checkpoints`);
+      continue;
+    }
+
+    normalized.push({
+      id: typeof node.id === "string" && node.id.trim().length > 0 ? node.id.trim() : `stage-${idx + 1}`,
       index: idx + 1,
       title,
-      summary: `Build ${title} from scratch with testable outputs and concrete checkpoints.`,
-      category: "feature",
-      difficulty: idx < 2 ? "intro" : idx < 6 ? "easy" : "medium",
-      goals: [`Deliver ${title} with working files and commands.`],
-      prerequisites: [],
-      checkpoints: [`${title} behavior can be validated locally.`],
-      source_themes: safeThemes.slice(0, 2),
-      optional_peeks: [],
+      summary,
+      category: typeof node.category === "string" && node.category.trim().length > 0 ? node.category.trim() : "feature",
+      difficulty: typeof node.difficulty === "string" && node.difficulty.trim().length > 0 ? node.difficulty.trim() : "easy",
+      goals,
+      prerequisites,
+      checkpoints,
+      source_themes: sourceThemes,
+      optional_peeks: optionalPeeks,
     });
   }
 
-  const nonTemplateCount = filled.filter((node) => !isTemplateTitle(node.title)).length;
-  if (nonTemplateCount < Math.max(3, Math.floor(targetCount * 0.6))) {
-    throw new Error("Syllabus quality failed: model returned too many template stage titles.");
+  if (issues.length > 0 || normalized.length !== targetCount) {
+    const reason = [
+      `normalized ${normalized.length}/${targetCount} stages`,
+      ...issues.slice(0, 8),
+    ].join("; ");
+    throw new Error(`Syllabus quality failed: ${reason}`);
   }
-  const uniqueTitleCount = new Set(filled.map((node) => node.title.toLowerCase())).size;
-  if (uniqueTitleCount < Math.max(3, Math.floor(targetCount * 0.7))) {
-    throw new Error("Syllabus quality failed: stage titles are too repetitive.");
-  }
-  return filled.slice(0, targetCount);
+  return normalized;
 }
 
 function buildChatPrompt(options: {
@@ -2502,6 +2544,30 @@ async function handleGetCachedRoadmap(context: RouteContext, owner: string, repo
     return routeError(404, "Timeline has not been generated for this repository.");
   }
 
+  if (data.is_catalog_visible === false) {
+    let userId: string | null = null;
+    try {
+      userId = await getAuthedUserId(context.req, false);
+    } catch {
+      userId = null;
+    }
+    if (!userId) {
+      return routeError(404, "Timeline has not been generated for this repository.");
+    }
+    const { data: syncedRow, error: syncedError } = await context.supabase
+      .from("user_synced_repos")
+      .select("repo_full_name,is_archived")
+      .eq("user_id", userId)
+      .eq("repo_full_name", fullName)
+      .maybeSingle();
+    if (syncedError) {
+      return routeError(500, syncedError.message);
+    }
+    if (!syncedRow || Boolean(syncedRow.is_archived)) {
+      return routeError(404, "Timeline has not been generated for this repository.");
+    }
+  }
+
   return toJsonResponse(mapRoadmapRow(data as Record<string, unknown>) as unknown as JsonObject);
 }
 
@@ -2814,11 +2880,37 @@ async function persistSyllabus(options: {
     models: GEMINI_MODELS_PLANNER,
   });
 
-  const nodes = normalizeSyllabusNodes(
-    syllabusResult.parsed.syllabus,
-    stageTarget,
-    ingest.commitClusters,
-  );
+  let nodes: RoadmapSyllabusNode[] = [];
+  try {
+    nodes = normalizeSyllabusNodes(
+      syllabusResult.parsed.syllabus,
+      stageTarget,
+      ingest.commitClusters,
+    );
+  } catch (error) {
+    const failureReason = error instanceof Error ? error.message : "Unknown syllabus normalization failure";
+    const repairPrompt = buildSyllabusRepairPrompt({
+      repoName: String(ingest.repoSummary.full_name ?? ""),
+      readmeExcerpt: ingest.readmeExcerpt,
+      commitClusters: ingest.commitClusters,
+      stageTarget,
+      failureReason,
+      previousSyllabus: syllabusResult.parsed.syllabus,
+    });
+    const repairResult = await callGeminiJson({
+      prompt: repairPrompt,
+      maxOutputTokens: ingest.complexity.mode === "multi_track" ? 3600 : 2800,
+      responseMimeType: "application/json",
+      temperature: 0.1,
+      models: GEMINI_MODELS_REPAIR,
+      retries: 2,
+    });
+    nodes = normalizeSyllabusNodes(
+      repairResult.parsed.syllabus,
+      stageTarget,
+      ingest.commitClusters,
+    );
+  }
 
   const { data: syllabusRow, error: syllabusError } = await supabase
     .from("roadmap_syllabi")

@@ -271,6 +271,7 @@ export default function TimelineView() {
             progress_percent?: number;
             phase_message?: string | null;
             current_phase?: string | null;
+            last_error?: string | null;
           }
         ) => {
           setProgressiveStatus(snapshot.status);
@@ -299,6 +300,9 @@ export default function TimelineView() {
         applyProgressSnapshot(startResponse.data);
 
         let currentStatus = startResponse.data.status;
+        let currentError =
+          (startResponse.data as { last_error?: string | null }).last_error ??
+          null;
         let pollCount = 0;
         while (
           !cancelled &&
@@ -315,7 +319,21 @@ export default function TimelineView() {
           }
           applyProgressSnapshot(statusResponse.data);
           currentStatus = statusResponse.data.status;
+          currentError = statusResponse.data.last_error ?? currentError;
           pollCount += 1;
+        }
+
+        if (currentStatus === "failed") {
+          throw new Error(
+            currentError ||
+              "Roadmap generation failed quality checks. Please try again."
+          );
+        }
+
+        if (currentStatus === "queued" || currentStatus === "running") {
+          throw new Error(
+            "Roadmap generation is taking longer than expected. Please retry in a moment."
+          );
         }
 
         const cached = await repoService.getCachedRoadmap(
@@ -338,6 +356,7 @@ export default function TimelineView() {
       } catch (err) {
         if (cancelled) return;
         console.error("Generation error:", err);
+        setHandledGeneration(true);
         if (err instanceof Error && err.message.includes("401")) {
           setIsAuthError(true);
           setError(
@@ -353,6 +372,11 @@ export default function TimelineView() {
           );
         }
         setFetchState("error");
+        router.replace(
+          `/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(
+            resolvedIdentity.fullName
+          )}`
+        );
       } finally {
         if (!cancelled) {
           setIsGenerating(false);

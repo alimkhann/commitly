@@ -53,6 +53,11 @@ export default function SearchPage() {
     "dubinc/dub",
     "calcom/cal.com",
   ];
+  const normalizeDescription = (value?: string | null) =>
+    String(value ?? "")
+      .replace(/\p{Extended_Pictographic}/gu, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
 
   const matchesDifficulty = (
     candidate: string | null | undefined,
@@ -281,7 +286,7 @@ export default function SearchPage() {
                     </Badge>
                   </div>
                   <CardDescription>
-                    {repo.repo?.description ?? "No description"}
+                    {normalizeDescription(repo.repo?.description) || "No description"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
@@ -365,7 +370,9 @@ export default function SearchPage() {
                       {repo.timeline.length} stages
                     </Badge>
                   </div>
-                  <CardDescription>{repo.repo.description}</CardDescription>
+                  <CardDescription>
+                    {normalizeDescription(repo.repo.description) || "No description"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
                   <div className="flex flex-col gap-2">
