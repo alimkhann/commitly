@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 
+const DEFAULT_EDGE_API_BASE = 'https://krxngpbvmnbkjfkquhgd.supabase.co/functions/v1/api-v1'
 const API_BASE = (
     process.env.NEXT_PUBLIC_EDGE_API_BASE_URL ??
-    ''
+    DEFAULT_EDGE_API_BASE
 ).trim()
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
-const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
 let hasWarnedMissingEdgeApiBase = false
 
 const WAITLIST_CACHE_KEY = 'commitly_waitlist_count'
@@ -27,30 +26,6 @@ function readCachedWaitlistCount() {
 function writeCachedWaitlistCount(value: number) {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(WAITLIST_CACHE_KEY, String(Math.max(0, Math.floor(value))))
-}
-
-async function fetchWaitlistCountFromSupabase() {
-    if (!(SUPABASE_URL && SUPABASE_ANON_KEY)) return null
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/waitlist?select=id`, {
-        headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            'Range-Unit': 'items',
-            Range: '0-0',
-            Prefer: 'count=exact',
-        },
-        cache: 'no-store',
-    })
-
-    if (!response.ok) return null
-    const rangeHeader = response.headers.get('content-range')
-    if (!rangeHeader) return null
-
-    const [, totalCount] = rangeHeader.split('/')
-    const parsedCount = Number(totalCount)
-    return Number.isFinite(parsedCount) && parsedCount >= 0
-        ? Math.floor(parsedCount)
-        : null
 }
 
 export function useWaitlist() {
@@ -77,12 +52,6 @@ export function useWaitlist() {
                 console.warn('Missing NEXT_PUBLIC_EDGE_API_BASE_URL environment variable')
                 hasWarnedMissingEdgeApiBase = true
             }
-            const fallbackCount = await fetchWaitlistCountFromSupabase()
-            if (fallbackCount !== null) {
-                setWaitlistCount(fallbackCount)
-                writeCachedWaitlistCount(fallbackCount)
-                return
-            }
             const cachedCount = readCachedWaitlistCount()
             if (cachedCount !== null) {
                 setWaitlistCount(cachedCount)
@@ -99,13 +68,6 @@ export function useWaitlist() {
             }
         } catch (error) {
             console.error('Failed to fetch waitlist count', error)
-            const fallbackCount = await fetchWaitlistCountFromSupabase()
-            if (fallbackCount !== null) {
-                setWaitlistCount(fallbackCount)
-                writeCachedWaitlistCount(fallbackCount)
-                return
-            }
-
             const cachedCount = readCachedWaitlistCount()
             if (cachedCount !== null) {
                 setWaitlistCount(cachedCount)
