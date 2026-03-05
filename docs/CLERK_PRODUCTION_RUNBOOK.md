@@ -24,7 +24,16 @@ Recommended parties during transition:
 3. Configure JWT template used by Supabase Edge:
    - include `aud` claim matching `CLERK_AUDIENCE`
    - include `planTier` claim (`free|pro|ultra`)
-4. Verify OAuth providers (Google/GitHub) are configured on prod instance.
+4. Configure social OAuth providers on the **production** Clerk instance.
+   - Google:
+     - Authorized JavaScript origin: `https://app.commitly.one`
+     - Authorized redirect URI: `https://clerk.commitly.one/v1/oauth_callback`
+   - GitHub OAuth App:
+     - Homepage URL: `https://app.commitly.one`
+     - Authorization callback URL: `https://clerk.commitly.one/v1/oauth_callback`
+   - Apple Sign in:
+     - Return URL: `https://clerk.commitly.one/v1/oauth_callback`
+5. If social OAuth returns `missing client_id` or `invalid OAuth client request`, re-check provider client ID/secret in Clerk social connections first.
 
 ## Supabase Edge Checklist
 1. Set `CLERK_JWKS_URL`, `CLERK_ISSUER`, `CLERK_AUDIENCE`, `CLERK_AUTHORIZED_PARTIES`.

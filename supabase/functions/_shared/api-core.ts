@@ -398,6 +398,10 @@ function toTextResponse(payload: string, status = 200, extraHeaders: HeadersInit
   });
 }
 
+function sanitizeControlChars(value: string) {
+  return value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function toNoContentResponse(status = 204) {
   return new Response(null, {
     status,
@@ -3829,7 +3833,7 @@ async function getProviderRateLimitStatus(supabase: SupabaseClient) {
     provider_limited: providerLimited,
     provider_limited_since: latestAt.toISOString(),
     provider_retry_at: retryAt.toISOString(),
-    provider_reason: String(latest.error_detail ?? "").slice(0, 240),
+    provider_reason: sanitizeControlChars(String(latest.error_detail ?? "")).slice(0, 240),
   };
 }
 
