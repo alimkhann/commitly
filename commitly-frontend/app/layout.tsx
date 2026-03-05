@@ -66,7 +66,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           headerTitle: "text-foreground",
           headerSubtitle: "text-muted-foreground",
           socialButtonsBlockButton:
-            "text-foreground border border-border hover:bg-accent transition-colors",
+            "bg-white text-black border border-black/10 hover:bg-neutral-100 hover:text-black transition-colors",
+          socialButtonsBlockButtonArrow: "text-black",
+          socialButtonsBlockButtonText: "text-black",
+          socialButtonsBlockButton__google: "bg-white text-black",
+          socialButtonsBlockButton__github: "bg-white text-black",
+          socialButtonsBlockButton__apple: "bg-white text-black",
+          socialButtonsProviderIcon: "text-black",
           formButtonPrimary:
             "bg-primary text-primary-foreground hover:bg-primary/85 transition-colors",
           footerActionLink: "text-primary hover:text-primary/80",
