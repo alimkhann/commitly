@@ -45,14 +45,11 @@ export default function SearchPage() {
 
   const backendConfigured = repoService.isBackendConfigured();
   const normalizedQuery = query.trim().toLowerCase();
-  const quickTestRepos = [
-    "vercel/ms",
-    "sindresorhus/ky",
-    "upstash/redis-js",
-    "umami-software/umami",
-    "dubinc/dub",
-    "calcom/cal.com",
-  ];
+  const quickTestRepos = useMemo(() => {
+    const curatedDefaults = ["vercel/ms", "sindresorhus/ky", "calcom/cal.com"];
+    const visibleCatalog = publicRepos.map((repo) => repo.repo.full_name);
+    return Array.from(new Set([...visibleCatalog, ...curatedDefaults])).slice(0, 6);
+  }, [publicRepos]);
   const normalizeDescription = (value?: string | null) =>
     String(value ?? "")
       .replace(/\p{Extended_Pictographic}/gu, "")
@@ -96,7 +93,7 @@ export default function SearchPage() {
       } else {
         setPublicError(
           response.error ??
-            t("public_catalog_load_error", "Unable to load public catalog.")
+            "Unable to load public catalog."
         );
       }
       setPublicLoading(false);
@@ -105,7 +102,7 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [backendConfigured, sortBy, difficulty, t]);
+  }, [backendConfigured, sortBy, difficulty]);
 
   const syncedMap = useMemo(
     () => new Map(synced.map((repo) => [repo.repo.full_name, repo])),
@@ -264,7 +261,7 @@ export default function SearchPage() {
                 variant="outline"
               >
                 <Link
-                  href={`/repo/${slug}?view=timeline&fullName=${encodeURIComponent(repo)}&repoUrl=${encodeURIComponent(repoUrl)}&intent=generate`}
+                  href={`/repo/${slug}?view=timeline&fullName=${encodeURIComponent(repo)}&repoUrl=${encodeURIComponent(repoUrl)}`}
                 >
                   {repo}
                 </Link>

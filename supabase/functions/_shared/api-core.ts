@@ -18,6 +18,8 @@ type GlobalUsage = {
   provider_limited_since?: string | null;
   provider_retry_at?: string | null;
   provider_reason?: string | null;
+  queued_jobs?: number;
+  processing_jobs?: number;
 };
 
 type UserSoftUsage = {
@@ -186,6 +188,10 @@ const GITHUB_OAUTH_SUCCESS_REDIRECT = Deno.env.get("GITHUB_OAUTH_SUCCESS_REDIREC
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
 const GEMINI_ALLOW_PRO_MODELS = (Deno.env.get("GEMINI_ALLOW_PRO_MODELS") ?? "false").toLowerCase() === "true";
+const GEMINI_FALLBACK_MODELS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-2.5-flash")
+  .split(",")
+  .map((value) => value.trim())
+  .filter((value) => value.length > 0);
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ??
   (GEMINI_ALLOW_PRO_MODELS ? "gemini-3.1-pro-preview" : "gemini-3-flash-preview");
 const GEMINI_REQUEST_TIMEOUT_MS = Number(Deno.env.get("GEMINI_REQUEST_TIMEOUT_MS") ?? "45000");
@@ -200,24 +206,25 @@ const GEMINI_MODEL_CANDIDATES = Array.from(
     [
       GEMINI_MODEL,
       ...GEMINI_ACTIVE_MODELS,
+      ...GEMINI_FALLBACK_MODELS,
     ].filter((model) => typeof model === "string" && model.trim().length > 0),
   ),
 );
 const GEMINI_MODELS_PLANNER = GEMINI_ALLOW_PRO_MODELS
-  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
-  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview", ...GEMINI_FALLBACK_MODELS]
+  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", ...GEMINI_FALLBACK_MODELS];
 const GEMINI_MODELS_HYDRATOR = GEMINI_ALLOW_PRO_MODELS
-  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
-  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview", ...GEMINI_FALLBACK_MODELS]
+  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", ...GEMINI_FALLBACK_MODELS];
 const GEMINI_MODELS_REPAIR = GEMINI_ALLOW_PRO_MODELS
-  ? ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"]
-  : ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"];
+  ? ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview", ...GEMINI_FALLBACK_MODELS]
+  : ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", ...GEMINI_FALLBACK_MODELS];
 const GEMINI_MODELS_CHAT = GEMINI_ALLOW_PRO_MODELS
-  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
-  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview", ...GEMINI_FALLBACK_MODELS]
+  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", ...GEMINI_FALLBACK_MODELS];
 const GEMINI_MODELS_TRANSLATE = GEMINI_ALLOW_PRO_MODELS
-  ? ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"]
-  : ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"];
+  ? ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview", ...GEMINI_FALLBACK_MODELS]
+  : ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", ...GEMINI_FALLBACK_MODELS];
 const ADMIN_CATALOG_SECRET = Deno.env.get("ADMIN_CATALOG_SECRET") ?? "";
 const ROADMAP_WORKER_SECRET = Deno.env.get("ROADMAP_WORKER_SECRET") ?? "";
 const WORKER_DEFAULT_BATCH_SIZE = Number(Deno.env.get("WORKER_DEFAULT_BATCH_SIZE") ?? "4");
@@ -3811,6 +3818,24 @@ async function getProviderRateLimitStatus(supabase: SupabaseClient) {
   };
 }
 
+async function getQueueLoadSummary(supabase: SupabaseClient) {
+  const [queuedResult, processingResult] = await Promise.all([
+    supabase
+      .from("roadmap_generation_jobs")
+      .select("id", { head: true, count: "exact" })
+      .eq("queue_state", "queued"),
+    supabase
+      .from("roadmap_generation_jobs")
+      .select("id", { head: true, count: "exact" })
+      .eq("queue_state", "processing"),
+  ]);
+
+  return {
+    queuedJobs: Number(queuedResult.count ?? 0),
+    processingJobs: Number(processingResult.count ?? 0),
+  };
+}
+
 async function resolvePlanDailyLimit(
   supabase: SupabaseClient,
   userId: string | null,
@@ -4507,6 +4532,10 @@ async function handleWaitlistJoin(context: RouteContext) {
 async function handleUsageGlobal(context: RouteContext) {
   const usage = await getGlobalUsage(context.supabase);
   const providerStatus = await getProviderRateLimitStatus(context.supabase);
+  const queueSummary = await getQueueLoadSummary(context.supabase);
+  if (queueSummary.queuedJobs > 0 && !providerStatus.provider_limited) {
+    triggerWorkerDrain(context, Math.min(4, Math.max(1, queueSummary.queuedJobs)));
+  }
   let userUsage: UserSoftUsage | null = null;
   let planTier: PlanTier = "free";
   try {
@@ -4526,6 +4555,8 @@ async function handleUsageGlobal(context: RouteContext) {
     provider_limited_since: providerStatus.provider_limited_since,
     provider_retry_at: providerStatus.provider_retry_at,
     provider_reason: providerStatus.provider_reason,
+    queued_jobs: queueSummary.queuedJobs,
+    processing_jobs: queueSummary.processingJobs,
     user_daily_limit: userUsage?.daily_limit ?? null,
     user_used: userUsage?.used ?? null,
     user_remaining: userUsage?.remaining ?? null,

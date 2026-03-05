@@ -49,6 +49,13 @@ export function SharedTokenPoolCard({ usage, t, className }: SharedTokenPoolCard
           {t("tokens_left", "tokens left")}
         </p>
       )}
+      {typeof usage.queued_jobs === "number" && typeof usage.processing_jobs === "number" && (
+        <p className="mt-2 text-muted-foreground text-xs">
+          {t("generation_queue", "Generation queue")}: {usage.queued_jobs}{" "}
+          {t("queue_queued", "queued")} · {usage.processing_jobs}{" "}
+          {t("queue_processing", "processing")}
+        </p>
+      )}
       {mode === "low" && (
         <p className="mt-2 text-amber-600 text-xs dark:text-amber-400">
           {t(

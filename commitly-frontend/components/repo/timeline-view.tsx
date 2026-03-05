@@ -280,6 +280,15 @@ export default function TimelineView() {
         setGenerationStatus(t("generation_preparing", "Preparing generation..."));
         setGenerationProgress(2);
         const token = await getToken?.();
+        const usageSnapshot = await repoService.getGlobalUsage(token ?? undefined);
+        if (usageSnapshot.ok && usageSnapshot.data?.provider_limited) {
+          const retryAtText = usageSnapshot.data.provider_retry_at
+            ? new Date(usageSnapshot.data.provider_retry_at).toLocaleString()
+            : t("later", "later");
+          throw new Error(
+            `${t("generation_rate_limited", "Generation is paused because the shared AI pool hit a provider rate limit. Wait for reset or try again later.")} ${t("retry_after", "Retry after")} ${retryAtText}.`
+          );
+        }
 
         const startResponse = await repoService.generateRoadmapProgressive(
           repoUrl,

@@ -351,6 +351,8 @@ export type GlobalUsage = {
   provider_limited_since?: string | null;
   provider_retry_at?: string | null;
   provider_reason?: string | null;
+  queued_jobs?: number;
+  processing_jobs?: number;
   user_daily_limit?: number | null;
   user_used?: number | null;
   user_remaining?: number | null;
