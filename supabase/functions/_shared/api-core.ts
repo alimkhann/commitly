@@ -6647,7 +6647,7 @@ async function enqueueRoadmapJobTask(
 ) {
   const { data: jobRow, error } = await context.supabase
     .from("roadmap_generation_jobs")
-    .select("id,user_id,status,queue_state,repo_full_name,last_error")
+    .select("id,user_id,status,queue_state,repo_full_name,last_error,last_worker_at")
     .eq("id", options.jobId)
     .eq("user_id", context.userId)
     .maybeSingle();
@@ -6660,15 +6660,25 @@ async function enqueueRoadmapJobTask(
   }
 
   const queueState = String(jobRow.queue_state ?? "idle");
-  if (!(queueState === "queued" || queueState === "processing")) {
+  const nowMs = Date.now();
+  const lastWorkerMs = jobRow.last_worker_at ? Date.parse(String(jobRow.last_worker_at)) : NaN;
+  const queueStale = !Number.isFinite(lastWorkerMs) || (nowMs - lastWorkerMs) > 120_000;
+  const alreadyQueued = queueState === "queued" || queueState === "processing";
+
+  if (alreadyQueued && !queueStale) {
+    triggerWorkerDrain(context, 1);
+    return;
+  }
+
+  if (!alreadyQueued || queueStale) {
     await context.supabase
       .from("roadmap_generation_jobs")
       .update({
         queue_state: "queued",
         current_phase: options.type === "bootstrap" ? "ingest" : "hydrate",
         phase_message: options.type === "bootstrap"
-          ? "Queued. Preparing ingest artifacts..."
-          : "Queued for stage hydration.",
+          ? (queueStale ? "Re-queued. Preparing ingest artifacts..." : "Queued. Preparing ingest artifacts...")
+          : (queueStale ? "Re-queued for stage hydration." : "Queued for stage hydration."),
         last_error: String(jobRow.status ?? "") === "failed" ? null : jobRow.last_error,
         updated_at: new Date().toISOString(),
       })
