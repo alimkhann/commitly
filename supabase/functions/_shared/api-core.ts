@@ -316,6 +316,16 @@ const TEMPLATE_TASK_PATTERNS = [
   /run the validation command and record the passing result/i,
   /implement (finalize|verify|check|create) .* in (readme\.md|package\.json|[^ ]*config[^ ]*)/i,
 ];
+const TEMPLATE_SCAFFOLD_STEP_PATTERNS = [
+  /define concrete invariants for .* and list expected outputs/i,
+  /implement the first iteration in .* and cover one edge case immediately/i,
+  /run tests and verify invariant checks pass/i,
+  /add focused tests for normal, invalid, and boundary inputs/i,
+  /run validation scripts and confirm zero regressions/i,
+  /write regression tests that lock expected behavior for tricky inputs/i,
+  /re-run full checks and confirm stable output/i,
+  /with explicit input parsing/i,
+];
 const NON_SOURCE_FILE_PATTERNS = [
   /^package\.json$/i,
   /^pnpm-lock\.yaml$/i,
@@ -3211,6 +3221,10 @@ function validateHydratedStageQuality(
     const text = `${task.label} ${task.steps.join(" ")}`;
     return count + (TEMPLATE_TASK_PATTERNS.some((pattern) => pattern.test(text)) ? 1 : 0);
   }, 0);
+  const scaffoldStepPatternHits = sanitizedTasks.reduce((count, task) =>
+    count + task.steps.filter((step) =>
+      TEMPLATE_SCAFFOLD_STEP_PATTERNS.some((pattern) => pattern.test(step))
+    ).length, 0);
   const recoveryStepHits = sanitizedTasks.reduce((count, task) => {
     return count + task.steps.filter((step) =>
       /add or update tests for .*, including at least one edge case/i.test(step) ||
@@ -3218,11 +3232,11 @@ function validateHydratedStageQuality(
       /with explicit input\/output behavior/i.test(step)
     ).length;
   }, 0);
-  if (templatePatternHits > 0) {
+  if (templatePatternHits > 0 || scaffoldStepPatternHits >= 2) {
     failReasons.push("contains repetitive scaffold task patterns");
     failCodes.add("template_phrase_repetition");
   }
-  if (recoveryStepHits >= 2) {
+  if (recoveryStepHits >= 2 || scaffoldStepPatternHits >= 3) {
     failReasons.push("contains fallback-like repair scaffolding phrases");
     failCodes.add("template_phrase_repetition");
   }
@@ -3278,6 +3292,7 @@ function validateHydratedStageQuality(
   );
   const templateRiskScore = Math.max(0, Math.min(100, Math.round(
     (templatePatternHits * 24) +
+    (scaffoldStepPatternHits * 16) +
     (vagueLabelHits * 16) +
     (recoveryStepHits * 30) +
     ((1 - uniqueLabelRatio) * 45),
