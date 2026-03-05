@@ -185,24 +185,39 @@ const GITHUB_OAUTH_SCOPE = Deno.env.get("GITHUB_OAUTH_SCOPE") ?? "read:user publ
 const GITHUB_OAUTH_SUCCESS_REDIRECT = Deno.env.get("GITHUB_OAUTH_SUCCESS_REDIRECT") ?? "/";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.1-pro-preview";
+const GEMINI_ALLOW_PRO_MODELS = (Deno.env.get("GEMINI_ALLOW_PRO_MODELS") ?? "false").toLowerCase() === "true";
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ??
+  (GEMINI_ALLOW_PRO_MODELS ? "gemini-3.1-pro-preview" : "gemini-3-flash-preview");
 const GEMINI_REQUEST_TIMEOUT_MS = Number(Deno.env.get("GEMINI_REQUEST_TIMEOUT_MS") ?? "45000");
 const GITHUB_REQUEST_TIMEOUT_MS = Number(Deno.env.get("GITHUB_REQUEST_TIMEOUT_MS") ?? "25000");
+const GEMINI_BASE_MODELS = ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"] as const;
+const GEMINI_PRO_MODELS = ["gemini-3.1-pro-preview"] as const;
+const GEMINI_ACTIVE_MODELS = GEMINI_ALLOW_PRO_MODELS
+  ? [...GEMINI_BASE_MODELS, ...GEMINI_PRO_MODELS]
+  : [...GEMINI_BASE_MODELS];
 const GEMINI_MODEL_CANDIDATES = Array.from(
   new Set(
     [
       GEMINI_MODEL,
-      "gemini-3.1-pro-preview",
-      "gemini-3-flash-preview",
-      "gemini-3.1-flash-lite-preview",
+      ...GEMINI_ACTIVE_MODELS,
     ].filter((model) => typeof model === "string" && model.trim().length > 0),
   ),
 );
-const GEMINI_MODELS_PLANNER = ["gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
-const GEMINI_MODELS_HYDRATOR = ["gemini-3-flash-preview", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview"];
-const GEMINI_MODELS_REPAIR = ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"];
-const GEMINI_MODELS_CHAT = ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"];
-const GEMINI_MODELS_TRANSLATE = ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"];
+const GEMINI_MODELS_PLANNER = GEMINI_ALLOW_PRO_MODELS
+  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
+  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+const GEMINI_MODELS_HYDRATOR = GEMINI_ALLOW_PRO_MODELS
+  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
+  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+const GEMINI_MODELS_REPAIR = GEMINI_ALLOW_PRO_MODELS
+  ? ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"]
+  : ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"];
+const GEMINI_MODELS_CHAT = GEMINI_ALLOW_PRO_MODELS
+  ? ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
+  : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
+const GEMINI_MODELS_TRANSLATE = GEMINI_ALLOW_PRO_MODELS
+  ? ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-3.1-pro-preview"]
+  : ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"];
 const ADMIN_CATALOG_SECRET = Deno.env.get("ADMIN_CATALOG_SECRET") ?? "";
 const ROADMAP_WORKER_SECRET = Deno.env.get("ROADMAP_WORKER_SECRET") ?? "";
 const WORKER_DEFAULT_BATCH_SIZE = Number(Deno.env.get("WORKER_DEFAULT_BATCH_SIZE") ?? "4");
@@ -6057,7 +6072,9 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
     .filter((item) => !(item.validated?.ok ?? false));
 
   if (failedNodes.length > 0) {
-    const repairModelByAttempt = ["gemini-3-flash-preview", "gemini-3.1-pro-preview"];
+    const repairModelByAttempt = GEMINI_ALLOW_PRO_MODELS
+      ? ["gemini-3-flash-preview", "gemini-3.1-pro-preview"]
+      : ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"];
     for (const item of failedNodes) {
       const node = item.node;
       const evidence = stageEvidenceById.get(node.id);
