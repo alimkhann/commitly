@@ -4930,8 +4930,20 @@ async function handleCatalog(context: RouteContext) {
   }
 
   const rows = (data ?? []) as Record<string, unknown>[];
+  const qualityVisibleRows = rows.filter((row) => {
+    const jobState = String(row.job_state ?? "completed");
+    if (jobState === "completed") {
+      return true;
+    }
+    if (jobState !== "partial_ready") {
+      return false;
+    }
+    const stageCount = Array.isArray(row.timeline) ? row.timeline.length : 0;
+    const hasQuality = row.timeline_quality && typeof row.timeline_quality === "object";
+    return stageCount >= 5 && Boolean(hasQuality);
+  });
   const filteredRows = Number.isFinite(minRating) && minRating > 0
-    ? rows.filter((row) => {
+    ? qualityVisibleRows.filter((row) => {
       const ratingCount = Number(row.rating_count ?? 0);
       const ratingSum = Number(row.rating_sum ?? 0);
       if (ratingCount <= 0) {
@@ -4939,7 +4951,7 @@ async function handleCatalog(context: RouteContext) {
       }
       return ratingSum / ratingCount >= minRating;
     })
-    : rows;
+    : qualityVisibleRows;
 
   return toJsonResponse(toCatalogResponse(filteredRows, page, pageSize, count ?? filteredRows.length) as unknown as JsonObject);
 }
