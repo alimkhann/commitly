@@ -1069,7 +1069,7 @@ export const repoService = {
     });
   },
 
-  getGlobalUsage(): Promise<ApiClientResponse<GlobalUsage>> {
+  getGlobalUsage(authToken?: string): Promise<ApiClientResponse<GlobalUsage>> {
     if (!env.apiBaseUrl) {
       return Promise.resolve({
         ok: false,
@@ -1080,6 +1080,7 @@ export const repoService = {
     return apiClient<GlobalUsage>(env.apiBaseUrl, {
       path: API_ROUTES.usageGlobal,
       cache: "no-store",
+      authToken,
     });
   },
 

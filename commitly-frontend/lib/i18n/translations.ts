@@ -73,6 +73,13 @@ const en = {
   tokens_left: "tokens left",
   mode: "Mode",
   resets: "resets",
+  your_plan_budget: "Your plan budget",
+  shared_pool_low_hint:
+    "Pool is in low mode. Generation may slow down and use cheaper model settings.",
+  shared_pool_critical_hint:
+    "Pool is exhausted. New roadmap generation is paused until reset.",
+  generation_rate_limited:
+    "Generation is paused because the shared AI pool hit a provider rate limit. Wait for reset or try again later.",
   connect_github_before_generate: "Connect GitHub before generating a roadmap.",
   invalid_repo_url: "Enter a valid GitHub repository URL (owner/name).",
   public_catalog_load_error: "Unable to load public catalog.",
@@ -406,6 +413,10 @@ const zhHKOverrides: Partial<Record<keyof typeof en, string>> = {
   tokens_left: "剩餘 tokens",
   mode: "模式",
   resets: "重置時間",
+  your_plan_budget: "你嘅方案配額",
+  shared_pool_low_hint: "資源池目前喺低量模式，生成速度會較慢，並可能使用較節省成本嘅模型設定。",
+  shared_pool_critical_hint: "資源池已耗盡，路線圖生成會暫停至重置時間。",
+  generation_rate_limited: "共享 AI 資源池已觸發供應商速率限制，生成已暫停。請等重置後再試。",
   page: "第",
   of: "/",
   total: "總數",
@@ -689,6 +700,11 @@ const kzOverrides: Partial<Record<keyof typeof en, string>> = {
   tokens_left: "токен қалды",
   mode: "Режим",
   resets: "жаңарады",
+  your_plan_budget: "Сіздің жоспар бюджеті",
+  shared_pool_low_hint: "Пул low режимінде. Генерация баяулауы мүмкін және арзанырақ модель параметрлері қолданылуы ықтимал.",
+  shared_pool_critical_hint: "Пул таусылған. Жаңа роудмап генерациясы келесі жаңаруға дейін тоқтатылды.",
+  generation_rate_limited:
+    "Ортақ AI пулында провайдер rate limit шегіне жетті. Генерация уақытша тоқтады, жаңарғаннан кейін қайта көріңіз.",
   help_kicker: "Қолдау",
   help_title: "Қалай көмектесе аламыз?",
   help_subtitle: "Нұсқаулықтарды қарап шығыңыз, өнім жаңартуларын бақылаңыз немесе адаммен байланысыңыз.",
@@ -974,6 +990,13 @@ const ruOverrides: Partial<Record<keyof typeof en, string>> = {
   tokens_left: "токенов осталось",
   mode: "Режим",
   resets: "сброс",
+  your_plan_budget: "Бюджет вашего плана",
+  shared_pool_low_hint:
+    "Пул работает в режиме low. Генерация может идти медленнее и использовать более экономичные настройки модели.",
+  shared_pool_critical_hint:
+    "Пул исчерпан. Новая генерация роудмапов приостановлена до сброса.",
+  generation_rate_limited:
+    "Общий AI-пул упёрся в лимит провайдера. Генерация приостановлена, дождитесь сброса и попробуйте снова.",
   help_kicker: "Поддержка",
   help_title: "Чем помочь?",
   help_subtitle: "Изучайте гайды, следите за обновлениями продукта или свяжитесь с человеком из команды.",

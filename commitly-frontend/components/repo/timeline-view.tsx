@@ -40,8 +40,10 @@ import {
 } from "@/components/ui/collapsible";
 
 import { StarRating } from "@/components/ui/star-rating";
+import { SharedTokenPoolCard } from "@/components/ui/shared-token-pool-card";
 import type { CodeExample, RepoTimelineStage } from "@/data/repos";
 import {
+  type GlobalUsage,
   type RoadmapGenerationJobStatus,
   type RepoIdentity,
   type RoadmapResponseBody,
@@ -130,6 +132,7 @@ export default function TimelineView() {
   const [totalPlannedStages, setTotalPlannedStages] = useState(0);
   const [isContinuingGeneration, setIsContinuingGeneration] = useState(false);
   const [flaggingStageId, setFlaggingStageId] = useState<string | null>(null);
+  const [globalUsage, setGlobalUsage] = useState<GlobalUsage | null>(null);
   const [stageTranslations, setStageTranslations] = useState<
     Record<
       string,
@@ -146,6 +149,23 @@ export default function TimelineView() {
   const translationRequestedRef = useRef<Set<string>>(new Set());
 
   const shouldGenerate = searchParams?.get("intent") === "generate";
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchUsage = async () => {
+      const token = isSignedIn ? (await getToken?.()) ?? undefined : undefined;
+      const response = await repoService.getGlobalUsage(token);
+      if (!(cancelled || !response.ok || !response.data)) {
+        setGlobalUsage(response.data);
+      }
+    };
+    void fetchUsage();
+    const intervalId = window.setInterval(fetchUsage, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [getToken, isSignedIn]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -409,8 +429,16 @@ export default function TimelineView() {
           setError(
             "GitHub authentication failed. Please reconnect your account."
           );
-        } else if (err instanceof Error && err.message.includes("Token budget")) {
-          setError(err.message);
+        } else if (
+          err instanceof Error &&
+          /(token budget|rate limit|quota|resource_exhausted|429)/i.test(err.message)
+        ) {
+          setError(
+            t(
+              "generation_rate_limited",
+              "Generation is paused because the shared AI pool hit a provider rate limit. Wait for reset or try again later."
+            )
+          );
         } else {
           setError(
             err instanceof Error
@@ -989,6 +1017,8 @@ export default function TimelineView() {
           {actionError}
         </p>
       )}
+
+      <SharedTokenPoolCard t={t} usage={globalUsage} />
 
       {(showLoadingState || error) && (
         <section className="rounded-2xl border border-border/70 border-dashed bg-card p-6 text-muted-foreground text-sm">
@@ -1600,7 +1630,7 @@ function TimelineNodeCard({
               <span>{stage.eta}</span>
             </div>
             <div className="flex items-center gap-2">
-              {isSignedIn && onFlagStageForRegeneration && (
+              {onFlagStageForRegeneration && (
                 <Button
                   disabled={flaggingStageId === stage.id}
                   onClick={() => onFlagStageForRegeneration(stage)}

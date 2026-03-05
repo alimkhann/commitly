@@ -8,6 +8,7 @@ import type { GlobalUsage } from "@/lib/services/repos";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SharedTokenPoolCard } from "@/components/ui/shared-token-pool-card";
 import { mapGithubOAuthError } from "@/lib/services/error-messages";
 import { githubService } from "@/lib/services/github";
 import { repoService } from "@/lib/services/repos";
@@ -68,7 +69,8 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     const fetchUsage = async () => {
-      const response = await repoService.getGlobalUsage();
+      const token = await getToken?.();
+      const response = await repoService.getGlobalUsage(token ?? undefined);
       if (!(cancelled || !response.ok || !response.data)) {
         setGlobalUsage(response.data);
       }
@@ -79,7 +81,7 @@ export default function Home() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [getToken]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -209,22 +211,7 @@ export default function Home() {
           )}
         </form>
 
-        {globalUsage && (
-          <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border/70 bg-card px-5 py-4 text-left">
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.2em]">
-              {t("shared_token_pool", "Shared AI token pool")}
-            </p>
-            <p className="mt-1 font-medium text-sm">
-              {globalUsage.remaining.toLocaleString()} /{" "}
-              {globalUsage.daily_limit.toLocaleString()}{" "}
-              {t("tokens_left", "tokens left")}
-            </p>
-            <p className="mt-1 text-muted-foreground text-xs">
-              {t("mode", "Mode")}: {globalUsage.mode} · {t("resets", "resets")}{" "}
-              {new Date(globalUsage.reset_at).toLocaleString()}
-            </p>
-          </div>
-        )}
+        <SharedTokenPoolCard className="mx-auto w-full max-w-2xl" t={t} usage={globalUsage} />
       </section>
     </div>
   );
