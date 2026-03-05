@@ -6852,6 +6852,7 @@ async function processRoadmapWorkerTask(
     await archiveRoadmapTask(context.supabase, message.msg_id);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Worker task failed";
+    const providerLimited = PROVIDER_RATE_LIMIT_REGEX.test(detail);
     await context.supabase
       .from("roadmap_worker_runs")
       .insert({
@@ -6866,7 +6867,11 @@ async function processRoadmapWorkerTask(
       await context.supabase
         .from("roadmap_generation_jobs")
         .update({
-          queue_state: message.read_ct >= WORKER_MAX_RETRIES ? "failed" : "queued",
+          queue_state: providerLimited
+            ? "queued"
+            : message.read_ct >= WORKER_MAX_RETRIES
+              ? "failed"
+              : "queued",
           worker_attempts: Math.max(1, message.read_ct),
           last_worker_at: new Date().toISOString(),
           last_error: detail.slice(0, 2000),
@@ -6887,10 +6892,13 @@ async function processRoadmapWorkerTask(
         .eq("id", task.flag_id);
     }
 
-    if (message.read_ct >= WORKER_MAX_RETRIES) {
+    if (message.read_ct >= WORKER_MAX_RETRIES && !providerLimited) {
       await archiveRoadmapTask(context.supabase, message.msg_id);
     } else {
-      await setRoadmapTaskVisibility(context.supabase, message.msg_id, 20 * Math.max(1, message.read_ct));
+      const baseSeconds = providerLimited
+        ? 180 * Math.max(1, message.read_ct)
+        : 20 * Math.max(1, message.read_ct);
+      await setRoadmapTaskVisibility(context.supabase, message.msg_id, Math.min(baseSeconds, 1800));
     }
   }
 }
