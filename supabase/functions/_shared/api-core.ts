@@ -14,6 +14,10 @@ type GlobalUsage = {
   remaining: number;
   mode: "normal" | "low" | "critical";
   reset_at: string;
+  provider_limited?: boolean;
+  provider_limited_since?: string | null;
+  provider_retry_at?: string | null;
+  provider_reason?: string | null;
 };
 
 type UserSoftUsage = {
@@ -204,6 +208,9 @@ const ROADMAP_WORKER_SECRET = Deno.env.get("ROADMAP_WORKER_SECRET") ?? "";
 const WORKER_DEFAULT_BATCH_SIZE = Number(Deno.env.get("WORKER_DEFAULT_BATCH_SIZE") ?? "4");
 const WORKER_MAX_BATCH_SIZE = Number(Deno.env.get("WORKER_MAX_BATCH_SIZE") ?? "12");
 const WORKER_MAX_RETRIES = Number(Deno.env.get("WORKER_MAX_RETRIES") ?? "3");
+const PROVIDER_RATE_LIMIT_LOOKBACK_MINUTES = Number(Deno.env.get("PROVIDER_RATE_LIMIT_LOOKBACK_MINUTES") ?? "30");
+const PROVIDER_RATE_LIMIT_COOLDOWN_MINUTES = Number(Deno.env.get("PROVIDER_RATE_LIMIT_COOLDOWN_MINUTES") ?? "12");
+const PROVIDER_RATE_LIMIT_REGEX = /(resource_exhausted|rate[\s_-]?limit|quota|too many requests|429)/i;
 
 const GLOBAL_DAILY_TOKEN_LIMIT = Number(Deno.env.get("GLOBAL_DAILY_TOKEN_LIMIT") ?? "2500000");
 const USER_DAILY_TOKEN_SOFT_LIMIT = Number(Deno.env.get("USER_DAILY_TOKEN_SOFT_LIMIT") ?? "120000");
@@ -3742,6 +3749,53 @@ async function getGlobalUsage(supabase: SupabaseClient): Promise<GlobalUsage> {
   };
 }
 
+async function getProviderRateLimitStatus(supabase: SupabaseClient) {
+  const lookbackMs = Math.max(5, PROVIDER_RATE_LIMIT_LOOKBACK_MINUTES) * 60 * 1000;
+  const sinceIso = new Date(Date.now() - lookbackMs).toISOString();
+  const { data, error } = await supabase
+    .from("roadmap_worker_runs")
+    .select("created_at,error_detail,status,task_type")
+    .eq("status", "failed")
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(40);
+
+  if (error || !(Array.isArray(data) && data.length > 0)) {
+    return {
+      provider_limited: false,
+      provider_limited_since: null,
+      provider_retry_at: null,
+      provider_reason: null,
+    };
+  }
+
+  const rateLimitedRows = data.filter((row) =>
+    PROVIDER_RATE_LIMIT_REGEX.test(String(row.error_detail ?? ""))
+  );
+  if (rateLimitedRows.length === 0) {
+    return {
+      provider_limited: false,
+      provider_limited_since: null,
+      provider_retry_at: null,
+      provider_reason: null,
+    };
+  }
+
+  const latest = rateLimitedRows[0] as Record<string, unknown>;
+  const latestAt = new Date(String(latest.created_at ?? new Date().toISOString()));
+  const cooldownMinutes = Math.max(5, Math.min(45, PROVIDER_RATE_LIMIT_COOLDOWN_MINUTES + (rateLimitedRows.length - 1) * 2));
+  const retryAt = new Date(latestAt.getTime() + cooldownMinutes * 60 * 1000);
+  const now = Date.now();
+  const providerLimited = retryAt.getTime() > now;
+
+  return {
+    provider_limited: providerLimited,
+    provider_limited_since: latestAt.toISOString(),
+    provider_retry_at: retryAt.toISOString(),
+    provider_reason: String(latest.error_detail ?? "").slice(0, 240),
+  };
+}
+
 async function resolvePlanDailyLimit(
   supabase: SupabaseClient,
   userId: string | null,
@@ -4437,6 +4491,7 @@ async function handleWaitlistJoin(context: RouteContext) {
 
 async function handleUsageGlobal(context: RouteContext) {
   const usage = await getGlobalUsage(context.supabase);
+  const providerStatus = await getProviderRateLimitStatus(context.supabase);
   let userUsage: UserSoftUsage | null = null;
   let planTier: PlanTier = "free";
   try {
@@ -4452,6 +4507,10 @@ async function handleUsageGlobal(context: RouteContext) {
 
   return toJsonResponse({
     ...usage,
+    provider_limited: providerStatus.provider_limited,
+    provider_limited_since: providerStatus.provider_limited_since,
+    provider_retry_at: providerStatus.provider_retry_at,
+    provider_reason: providerStatus.provider_reason,
     user_daily_limit: userUsage?.daily_limit ?? null,
     user_used: userUsage?.used ?? null,
     user_remaining: userUsage?.remaining ?? null,
@@ -6113,42 +6172,48 @@ async function runProgressiveGenerationChunk(context: AuthedRouteContext, jobId:
         }
       }
       if (!(currentValidation?.ok ?? false)) {
-        const deterministicStage = buildEvidenceBoundRecoveryStage({
-          node,
-          evidence,
-          knownFiles: validationContext.knownFiles,
-          packageManager: validationContext.packageManager,
-          scripts: validationContext.scripts,
-        });
-        const deterministicValidated = validateHydratedStageQuality(
-          deterministicStage,
+        const fallbackStage = stageByNodeId.get(node.id) ?? initialStages[idx];
+        const fallbackValidated = currentValidation ?? validateHydratedStageQuality(
+          fallbackStage,
           node,
           evidence,
           validationContext,
         );
-        stageByNodeId.set(node.id, deterministicStage);
-        validationByNodeId.set(node.id, deterministicValidated);
-        currentValidation = deterministicValidated;
+        const failCodes = fallbackValidated.failCodes.length > 0
+          ? fallbackValidated.failCodes
+          : ["missing_actionability"];
+        const failReasons = [
+          ...fallbackValidated.failReasons,
+          "stage_repair_exhausted_without_valid_output",
+        ];
+        const forcedFailure: StageValidationReport = {
+          ...fallbackValidated,
+          ok: false,
+          failCodes: Array.from(new Set(failCodes)),
+          failReasons: Array.from(new Set(failReasons)),
+        };
+        validationByNodeId.set(node.id, forcedFailure);
+        currentValidation = forcedFailure;
         await recordStageRepairAttempt(supabase, {
           jobId,
           stageId: node.id,
           attemptNo: 99,
-          model: "rule-based-recovery",
-          failCodes: deterministicValidated.ok ? [] : deterministicValidated.failCodes,
-          failReasons: deterministicValidated.ok ? [] : deterministicValidated.failReasons,
+          model: "repair-exhausted",
+          failCodes: forcedFailure.failCodes,
+          failReasons: forcedFailure.failReasons,
           metrics: {
-            quality_score: deterministicValidated.qualityScore,
-            grounding_score: deterministicValidated.groundingScore,
-            concept_coverage_score: deterministicValidated.conceptCoverageScore,
-            template_risk_score: deterministicValidated.templateRiskScore,
+            quality_score: forcedFailure.qualityScore,
+            grounding_score: forcedFailure.groundingScore,
+            concept_coverage_score: forcedFailure.conceptCoverageScore,
+            template_risk_score: forcedFailure.templateRiskScore,
           },
         });
         stageAttemptReports.set(node.id, {
           stage_id: node.id,
-          attempt_count: deterministicValidated.ok ? 99 : 100,
-          fail_codes: deterministicValidated.ok ? [] : deterministicValidated.failCodes,
-          fail_reasons: deterministicValidated.ok ? [] : deterministicValidated.failReasons,
-          last_model: "rule-based-recovery",
+          attempt_count: 99,
+          fail_codes: forcedFailure.failCodes,
+          fail_reasons: forcedFailure.failReasons,
+          last_model: "repair-exhausted",
         });
       }
     }
@@ -6837,7 +6902,28 @@ async function handleInternalWorkerDrain(context: RouteContext) {
   const body = await readJsonBody(context.req);
   const requestedMaxTasks = Number(body.max_tasks ?? context.url.searchParams.get("max_tasks") ?? WORKER_DEFAULT_BATCH_SIZE);
   const maxTasks = Math.max(1, Math.min(WORKER_MAX_BATCH_SIZE, Math.floor(requestedMaxTasks)));
+  const asyncModeRaw = body.async_mode ?? context.url.searchParams.get("async_mode") ?? true;
+  const asyncMode = typeof asyncModeRaw === "boolean"
+    ? asyncModeRaw
+    : ["1", "true", "yes", "on"].includes(String(asyncModeRaw).toLowerCase());
   const messages = await readRoadmapTasks(context.supabase, maxTasks);
+  if (asyncMode) {
+    const task = (async () => {
+      for (const message of messages) {
+        await processRoadmapWorkerTask(context, message);
+      }
+    })().catch((error) => {
+      console.error("Async worker drain failed:", error instanceof Error ? error.message : String(error));
+    });
+    scheduleBackgroundTask(task);
+    return toJsonResponse({
+      ok: true,
+      processed: 0,
+      queued_for_processing: messages.length,
+      max_tasks: maxTasks,
+      async_mode: true,
+    }, 202);
+  }
   for (const message of messages) {
     await processRoadmapWorkerTask(context, message);
   }
@@ -6845,6 +6931,7 @@ async function handleInternalWorkerDrain(context: RouteContext) {
     ok: true,
     processed: messages.length,
     max_tasks: maxTasks,
+    async_mode: false,
   });
 }
 

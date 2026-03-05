@@ -65,6 +65,17 @@ export function SharedTokenPoolCard({ usage, t, className }: SharedTokenPoolCard
           )}
         </p>
       )}
+      {usage.provider_limited && (
+        <p className="mt-2 text-destructive text-xs">
+          {t(
+            "provider_rate_limited_hint",
+            "Gemini provider limits are currently throttling generation."
+          )}{" "}
+          {usage.provider_retry_at
+            ? `${t("retry_after", "Retry after")} ${new Date(usage.provider_retry_at).toLocaleString()}`
+            : ""}
+        </p>
+      )}
     </div>
   );
 }

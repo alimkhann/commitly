@@ -347,6 +347,10 @@ export type GlobalUsage = {
   remaining: number;
   mode: "normal" | "low" | "critical" | string;
   reset_at: string;
+  provider_limited?: boolean;
+  provider_limited_since?: string | null;
+  provider_retry_at?: string | null;
+  provider_reason?: string | null;
   user_daily_limit?: number | null;
   user_used?: number | null;
   user_remaining?: number | null;

@@ -80,6 +80,9 @@ const en = {
     "Pool is exhausted. New roadmap generation is paused until reset.",
   generation_rate_limited:
     "Generation is paused because the shared AI pool hit a provider rate limit. Wait for reset or try again later.",
+  provider_rate_limited_hint:
+    "Gemini provider limits are currently throttling generation.",
+  retry_after: "Retry after",
   connect_github_before_generate: "Connect GitHub before generating a roadmap.",
   invalid_repo_url: "Enter a valid GitHub repository URL (owner/name).",
   public_catalog_load_error: "Unable to load public catalog.",
@@ -417,6 +420,8 @@ const zhHKOverrides: Partial<Record<keyof typeof en, string>> = {
   shared_pool_low_hint: "資源池目前喺低量模式，生成速度會較慢，並可能使用較節省成本嘅模型設定。",
   shared_pool_critical_hint: "資源池已耗盡，路線圖生成會暫停至重置時間。",
   generation_rate_limited: "共享 AI 資源池已觸發供應商速率限制，生成已暫停。請等重置後再試。",
+  provider_rate_limited_hint: "Gemini 供應商限制目前正限制生成速度。",
+  retry_after: "可再試時間",
   page: "第",
   of: "/",
   total: "總數",
@@ -705,6 +710,8 @@ const kzOverrides: Partial<Record<keyof typeof en, string>> = {
   shared_pool_critical_hint: "Пул таусылған. Жаңа роудмап генерациясы келесі жаңаруға дейін тоқтатылды.",
   generation_rate_limited:
     "Ортақ AI пулында провайдер rate limit шегіне жетті. Генерация уақытша тоқтады, жаңарғаннан кейін қайта көріңіз.",
+  provider_rate_limited_hint: "Gemini провайдерінің лимиттері қазір генерацияны тежеп тұр.",
+  retry_after: "Қайта көру уақыты",
   help_kicker: "Қолдау",
   help_title: "Қалай көмектесе аламыз?",
   help_subtitle: "Нұсқаулықтарды қарап шығыңыз, өнім жаңартуларын бақылаңыз немесе адаммен байланысыңыз.",
@@ -997,6 +1004,9 @@ const ruOverrides: Partial<Record<keyof typeof en, string>> = {
     "Пул исчерпан. Новая генерация роудмапов приостановлена до сброса.",
   generation_rate_limited:
     "Общий AI-пул упёрся в лимит провайдера. Генерация приостановлена, дождитесь сброса и попробуйте снова.",
+  provider_rate_limited_hint:
+    "Лимиты Gemini-провайдера сейчас ограничивают генерацию.",
+  retry_after: "Повторить после",
   help_kicker: "Поддержка",
   help_title: "Чем помочь?",
   help_subtitle: "Изучайте гайды, следите за обновлениями продукта или свяжитесь с человеком из команды.",
