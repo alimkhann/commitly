@@ -21,6 +21,7 @@ export type ApiClientResponse<TData> = {
   status: number;
   data?: TData | null;
   error?: string;
+  errorCode?: string;
 };
 
 const buildHeaders = (
@@ -42,7 +43,9 @@ const resolveUrl = (path: string, baseUrl: string) => {
   if (path.startsWith("http")) {
     return path;
   }
-  return new URL(path, baseUrl).toString();
+  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const normalizedPath = path.replace(/^\/+/, "");
+  return new URL(normalizedPath, normalizedBase).toString();
 };
 
 export async function apiClient<TResponse, TBody = unknown>(
@@ -76,13 +79,23 @@ export async function apiClient<TResponse, TBody = unknown>(
     const payload = isJson ? await response.json().catch(() => null) : null;
 
     if (!response.ok) {
+      const errorPayload = (payload ?? {}) as {
+        message?: string;
+        detail?: string;
+        error?: string;
+        code?: string;
+      };
       return {
         ok: false,
         status: response.status,
         error:
-          (payload as { message?: string })?.message ??
+          errorPayload.message ??
+          errorPayload.detail ??
+          errorPayload.error ??
           response.statusText ??
           "Request failed",
+        errorCode:
+          typeof errorPayload.code === "string" ? errorPayload.code : undefined,
       };
     }
 

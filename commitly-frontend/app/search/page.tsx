@@ -3,6 +3,7 @@
 import { Eye, Filter, GitBranch, Search, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 import { type RoadmapResponseBody, repoService } from "@/lib/services/repos";
 
 export default function SearchPage() {
+  const { t } = usePreferences();
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<
     "all" | "intro" | "easy" | "medium" | "hard"
@@ -42,6 +44,27 @@ export default function SearchPage() {
   const [publicError, setPublicError] = useState<string | null>(null);
 
   const backendConfigured = repoService.isBackendConfigured();
+  const normalizedQuery = query.trim().toLowerCase();
+  const quickTestRepos = useMemo(() => {
+    const curatedDefaults = ["vercel/ms", "sindresorhus/ky", "calcom/cal.com"];
+    const visibleCatalog = publicRepos.map((repo) => repo.repo.full_name);
+    return Array.from(new Set([...visibleCatalog, ...curatedDefaults])).slice(0, 6);
+  }, [publicRepos]);
+  const normalizeDescription = (value?: string | null) =>
+    String(value ?? "")
+      .replace(/\p{Extended_Pictographic}/gu, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+  const matchesDifficulty = (
+    candidate: string | null | undefined,
+    selected: "all" | "intro" | "easy" | "medium" | "hard"
+  ) => {
+    if (selected === "all") {
+      return true;
+    }
+    return String(candidate ?? "").toLowerCase() === selected;
+  };
 
   useEffect(() => {
     if (!backendConfigured) {
@@ -54,6 +77,7 @@ export default function SearchPage() {
         page: 1,
         page_size: 50,
         sort: sortBy,
+        difficulty: difficulty !== "all" ? difficulty : undefined,
       });
       if (cancelled) {
         return;
@@ -67,7 +91,10 @@ export default function SearchPage() {
         });
         setPublicError(null);
       } else {
-        setPublicError(response.error ?? "Unable to load public catalog.");
+        setPublicError(
+          response.error ??
+            "Unable to load public catalog."
+        );
       }
       setPublicLoading(false);
     };
@@ -75,7 +102,7 @@ export default function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [backendConfigured, sortBy]);
+  }, [backendConfigured, sortBy, difficulty]);
 
   const syncedMap = useMemo(
     () => new Map(synced.map((repo) => [repo.repo.full_name, repo])),
@@ -98,50 +125,67 @@ export default function SearchPage() {
   );
 
   const syncedMatches = useMemo(() => {
-    if (!query.trim()) {
-      return userRepoList;
-    }
-    const lower = query.toLowerCase();
     return userRepoList.filter((repo) => {
       if (!repo.repo) {
         return false;
       }
+      if (!matchesDifficulty(repo.repo.difficulty, difficulty)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
       const summary = repo.repo.description?.toLowerCase() ?? "";
       return (
-        repo.repo.full_name.toLowerCase().includes(lower) ||
-        summary.includes(lower)
+        repo.repo.full_name.toLowerCase().includes(normalizedQuery) ||
+        summary.includes(normalizedQuery)
       );
     });
-  }, [userRepoList, query]);
+  }, [userRepoList, difficulty, normalizedQuery]);
 
   const publicRepoList = useMemo(() => {
     if (!backendConfigured) {
       return [];
     }
-    return publicRepos;
-  }, [backendConfigured, publicRepos]);
+    return publicRepos.filter((repo) => {
+      if (!matchesDifficulty(repo.repo.difficulty, difficulty)) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      const fullName = repo.repo.full_name.toLowerCase();
+      const description = (repo.repo.description ?? "").toLowerCase();
+      return fullName.includes(normalizedQuery) || description.includes(normalizedQuery);
+    });
+  }, [backendConfigured, difficulty, normalizedQuery, publicRepos]);
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 py-10 lg:px-16">
       <div className="space-y-2">
         <p className="font-medium text-primary text-sm uppercase tracking-[0.3em]">
-          Repo directory
+          {t("roadmap_catalog", "Roadmap catalog")}
         </p>
-        <h1 className="font-semibold text-3xl">Search repositories</h1>
+        <h1 className="font-semibold text-3xl">{t("search_roadmaps_title", "Search roadmaps")}</h1>
         <p className="text-base text-muted-foreground">
-          Filter by difficulty, language, or keywords to jump into an existing
-          timeline.
+          {t(
+            "search_roadmaps_subtitle",
+            "Filter by difficulty, language, or keywords to find a roadmap and start reading immediately."
+          )}
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-black/25 shadow-xl backdrop-blur-lg">
+      <div className="grid gap-4 rounded-2xl border border-border/70 bg-card p-6">
         <div className="flex flex-col gap-4 lg:flex-row">
-          <div className="flex flex-1 items-center gap-3 rounded-xl border border-border/60 bg-background px-3 py-2">
+          <div className="flex flex-1 items-center gap-3 rounded-xl border border-border/70 bg-background px-3 py-2">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
               className="border-0 bg-transparent text-base focus-visible:ring-0"
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="deepseek, ncnn, microsoft/vscode..."
+              placeholder={t(
+                "search_placeholder",
+                "deepseek, ncnn, microsoft/vscode..."
+              )}
               value={query}
             />
           </div>
@@ -154,7 +198,7 @@ export default function SearchPage() {
                   onClick={() => setDifficulty(level)}
                   variant={difficulty === level ? "secondary" : "ghost"}
                 >
-                  {level}
+                  {t(`difficulty_${level}`, level)}
                 </Button>
               )
             )}
@@ -163,10 +207,10 @@ export default function SearchPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <Filter className="h-4 w-4" />
-            Showing {publicRepoList.length} public repositories
+            {t("public_results", "Showing public roadmaps")}: {publicRepoList.length}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-sm">Sort by:</span>
+            <span className="text-muted-foreground text-sm">{t("sort_by", "Sort by")}:</span>
             <Select
               onValueChange={(value: string) =>
                 setSortBy(value as typeof sortBy)
@@ -174,32 +218,71 @@ export default function SearchPage() {
               value={sortBy}
             >
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Sort by" />
+                <SelectValue placeholder={t("sort_by", "Sort by")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="newest">🆕 Newest</SelectItem>
-                <SelectItem value="trending">🔥 Trending</SelectItem>
-                <SelectItem value="most_viewed">👁️ Most Viewed</SelectItem>
-                <SelectItem value="most_synced">⭐ Most Synced</SelectItem>
-                <SelectItem value="highest_rated">⭐ Highest Rated</SelectItem>
+                <SelectItem value="newest">
+                  {t("sort_newest", "Newest")}
+                </SelectItem>
+                <SelectItem value="trending">
+                  {t("sort_trending", "Trending")}
+                </SelectItem>
+                <SelectItem value="most_viewed">
+                  {t("sort_most_viewed", "Most viewed")}
+                </SelectItem>
+                <SelectItem value="most_synced">
+                  {t("sort_most_saved", "Most saved")}
+                </SelectItem>
+                <SelectItem value="highest_rated">
+                  {t("sort_highest_rated", "Highest rated")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
+      <section className="space-y-3 rounded-2xl border border-border/70 bg-card p-5">
+        <div className="flex items-center justify-between">
+          <p className="font-medium text-sm">{t("quick_test_repos", "Quick test repos")}</p>
+          <p className="text-muted-foreground text-xs">
+            {t("qa_examples_caption", "GitHub examples for generation QA")}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {quickTestRepos.map((repo) => {
+            const slug = repo.replace("/", "-");
+            const repoUrl = `https://github.com/${repo}`;
+            return (
+              <Button
+                asChild
+                className="h-8 rounded-lg px-3 text-xs"
+                key={repo}
+                variant="outline"
+              >
+                <Link
+                  href={`/repo/${slug}?view=timeline&fullName=${encodeURIComponent(repo)}&repoUrl=${encodeURIComponent(repoUrl)}`}
+                >
+                  {repo}
+                </Link>
+              </Button>
+            );
+          })}
+        </div>
+      </section>
+
       {!!syncedMatches.length && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-lg">Your repositories</h2>
+            <h2 className="font-semibold text-lg">{t("your_library", "Your library")}</h2>
             {loading && (
-              <p className="text-muted-foreground text-xs">Refreshing…</p>
+              <p className="text-muted-foreground text-xs">{t("loading", "Loading…")}</p>
             )}
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {syncedMatches.map((repo) => (
               <Card
-                className="flex flex-col border-border/60 bg-card/70 shadow-black/20 shadow-lg"
+                className="flex flex-col border-border/70 bg-card"
                 key={repo.slug}
               >
                 <CardHeader className="space-y-1">
@@ -212,18 +295,19 @@ export default function SearchPage() {
                       variant="outline"
                     >
                       {syncedMap.get(repo.repo_full_name)?.timeline.length ?? 0}{" "}
-                      stages
+                      {t("stages", "stages")}
                     </Badge>
                   </div>
                   <CardDescription>
-                    {repo.repo?.description ?? "No description"}
+                    {normalizeDescription(repo.repo?.description) ||
+                      t("no_description", "No description")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
                   <div className="flex items-center gap-2">
                     <GitBranch className="h-4 w-4" />
-                    <span>
-                      {repo.repo?.language ?? "Unknown"} •{" "}
+                      <span>
+                      {repo.repo?.language ?? t("language_unknown", "Unknown")} •{" "}
                       {new Date(
                         syncedMap.get(repo.repo_full_name)?.generated_at ??
                           nowIso
@@ -233,9 +317,9 @@ export default function SearchPage() {
                   <div className="flex gap-2">
                     <Button asChild className="w-full" variant="secondary">
                       <Link
-                        href={`/repo/${repo.slug}/timeline?fullName=${repo.repo?.full_name ?? repo.repo_full_name}`}
+                        href={`/repo/${repo.slug}?view=timeline&fullName=${repo.repo?.full_name ?? repo.repo_full_name}`}
                       >
-                        Open timeline
+                        {t("read_roadmap", "Read roadmap")}
                       </Link>
                     </Button>
                   </div>
@@ -248,31 +332,45 @@ export default function SearchPage() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-lg">Public repositories</h2>
+          <h2 className="font-semibold text-lg">{t("public_catalog", "Public catalog")}</h2>
           {publicLoading && (
-            <p className="text-muted-foreground text-xs">Loading…</p>
+            <p className="text-muted-foreground text-xs">{t("loading", "Loading…")}</p>
           )}
           {publicMeta && (
             <p className="text-muted-foreground text-xs">
-              Page {publicMeta.page} of {publicMeta.total_pages} •{" "}
-              {publicMeta.total_count} total
+              {t("page", "Page")} {publicMeta.page} {t("of", "of")}{" "}
+              {publicMeta.total_pages} • {publicMeta.total_count}{" "}
+              {t("total", "total")}
             </p>
           )}
         </div>
         {publicError && (
           <p className="text-destructive text-sm">{publicError}</p>
         )}
+        {!publicLoading && !publicError && publicRepoList.length === 0 && (
+          <div className="rounded-xl border border-border/70 bg-card p-5 text-muted-foreground text-sm">
+            <p>{t("no_results", "No results for your current filters.")}</p>
+            <Button
+              className="mt-3"
+              onClick={() => {
+                setDifficulty("all");
+                setQuery("");
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("clear_filters", "Clear filters")}
+            </Button>
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {publicRepoList.map((repo) => {
             const identity = repoService.buildIdentityFromFullName(
               repo.repo.full_name
             );
-            const isSynced = yourRepos.some(
-              (item) => item.repo_full_name === repo.repo.full_name
-            );
             return (
               <Card
-                className="flex flex-col border-border/60 bg-card/70 shadow-black/20 shadow-lg"
+                className="flex flex-col border-border/70 bg-card"
                 key={identity.slug}
               >
                 <CardHeader className="space-y-1">
@@ -284,10 +382,13 @@ export default function SearchPage() {
                       className="text-xs uppercase tracking-wide"
                       variant="outline"
                     >
-                      {repo.timeline.length} stages
+                      {repo.timeline.length} {t("stages", "stages")}
                     </Badge>
                   </div>
-                  <CardDescription>{repo.repo.description}</CardDescription>
+                  <CardDescription>
+                    {normalizeDescription(repo.repo.description) ||
+                      t("no_description", "No description")}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 text-muted-foreground text-sm">
                   <div className="flex flex-col gap-2">
@@ -296,7 +397,7 @@ export default function SearchPage() {
                       <span>
                         {repo.repo.language ??
                           repo.repo.primary_language ??
-                          "Unknown"}
+                          t("language_unknown", "Unknown")}
                         {repo.repo.star_count
                           ? ` • ${repo.repo.star_count}★`
                           : ""}
@@ -328,9 +429,9 @@ export default function SearchPage() {
                   <div className="flex gap-2">
                     <Button asChild className="w-full" variant="secondary">
                       <Link
-                        href={`/repo/${identity.slug}/timeline?fullName=${repo.repo.full_name}`}
+                        href={`/repo/${identity.slug}?view=timeline&fullName=${repo.repo.full_name}`}
                       >
-                        Open timeline
+                        {t("read_roadmap", "Read roadmap")}
                       </Link>
                     </Button>
                   </div>

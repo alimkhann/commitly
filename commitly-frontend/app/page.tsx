@@ -3,9 +3,13 @@
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
+import type { GlobalUsage } from "@/lib/services/repos";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SharedTokenPoolCard } from "@/components/ui/shared-token-pool-card";
+import { mapGithubOAuthError } from "@/lib/services/error-messages";
 import { githubService } from "@/lib/services/github";
 import { repoService } from "@/lib/services/repos";
 
@@ -17,7 +21,9 @@ export default function Home() {
   const [githubConnected, setGithubConnected] = useState(false);
   const [githubLogin, setGithubLogin] = useState<string | null>(null);
   const [isCheckingGithub, setIsCheckingGithub] = useState(false);
+  const [globalUsage, setGlobalUsage] = useState<GlobalUsage | null>(null);
   const { isSignedIn, getToken } = useAuth();
+  const { t } = usePreferences();
   const { markPending } = useRoadmapCatalog();
 
   useEffect(() => {
@@ -60,6 +66,23 @@ export default function Home() {
     };
   }, [getToken, isSignedIn]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const fetchUsage = async () => {
+      const token = await getToken?.();
+      const response = await repoService.getGlobalUsage(token ?? undefined);
+      if (!(cancelled || !response.ok || !response.data)) {
+        setGlobalUsage(response.data);
+      }
+    };
+    fetchUsage();
+    const intervalId = window.setInterval(fetchUsage, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [getToken]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = repoLink.trim();
@@ -73,7 +96,7 @@ export default function Home() {
     }
 
     if (!githubConnected) {
-      setError("Connect GitHub before generating a roadmap.");
+      setError(t("connect_github_before_generate", "Connect GitHub before generating a roadmap."));
       return;
     }
 
@@ -82,22 +105,18 @@ export default function Home() {
     const identity = repoService.parseRepoInput(value);
     if (!identity) {
       setIsSubmitting(false);
-      setError("Enter a valid GitHub repository URL (owner/name).");
+      setError(t("invalid_repo_url", "Enter a valid GitHub repository URL (owner/name)."));
       return;
     }
 
     const canonicalUrl = `https://github.com/${identity.fullName}`;
     markPending(identity);
 
-    const params = new URLSearchParams({
-      repoUrl: canonicalUrl,
-      fullName: identity.fullName,
-      intent: "generate",
-    });
-
-    router.push(`/repo/${identity.slug}/timeline?${params.toString()}`);
-    setRepoLink("");
-    setIsSubmitting(false);
+    const params = new URLSearchParams();
+    if (identity.fullName) params.set("fullName", identity.fullName);
+    if (canonicalUrl) params.set("repoUrl", canonicalUrl);
+    params.set("intent", "generate");
+    router.push(`/repo/${identity.slug}?view=timeline&${params.toString()}`);
   };
 
   const handleConnectGithub = async () => {
@@ -114,7 +133,9 @@ export default function Home() {
     if (response.ok && response.data) {
       window.location.href = response.data.authorize_url;
     } else if (response.error) {
-      setError(response.error);
+      const errorCode =
+        "errorCode" in response ? response.errorCode : undefined;
+      setError(mapGithubOAuthError(errorCode, response.error, t));
     }
   };
 
@@ -122,37 +143,41 @@ export default function Home() {
     <div className="relative flex w-full flex-1 items-center justify-center overflow-hidden px-6 py-12 lg:px-16">
       <section className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-10 py-16 text-center">
         <div className="space-y-4">
-          <p className="text-primary/80 text-sm uppercase tracking-[0.3em]">
-            Repo-first learning
+          <p className="text-muted-foreground text-xs uppercase tracking-[0.28em]">
+            {t("home_kicker", "Repo-first learning")}
           </p>
           <h1 className="font-semibold text-4xl leading-tight tracking-tight sm:text-5xl">
-            Hey, builder. Ready to learn?
+            {t("home_title", "Hey, builder. Ready to learn?")}
           </h1>
-          <p className="text-lg">
-            Drop a GitHub repo and we&apos;ll draft a roadmap that mirrors how
-            the authors shipped it.
+          <p className="text-muted-foreground text-lg">
+            {t(
+              "home_subtitle",
+              "Drop a GitHub repo and we'll draft a roadmap that mirrors how the authors shipped it."
+            )}
           </p>
         </div>
 
         <form
-          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-3xl border border-border bg-card/70 p-6 shadow-2xl shadow-black/30"
+          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-2xl border border-border/70 bg-card p-6"
           onSubmit={handleSubmit}
         >
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <Input
-              className="flex-1 text-base"
+              className="h-11 flex-1 border-border/70 bg-background text-base"
               disabled={!isSignedIn || isSubmitting || !githubConnected}
               onChange={(event) => setRepoLink(event.target.value)}
               placeholder="https://github.com/your-org/your-repo"
               value={repoLink}
             />
             <Button
-              className="font-semibold text-base disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-11 font-semibold text-base disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!isSignedIn || isSubmitting || !githubConnected}
               size="lg"
               type="submit"
             >
-              {isSubmitting ? "Generating..." : "Generate roadmap"}
+              {isSubmitting
+                ? t("generating", "Generating...")
+                : t("generate_roadmap", "Generate roadmap")}
             </Button>
           </div>
           {error && (
@@ -162,35 +187,31 @@ export default function Home() {
             <div className="flex flex-col gap-3 text-left text-sm">
               <p className="text-muted-foreground">
                 {isCheckingGithub
-                  ? "Checking your GitHub connection..."
-                  : "Connect GitHub to allow Commitly to read repository history."}
+                  ? t("github_checking", "Checking your GitHub connection...")
+                  : t(
+                    "github_connect_required",
+                    "Connect GitHub to allow Commitly to read repository history."
+                  )}
               </p>
               {!isCheckingGithub && (
                 <Button
                   onClick={handleConnectGithub}
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                 >
-                  Connect GitHub
+                  {t("connect_github", "Connect GitHub")}
                 </Button>
               )}
             </div>
           )}
           {githubConnected && githubLogin && (
             <p className="text-left text-muted-foreground text-xs">
-              Connected as {githubLogin}
+              {t("connected_as", "Connected as")} {githubLogin}
             </p>
           )}
         </form>
 
-        {/*
-        <div className="space-y-4">
-          <p className="text-sm font-medium">Examples</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {/* Examples removed as mock data is deleted
-          </div>
-        </div>
-        */}
+        <SharedTokenPoolCard className="mx-auto w-full max-w-2xl" t={t} usage={globalUsage} />
       </section>
     </div>
   );

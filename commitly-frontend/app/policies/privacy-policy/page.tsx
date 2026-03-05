@@ -1,42 +1,49 @@
+"use client";
+
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { policyMeta } from "@/data/policies";
 
 export default function PrivacyPolicyPage() {
+  const { t } = usePreferences();
+
   return (
     <main className="min-h-screen w-full bg-background px-6 py-16">
       <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <header className="space-y-2">
           <p className="text-primary text-sm uppercase tracking-[0.3em]">
-            Legal
+            {t("legal", "Legal")}
           </p>
-          <h1 className="font-semibold text-4xl">Privacy policy</h1>
+          <h1 className="font-semibold text-4xl">
+            {t("policy_privacy_title", "Privacy policy")}
+          </h1>
           <p className="text-muted-foreground text-sm">
-            Last updated {policyMeta.updated}
+            {t("last_updated", "Last updated")} {policyMeta.updated}
           </p>
         </header>
         <section className="space-y-4 text-base text-muted-foreground leading-relaxed">
           <p>
-            This Privacy Policy explains what data we collect when you use
-            commitly, how we use it, and your choices. We collect information
-            you provide (like account details) and information generated while
-            using the product (like device metadata or usage analytics).
+            {t(
+              "policy_privacy_p1",
+              "This policy explains what data we collect in Commitly, how we use it, and your available controls."
+            )}
           </p>
           <h2 className="font-semibold text-foreground text-xl">
-            What we collect
+            {t("policy_privacy_h2_collect", "What we collect")}
           </h2>
           <p>
-            Account basics (name, email), repository metadata, and feature usage
-            are required to operate the service. When you import a repo we
-            process its contents to build timelines. We do not train foundation
-            models on private repo data.
+            {t(
+              "policy_privacy_p2",
+              "We collect account basics, repository metadata, and product usage data required to deliver roadmap generation and guide features."
+            )}
           </p>
           <h2 className="font-semibold text-foreground text-xl">
-            How we use information
+            {t("policy_privacy_h2_use", "How we use information")}
           </h2>
           <p>
-            Data helps us: provide the product, troubleshoot issues, improve
-            features, secure the platform, and comply with legal obligations. We
-            retain repo-derived data only while your workspace needs it;
-            deleting a repo removes cached context within seven days.
+            {t(
+              "policy_privacy_p3",
+              "Data is used to operate the product, improve quality, secure the platform, and satisfy legal obligations."
+            )}
           </p>
         </section>
       </article>

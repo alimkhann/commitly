@@ -1,4 +1,5 @@
 from functools import lru_cache
+import json
 from typing import Any, List, Optional, Union
 
 from pydantic import Field, HttpUrl, field_validator
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     )
 
     # GitHub ingestion
-    github_api_base: HttpUrl = Field(
+    github_api_base: HttpUrl = Field(  # type: ignore
         "https://api.github.com", validation_alias="GITHUB_API_BASE"
     )
     github_token: Optional[str] = Field(default=None, validation_alias="GITHUB_TOKEN")
@@ -91,8 +92,6 @@ class Settings(BaseSettings):
                     return []
                 if cleaned.startswith("["):
                     try:
-                        import json
-
                         data = json.loads(cleaned)
                         if isinstance(data, list):
                             return [
@@ -136,7 +135,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return a cached instance of the application settings."""
-    return Settings()
+    return Settings()  # type: ignore
 
 
 settings = get_settings()

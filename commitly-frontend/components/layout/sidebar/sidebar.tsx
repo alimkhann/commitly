@@ -15,6 +15,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import { useLayout } from "@/components/providers/layout-provider";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { useRoadmapCatalog } from "@/components/providers/roadmap-catalog-provider";
 import {
   AlertDialog,
@@ -56,12 +58,13 @@ export default function Sidebar() {
     loading,
     desync,
     archive,
-    refreshUserRepos,
   } = useRoadmapCatalog();
-  const [collapsed, setCollapsed] = useState(false);
+
+  const { isLeftSidebarCollapsed: collapsed, toggleLeftSidebar: toggleCollapse } = useLayout();
+  const { t } = usePreferences();
+
   const [desyncingRepo, setDesyncingRepo] = useState<string | null>(null);
   const [archivingRepo, setArchivingRepo] = useState<string | null>(null);
-  const toggleCollapse = () => setCollapsed((prev) => !prev);
 
   const activeRepoId = useMemo(() => {
     if (!pathname) {
@@ -128,8 +131,7 @@ export default function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-screen flex-col overflow-y-auto border border-white/10 bg-card/25 backdrop-blur-2xl",
-        collapsed ? "w-[96px]" : "w-[320px]"
+        "flex h-full w-full flex-col overflow-y-auto bg-background"
       )}
     >
       <div className="flex flex-1 flex-col gap-6 p-4">
@@ -145,7 +147,7 @@ export default function Sidebar() {
               className="group relative flex h-14 w-14 items-center justify-center rounded-xl transition-colors hover:bg-muted/30"
               onClick={() => {
                 if (collapsed) {
-                  setCollapsed(false);
+                  toggleCollapse();
                 } else {
                   window.location.href = "/";
                 }
@@ -156,10 +158,11 @@ export default function Sidebar() {
                 <Image
                   alt="commitly"
                   className={cn(
-                    "rounded-lg object-contain transition-opacity duration-150",
+                    "invert rounded-lg object-contain transition-opacity duration-150 dark:invert-0",
                     collapsed && "group-hover:opacity-0"
                   )}
                   fill
+                  sizes="64px"
                   src="/logos/logo_4x.png"
                 />
               </div>
@@ -185,20 +188,20 @@ export default function Sidebar() {
           <Button
             asChild
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl border border-white/10 bg-white/10 text-base text-white transition-colors hover:bg-white/15",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-card text-base text-foreground transition-colors hover:bg-muted",
               collapsed && "justify-center px-0"
             )}
             size="lg"
           >
             <Link href="/">
               <Hammer className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
-              {!collapsed && <span>New repo roadmap</span>}
+              {!collapsed && <span>{t("new_repo_roadmap", "New repo roadmap")}</span>}
             </Link>
           </Button>
           <Button
             asChild
             className={cn(
-              "h-14 w-full justify-start gap-3 rounded-xl border border-white/5 bg-white/5 text-base text-white/90 transition-colors hover:bg-white/10",
+              "h-14 w-full justify-start gap-3 rounded-xl border border-border/70 bg-card text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
               collapsed && "justify-center px-0"
             )}
             size="lg"
@@ -206,7 +209,7 @@ export default function Sidebar() {
           >
             <Link href="/search">
               <Search className={cn("h-5 w-5", collapsed && "h-6 w-6")} />
-              {!collapsed && <span>Search repos</span>}
+              {!collapsed && <span>{t("search_roadmaps", "Search roadmaps")}</span>}
             </Link>
           </Button>
         </div>
@@ -215,19 +218,19 @@ export default function Sidebar() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                Your repositories
+                {t("your_library", "Your library")}
               </p>
               {loading && (
                 <Badge className="font-normal text-[11px]" variant="outline">
-                  Loading…
+                  {t("loading", "Loading...")}
                 </Badge>
               )}
             </div>
             <ScrollArea className="h-full max-h-[45vh]">
-              <div className="flex flex-col gap-2 pr-3">
+              <div className="flex flex-col gap-2">
                 {aggregatedRows.length === 0 && !loading ? (
-                  <div className="rounded-xl border border-border/50 bg-card/10 px-4 py-6 text-muted-foreground text-sm">
-                    Generate a roadmap to pin it here.
+                  <div className="rounded-xl border border-border/70 bg-background px-4 py-6 text-muted-foreground text-sm">
+                    {t("library_empty_hint", "Save to library to add a roadmap.")}
                   </div>
                 ) : (
                   aggregatedRows.map((row) => (
@@ -236,7 +239,6 @@ export default function Sidebar() {
                       collapsed={collapsed}
                       desyncingRepo={desyncingRepo}
                       isActive={activeRepoId === row.slug}
-                      isSignedIn={isSignedIn}
                       key={row.slug}
                       onArchive={handleArchive}
                       onDesync={handleDesync}
@@ -355,7 +357,6 @@ function SidebarRepoRow({
   onArchive,
   desyncingRepo,
   archivingRepo,
-  isSignedIn,
 }: {
   row: AggregatedSidebarRow;
   isActive: boolean;
@@ -364,12 +365,13 @@ function SidebarRepoRow({
   onArchive: (fullName: string) => void | Promise<void>;
   desyncingRepo: string | null;
   archivingRepo: string | null;
-  isSignedIn: boolean;
 }) {
+  const { t } = usePreferences();
   const { slug, fullName, pending, repoFullName } = row;
   const isDesyncing = desyncingRepo === repoFullName;
   const isArchiving = archivingRepo === repoFullName;
   const isLoading = isDesyncing || isArchiving;
+  const timelineHref = `/repo/${slug}?view=timeline&fullName=${encodeURIComponent(fullName)}`;
 
   if (collapsed) {
     return (
@@ -385,7 +387,7 @@ function SidebarRepoRow({
           size="icon"
           variant="ghost"
         >
-          <Link href={`/repo/${slug}/timeline`} title={fullName}>
+          <Link href={timelineHref} title={fullName}>
             <span className="font-bold text-xs">
               {fullName.substring(0, 2).toUpperCase()}
             </span>
@@ -406,14 +408,14 @@ function SidebarRepoRow({
     >
       <Link
         className="flex-1 truncate pr-2"
-        href={`/repo/${slug}/timeline`}
+        href={timelineHref}
         title={fullName}
       >
         {fullName}
       </Link>
 
       {pending ? (
-        <Loader2 className="h-3 w-3 animate-spin opacity-50" />
+        <Loader2 className="h-3 w-3 opacity-50" />
       ) : (
         <div
           className={cn(
@@ -422,7 +424,7 @@ function SidebarRepoRow({
           )}
         >
           {isLoading ? (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            <Loader2 className="h-3 w-3 text-muted-foreground" />
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -432,36 +434,38 @@ function SidebarRepoRow({
                   variant="ghost"
                 >
                   <MoreHorizontal className="h-3 w-3" />
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{t("actions", "Actions")}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem onClick={() => onArchive(repoFullName)}>
                   <Archive className="mr-2 h-3.5 w-3.5" />
-                  Archive
+                  {t("archive", "Archive")}
                 </DropdownMenuItem>
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Unlink className="mr-2 h-3.5 w-3.5" />
-                      Desync
+                      {t("remove_from_library", "Remove from library")}
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        Desync this repository?
+                        {t("remove_from_library_title", "Remove from library?")}
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes your personal implementation state. The
-                        public timeline will remain available.
+                        {t(
+                          "remove_from_library_desc",
+                          "This removes the roadmap from your personal library. The public timeline will remain available."
+                        )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>{t("cancel", "Cancel")}</AlertDialogCancel>
                       <AlertDialogAction onClick={() => onDesync(repoFullName)}>
-                        Confirm desync
+                        {t("confirm_remove", "Confirm remove")}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

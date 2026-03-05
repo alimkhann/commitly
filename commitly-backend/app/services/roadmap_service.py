@@ -532,6 +532,7 @@ class RoadmapService:
             states = self._pin_store.list_states(user_id)
             had_state = any(state.repo_full_name == full_name for state in states)
             self._pin_store.unpin(user_id, full_name)
+            self._pin_store.clear_chat_history(user_id, full_name)
             if had_state:
                 self._result_store.decrement_sync_count(full_name)
 

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { usePreferences } from "@/components/providers/preferences-provider";
 import ReportBug from "@/components/modals/report-bug";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -43,30 +44,33 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoaded, user, isSignedIn } = useUser();
+  const { t } = usePreferences();
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [reportBugOpen, setReportBugOpen] = useState(false);
 
   useEffect(() => {
-    if (searchParams?.get("settings") === "connections") {
+    if (searchParams?.get("settings") !== "connections") return;
+    const timeoutId = window.setTimeout(() => {
       setAccountSettingsOpen(true);
-    }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [searchParams]);
 
   const displayName = useMemo(() => {
     if (!user) {
-      return "Workspace";
+      return t("workspace", "Workspace");
     }
     return (
       user.fullName ||
       user.username ||
       user.primaryEmailAddress?.emailAddress ||
-      "Workspace"
+      t("workspace", "Workspace")
     );
-  }, [user]);
+  }, [t, user]);
 
   const planLabel = useMemo(() => {
     if (!user) {
-      return "Sign in to manage plan";
+      return t("sign_in_manage_plan", "Sign in to manage plan");
     }
     const publicMeta = user.publicMetadata as
       | Record<string, unknown>
@@ -75,8 +79,8 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
     if (typeof planName === "string" && planName.trim().length > 0) {
       return planName;
     }
-    return "Free plan";
-  }, [user]);
+    return t("free_plan", "Free plan");
+  }, [t, user]);
 
   const initials = useMemo(
     () =>
@@ -108,7 +112,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isCollapsed
                     ? "flex-col bg-transparent hover:bg-muted/30"
-                    : "justify-between bg-card/50 hover:bg-muted/30"
+                    : "justify-between bg-card hover:bg-muted"
                 )}
                 disabled={!(isLoaded && isSignedIn)}
                 type="button"
@@ -141,48 +145,48 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
             <DropdownMenuPortal>
               <DropdownMenuContent
                 align="center"
-                className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/60 bg-card/95 p-3 shadow-2xl backdrop-blur"
+                className="w-[min(300px,calc(100vw-2rem))] rounded-2xl border border-border/70 bg-popover p-3 shadow-2xl"
                 side="top"
                 sideOffset={16}
               >
                 <DropdownMenuItem onClick={() => setAccountSettingsOpen(true)}>
                   <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                  {t("settings", "Settings")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/plans")}>
                   <Sparkles className="mr-2 h-4 w-4" />
-                  Upgrade plan
+                  {t("upgrade_plan", "Upgrade plan")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <HelpCircle className="mr-2 h-4 w-4" />
-                    Help & resources
+                    {t("help_resources", "Help & resources")}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
-                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/60 bg-card/95 shadow-xl backdrop-blur">
+                    <DropdownMenuSubContent className="w-[min(280px,calc(100vw-3rem))] rounded-xl border border-border/70 bg-popover shadow-xl">
                       <DropdownMenuItem
                         onClick={() => router.push("/help-center")}
                       >
-                        Help center
+                        {t("help_center", "Help center")}
                         <ExternalLink className="ml-auto h-3.5 w-3.5" />
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => router.push("/release-notes")}
                       >
-                        Release notes
+                        {t("release_notes_title", "Release notes")}
                         <ExternalLink className="ml-auto h-3.5 w-3.5" />
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => router.push("/policies")}
                       >
-                        Terms & policies
+                        {t("policies_title", "Terms & policies")}
                         <ExternalLink className="ml-auto h-3.5 w-3.5" />
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setReportBugOpen(true)}>
                         <Bug className="mr-2 h-4 w-4" />
-                        Report a bug
+                        {t("report_bug", "Report a bug")}
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
                   </DropdownMenuPortal>
@@ -191,7 +195,7 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
                 <SignOutButton>
                   <DropdownMenuItem className="text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
-                    Log out
+                    {t("log_out", "Log out")}
                   </DropdownMenuItem>
                 </SignOutButton>
               </DropdownMenuContent>
@@ -231,19 +235,23 @@ export default function AccountSection({ isCollapsed }: AccountSectionProps) {
               </SignUpButton>
             </div>
           ) : (
-            <div className="rounded-2xl border border-border/60 bg-card/80 p-4 text-center shadow-inner">
-              <p className="font-semibold text-sm">Sign in to track progress</p>
+            <div className="rounded-2xl border border-border/70 bg-card p-4 text-center">
+              <p className="font-semibold text-sm">
+                {t("sign_in_track_progress", "Sign in to track progress")}
+              </p>
               <p className="mt-1 text-muted-foreground text-xs">
-                Sync repo timelines, save task states, and unlock the workspace
-                menu.
+                {t(
+                  "sign_in_track_progress_desc",
+                  "Save roadmaps to your library, keep your reading history, and unlock the workspace menu."
+                )}
               </p>
               <div className="mt-4 flex flex-col gap-2">
                 <SignInButton mode="modal">
-                  <Button className="w-full">Sign in</Button>
+                  <Button className="w-full">{t("sign_in", "Sign in")}</Button>
                 </SignInButton>
                 <SignUpButton mode="modal">
                   <Button className="w-full" variant="secondary">
-                    Create account
+                    {t("create_account", "Create account")}
                   </Button>
                 </SignUpButton>
               </div>

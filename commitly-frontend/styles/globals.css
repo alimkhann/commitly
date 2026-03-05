@@ -1,11 +1,15 @@
 /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS directives */
 @tailwind base;
+
 /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS directives */
 @tailwind components;
+
 /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS directives */
 @tailwind utilities;
 
 :root {
+  --background: 0 0% 100%;
+  --foreground: 240 5.9% 10%;
   --card: 0 0% 100%;
   --card-foreground: 240 5.9% 10%;
   --popover: 0 0% 100%;
@@ -61,5 +65,41 @@
       var(--font-sans), Inter, "SF Pro Display", -apple-system,
       BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@keyframes shiny-text-slide {
+  0% {
+    background-position: 120% 50%;
+  }
+
+  100% {
+    background-position: -20% 50%;
+  }
+}
+
+@layer utilities {
+  .shiny-text {
+    color: transparent;
+    background-image:
+      linear-gradient(
+        110deg,
+        hsl(var(--foreground) / 38%) 34%,
+        hsl(var(--foreground) / 98%) 50%,
+        hsl(var(--foreground) / 38%) 66%
+      );
+    background-size: 220% 100%;
+    background-clip: text;
+  }
+
+  .animate-shiny-text {
+    animation: shiny-text-slide 2.4s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shiny-text {
+    animation: none;
+    background-position: 50% 50%;
   }
 }

@@ -130,6 +130,37 @@ class RoadmapRating(Base):
     )
 
 
+class GuideChatSession(Base):
+    """Stores the latest guide chat history per user/repo/stage."""
+
+    __tablename__ = "guide_chat_sessions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "repo_full_name",
+            "stage_id",
+            name="uq_guide_chat_user_repo_stage",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    repo_full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    stage_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    messages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class RoadmapViewTracker(Base):
     """Tracks views to prevent spam and implement anti-spam logic."""
 
@@ -304,10 +335,23 @@ class RatingResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: Optional[str] = None
     repo_full_name: str
     stage_id: Optional[str] = None
+    messages: Optional[List[dict]] = None  # For full chat history context
 
 
 class ChatResponse(BaseModel):
     response: str
+
+
+class SaveChatRequest(BaseModel):
+    repo_full_name: str
+    stage_id: Optional[str] = None
+    messages: List[dict]
+
+
+class ChatHistoryResponse(BaseModel):
+    repo_full_name: str
+    stage_id: Optional[str] = None
+    messages: List[dict]

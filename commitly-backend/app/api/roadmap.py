@@ -12,14 +12,16 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.roadmap import (
     CatalogPage,
+    ChatHistoryResponse,
     ChatRequest,
-    ChatResponse,
     RatingRequest,
     RatingResponse,
     RoadmapRequest,
     RoadmapResponse,
+    SaveChatRequest,
     UserRepoStateResponse,
 )
+from app.models.roadmap import GuideChatSession
 from app.services.ai.chat import GeminiChatService
 from app.services.roadmap_service import RoadmapService, build_roadmap_service
 
@@ -39,6 +41,15 @@ def get_user_id(claims: ClerkClaims) -> str:
             detail="User ID not found in authentication claims",
         )
     return user_id
+
+
+def get_chat_session(
+    session: Session, user_id: str, repo_full_name: str, stage_id: str | None
+) -> GuideChatSession | None:
+    query = session.query(GuideChatSession).filter_by(
+        user_id=user_id, repo_full_name=repo_full_name, stage_id=stage_id
+    )
+    return query.first()
 
 
 @router.get("/catalog", response_model=CatalogPage)
@@ -251,25 +262,112 @@ async def record_roadmap_view(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat")
 async def chat_with_guide(
     payload: ChatRequest,
     session: Session = Depends(get_db),
-    current_user: ClerkClaims = Depends(require_clerk_auth),
-) -> ChatResponse:
+    # current_user: ClerkClaims = Depends(require_clerk_auth),
+) -> StreamingResponse:
     """
     Chat with the AI guide about the repository or a specific stage.
     """
+    if not settings.gemini_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gemini API key not configured.",
+        )
+
     chat_service = GeminiChatService(
         session=session,
         api_key=settings.gemini_api_key,
         model=settings.gemini_model,
     )
 
-    response = await chat_service.chat(
-        repo_full_name=payload.repo_full_name,
-        message=payload.message,
-        stage_id=payload.stage_id,
+    # If messages are provided (from useChat), use them.
+    # Otherwise, construct a single message list from payload.message.
+    messages = payload.messages
+    if not messages:
+        if not payload.message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either 'messages' or 'message' must be provided.",
+            )
+        messages = [{"role": "user", "content": payload.message}]
+
+    return StreamingResponse(
+        chat_service.chat_stream(
+            repo_full_name=payload.repo_full_name,
+            messages=messages,
+            stage_id=payload.stage_id,
+        ),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Vercel-AI-Data-Stream": "v1",
+        },
     )
 
-    return ChatResponse(response=response)
+
+@router.get("/chat/history", response_model=ChatHistoryResponse)
+async def get_chat_history(
+    repo_full_name: str,
+    stage_id: Optional[str] = None,
+    session: Session = Depends(get_db),
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+):
+    user_id = get_user_id(current_user)
+    try:
+        record = get_chat_session(session, user_id, repo_full_name, stage_id)
+        if not record:
+            return ChatHistoryResponse(
+                repo_full_name=repo_full_name, stage_id=stage_id, messages=[]
+            )
+        return ChatHistoryResponse(
+            repo_full_name=record.repo_full_name,
+            stage_id=record.stage_id,
+            messages=record.messages or [],
+        )
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        # If the table doesn't exist yet (migration pending), return empty history
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "chat history fetch failed: %s", exc, exc_info=True
+        )
+        return ChatHistoryResponse(
+            repo_full_name=repo_full_name, stage_id=stage_id, messages=[]
+        )
+
+
+@router.post("/chat/history", status_code=status.HTTP_204_NO_CONTENT)
+async def save_chat_history(
+    payload: SaveChatRequest,
+    session: Session = Depends(get_db),
+    current_user: ClerkClaims = Depends(require_clerk_auth),
+):
+    user_id = get_user_id(current_user)
+    try:
+        record = get_chat_session(
+            session, user_id, payload.repo_full_name, payload.stage_id
+        )
+
+        if record:
+            record.messages = payload.messages
+        else:
+            record = GuideChatSession(
+                user_id=user_id,
+                repo_full_name=payload.repo_full_name,
+                stage_id=payload.stage_id,
+                messages=payload.messages,
+            )
+            session.add(record)
+
+        session.commit()
+    except Exception as exc:  # pragma: no cover
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "chat history save failed: %s", exc, exc_info=True
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

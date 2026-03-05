@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 
@@ -14,7 +15,8 @@ logger = logging.getLogger(__name__)
 MAX_OUTPUT_TOKENS = 2048
 
 SYSTEM_PROMPT_TEMPLATE = """
-You are Commitly, an expert engineering mentor. You are guiding a developer who is rebuilding the repository "{repo_name}".
+You are Commitly, an expert engineering mentor. You are guiding a developer who is
+rebuilding the repository "{repo_name}".
 
 Context:
 {context}
@@ -25,7 +27,8 @@ Answer the user's question based on the provided context.
 - Be helpful, encouraging, and technical.
 - If the context contains code snippets, reference them.
 - If the user asks about a specific task in the stage, guide them through it.
-- If the answer is not in the context, use your general programming knowledge but mention that it's not explicitly in the provided commit history.
+- If the answer is not in the context, use your general programming knowledge
+  but mention that it's not explicitly in the provided commit history.
 """
 
 
@@ -33,17 +36,15 @@ class GeminiChatService:
     def __init__(self, session: Session, api_key: str, model: str) -> None:
         self._session = session
         self._api_key = api_key
+        self._model = model
         self._endpoint = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent"
         )
 
-    async def chat(
-        self,
-        repo_full_name: str,
-        message: str,
-        stage_id: Optional[str] = None,
-    ) -> str:
+    def _build_context(
+        self, repo_full_name: str, stage_id: Optional[str] = None
+    ) -> str | None:
         # 1. Fetch Roadmap
         roadmap = (
             self._session.query(GeneratedRoadmap)
@@ -51,7 +52,7 @@ class GeminiChatService:
             .first()
         )
         if not roadmap:
-            return "I don't have a roadmap for this repository yet. Please generate one first."
+            return None
 
         context = ""
 
@@ -88,6 +89,21 @@ class GeminiChatService:
             for stage in roadmap.timeline:
                 context += f"- {stage['title']}: {stage['summary']}\n"
 
+        return context
+
+    async def chat(
+        self,
+        repo_full_name: str,
+        message: str,
+        stage_id: Optional[str] = None,
+    ) -> str:
+        context = self._build_context(repo_full_name, stage_id)
+        if not context:
+            return (
+                "I don't have a roadmap for this repository yet."
+                " Please generate one first."
+            )
+
         # 2. Call Gemini
         prompt = SYSTEM_PROMPT_TEMPLATE.format(
             repo_name=repo_full_name, context=context, user_query=message
@@ -95,12 +111,155 @@ class GeminiChatService:
 
         return await self._call_gemini(prompt)
 
+    async def chat_stream(
+        self,
+        repo_full_name: str,
+        messages: list[dict],
+        stage_id: Optional[str] = None,
+    ):
+        context = self._build_context(repo_full_name, stage_id)
+        if not context:
+            yield self._format_protocol_text(
+                "I don't have a roadmap for this repository yet."
+                " Please generate one first."
+            )
+            return
+
+        # Use the last message from the user
+        user_query = messages[-1]["content"] if messages else ""
+        prompt = SYSTEM_PROMPT_TEMPLATE.format(
+            repo_name=repo_full_name, context=context, user_query=user_query
+        )
+
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generation_config": {
+                "temperature": 0.4,
+                "maxOutputTokens": MAX_OUTPUT_TOKENS,
+            },
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
+        }
+
+        stream_endpoint = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self._model}:streamGenerateContent"
+        )
+
+        logger.info(f"Starting chat stream for {repo_full_name}")
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream(
+                "POST",
+                stream_endpoint,
+                params={"key": self._api_key},
+                json=payload,
+            ) as response:
+                logger.info(f"Gemini stream response status: {response.status_code}")
+                if response.status_code >= 400:
+                    error_text = await response.aread()
+                    logger.error(f"Gemini stream error: {error_text}")
+                    yield self._format_protocol_error(
+                        f"Gemini API error: {response.status_code}"
+                    )
+                    return
+
+                decoder = json.JSONDecoder()
+                buffer = ""
+                has_yielded = False
+                try:
+                    async for chunk in response.aiter_text():
+                        logger.info(f"Received chunk length: {len(chunk)}")
+                        buffer += chunk
+                        while True:
+                            # Skip whitespace
+                            buffer = buffer.lstrip()
+                            if not buffer:
+                                break
+
+                            # Skip array start/end/separators
+                            if buffer[0] in ["[", "]", ","]:
+                                buffer = buffer[1:]
+                                continue
+
+                            try:
+                                obj, idx = decoder.raw_decode(buffer)
+                                # logger.info(f"Parsed object keys: {obj.keys()}")
+
+                                # Process obj
+                                candidates = obj.get("candidates", [])
+                                if candidates:
+                                    parts = (
+                                        candidates[0]
+                                        .get("content", {})
+                                        .get("parts", [])
+                                    )
+                                    if parts:
+                                        text_chunk = parts[0].get("text", "")
+                                        if text_chunk:
+                                            yield self._format_protocol_text(text_chunk)
+                                            has_yielded = True
+                                else:
+                                    # Check for promptFeedback or just metadata
+                                    if "promptFeedback" in obj:
+                                        block_reason = obj["promptFeedback"].get(
+                                            "blockReason"
+                                        )
+                                        if block_reason:
+                                            msg = (
+                                                f"\n[Response blocked: {block_reason}]"
+                                            )
+                                            logger.warning(
+                                                f"Response blocked: {block_reason}"
+                                            )
+                                            yield self._format_protocol_text(msg)
+                                            has_yielded = True
+                                    elif "usageMetadata" in obj:
+                                        logger.info("Received usage metadata")
+                                    else:
+                                        logger.warning(
+                                            f"Unexpected Gemini response chunk: {obj}"
+                                        )
+
+                                buffer = buffer[idx:]
+                            except json.JSONDecodeError:
+                                # Incomplete JSON, wait for more data
+                                break
+                except Exception as e:
+                    logger.error(f"Error during stream iteration: {e}")
+                    yield self._format_protocol_error(f"Stream error: {str(e)}")
+                    return
+
+                if not has_yielded:
+                    logger.warning("Stream finished without yielding any content")
+                    yield self._format_protocol_text("I couldn't generate a response.")
+
+    def _format_protocol_error(self, error: str) -> str:
+        """Format error for Vercel AI data stream v1."""
+        return f"0:{json.dumps('Error: ' + error)}\n"
+
+    def _format_protocol_text(self, text: str) -> str:
+        """Format text chunk for Vercel AI data stream v1."""
+        return f"0:{json.dumps(text)}\n"
+
     def _find_commits_for_window(
         self, repo_full_name: str, window: list[str]
     ) -> list[RepoCommitChunk]:
-        # This is a simplified version. In reality, we might need to traverse the graph or rely on authored_at.
-        # For now, let's fetch all chunks for the repo and filter in python as in gemini.py
-        # Optimization: In a real app, we'd query by range if we had order, or just fetch all (expensive).
+        # This is a simplified version. In reality, we might need to traverse the
+        # graph or rely on authored_at.
+        # For now, let's fetch all chunks for the repo and filter in python as in
+        # gemini.py
+        # Optimization: In a real app, we'd query by range if we had order, or
+        # just fetch all (expensive).
         # Let's try to fetch by repo_full_name and filter.
 
         all_chunks = (
@@ -138,6 +297,18 @@ class GeminiChatService:
                 "temperature": 0.4,
                 "maxOutputTokens": MAX_OUTPUT_TOKENS,
             },
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
         }
 
         try:

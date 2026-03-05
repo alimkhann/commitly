@@ -240,14 +240,15 @@ export function RoadmapCatalogProvider({ children }: { children: ReactNode }) {
     if (!(backendConfigured && isSignedIn)) {
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshUserRepos().catch(() => {
-      // Error handling is done in the function
-    });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshArchivedRepos().catch(() => {
-      // Error handling is done in the function
-    });
+    const timeoutId = window.setTimeout(() => {
+      refreshUserRepos().catch(() => {
+        // Error handling is done in the function
+      });
+      refreshArchivedRepos().catch(() => {
+        // Error handling is done in the function
+      });
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [backendConfigured, isSignedIn, refreshUserRepos, refreshArchivedRepos]);
 
   const upsertRoadmap = useCallback(

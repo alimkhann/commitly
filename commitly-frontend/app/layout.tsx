@@ -1,14 +1,14 @@
 import "@/styles/globals.css";
 
 import { ClerkProvider } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { type ReactNode, Suspense } from "react";
-import HomeBackground from "@/components/layout/home-background";
 import SidebarWrapper from "@/components/layout/sidebar/sidebar-wrapper";
+import { LayoutProvider } from "@/components/providers/layout-provider";
+import { PreferencesProvider } from "@/components/providers/preferences-provider";
 import { RoadmapCatalogProvider } from "@/components/providers/roadmap-catalog-provider";
 
 const inter = Inter({
@@ -38,43 +38,70 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+const isProdRuntime =
+  process.env.NODE_ENV === "production" ||
+  process.env.VERCEL_ENV === "production";
+const hasTestClerkKeyInProd =
+  isProdRuntime && clerkPublishableKey.startsWith("pk_test_");
+
+if (hasTestClerkKeyInProd) {
+  console.error(
+    "[commitly] Production runtime is using a Clerk test publishable key (pk_test_*). Switch to production Clerk keys immediately."
+  );
+}
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider
       appearance={{
-        theme: dark,
         variables: {
-          colorBackground: "#050507",
+          colorBackground: "hsl(var(--background))",
+          colorText: "hsl(var(--foreground))",
           borderRadius: "0.3rem",
         },
         elements: {
-          card: "text-foreground border-none border-white/8 shadow-[0_35px_70px_rgba(0,0,0,0.65)]",
-          formFieldInput: "bg-white/5",
-          headerTitle: "text-white",
-          headerSubtitle: "text-white/70",
+          card: "text-foreground border border-border bg-background shadow-xl",
+          formFieldInput: "bg-background border-border",
+          headerTitle: "text-foreground",
+          headerSubtitle: "text-muted-foreground",
           socialButtonsBlockButton:
-            "text-foreground border border-white/12 hover:bg-white/10 transition-colors",
+            "bg-white text-black border border-black/10 hover:bg-neutral-100 hover:text-black transition-colors",
+          socialButtonsBlockButtonArrow: "text-black",
+          socialButtonsBlockButtonText: "text-black",
+          socialButtonsBlockButton__google: "bg-white text-black",
+          socialButtonsBlockButton__github: "bg-white text-black",
+          socialButtonsBlockButton__apple: "bg-white text-black",
+          socialButtonsProviderIcon: "text-black",
           formButtonPrimary:
-            "bg-primary text-primary-foreground hover:bg-primary/85 shadow-[0_15px_35px_rgba(125,211,252,0.45)] transition-all",
+            "bg-primary text-primary-foreground hover:bg-primary/85 transition-colors",
           footerActionLink: "text-primary hover:text-primary/80",
         },
       }}
     >
-      <html className="dark" lang="en">
+      <html lang="en" suppressHydrationWarning>
         <body
           className={`${inter.variable} ${jetBrainsMono.variable} bg-background text-foreground`}
         >
-          <RoadmapCatalogProvider>
-            <div className="relative flex h-screen bg-background">
-              <HomeBackground />
-              <Suspense fallback={null}>
-                <SidebarWrapper />
-              </Suspense>
-              <main className="relative z-10 flex h-screen flex-1 flex-col overflow-y-auto overflow-x-hidden bg-transparent">
-                {children}
-              </main>
+          {hasTestClerkKeyInProd && (
+            <div className="border-destructive/40 border-b bg-destructive/15 px-4 py-2 text-center text-destructive text-sm">
+              Clerk production key is not configured. Replace `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` with a production key.
             </div>
-          </RoadmapCatalogProvider>
+          )}
+          <PreferencesProvider>
+            <RoadmapCatalogProvider>
+              <LayoutProvider>
+                <div className="flex h-screen w-full overflow-hidden">
+                  <Suspense fallback={null}>
+                    <SidebarWrapper />
+                  </Suspense>
+                  <main className="relative flex h-full flex-1 flex-col overflow-y-auto overflow-x-hidden">
+                    {children}
+                  </main>
+                </div>
+              </LayoutProvider>
+            </RoadmapCatalogProvider>
+          </PreferencesProvider>
           <Analytics />
           <SpeedInsights />
         </body>

@@ -1,25 +1,34 @@
+"use client";
+
+import { usePreferences } from "@/components/providers/preferences-provider";
 import { Badge } from "@/components/ui/badge";
 import { releaseNotes } from "@/data/release-notes";
 
 export default function ReleaseNotesPage() {
+  const { t } = usePreferences();
+
   return (
     <main className="min-h-screen w-full bg-background px-6 py-16">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-12">
-        <header className="rounded-3xl border border-border/60 bg-card/80 p-8 shadow-2xl shadow-black/30">
+        <header className="rounded-3xl border border-border/60 bg-card p-8">
           <p className="text-primary text-sm uppercase tracking-[0.35em]">
-            Changelog
+            {t("changelog", "Changelog")}
           </p>
-          <h1 className="mt-3 font-semibold text-4xl">Release notes</h1>
+          <h1 className="mt-3 font-semibold text-4xl">
+            {t("release_notes_title", "Release notes")}
+          </h1>
           <p className="mt-3 text-base text-muted-foreground">
-            Product updates, bug fixes, and design refreshes. We ship weekly,
-            collect feedback in the app, and keep the roadmap transparent.
+            {t(
+              "release_notes_subtitle",
+              "Product updates, bug fixes, and quality improvements shipped to Commitly."
+            )}
           </p>
         </header>
 
         <section className="space-y-8">
           {releaseNotes.map((entry, index) => (
             <article
-              className="grid gap-4 rounded-3xl border border-border/60 bg-card/70 p-6 shadow-black/25 shadow-lg md:grid-cols-[1fr_2fr]"
+              className="grid gap-4 rounded-3xl border border-border/60 bg-card p-6 md:grid-cols-[1fr_2fr]"
               key={entry.version}
             >
               <div className="flex flex-col gap-2">
@@ -33,7 +42,7 @@ export default function ReleaseNotesPage() {
                 </div>
                 <h2 className="font-semibold text-2xl">{entry.version}</h2>
                 <p className="text-muted-foreground text-sm">
-                  Release {index + 1} of {releaseNotes.length} in this series.
+                  {t("release_entry_progress", "Release")} {index + 1} {t("of", "of")} {releaseNotes.length}
                 </p>
               </div>
 
@@ -41,10 +50,10 @@ export default function ReleaseNotesPage() {
                 <ul className="space-y-3 text-muted-foreground text-sm">
                   {entry.highlights.map((item) => (
                     <li
-                      className="rounded-2xl border border-border/40 bg-background/40 p-3"
-                      key={item}
+                      className="rounded-2xl border border-border/40 bg-background p-3"
+                      key={item.key}
                     >
-                      {item}
+                      {t(item.key, item.fallback)}
                     </li>
                   ))}
                 </ul>

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { usePreferences } from "@/components/providers/preferences-provider";
 
 import { cn } from "@/lib/utils";
 
@@ -10,32 +11,44 @@ type TabSwitchProps = {
 };
 
 export default function TabSwitch({ repoId }: TabSwitchProps) {
-  const pathname = usePathname() || "";
-
-  const tabs = [
-    { label: "Timeline", href: `/repo/${repoId}/timeline` },
-    { label: "Guide", href: `/repo/${repoId}/guide` },
-  ];
+  const { t } = usePreferences();
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view");
+  const fullName = searchParams.get("fullName");
+  const isGuide = view === "guide";
+  const timelineHref = fullName
+    ? `/repo/${repoId}?view=timeline&fullName=${encodeURIComponent(fullName)}`
+    : `/repo/${repoId}?view=timeline`;
+  const guideHref = fullName
+    ? `/repo/${repoId}?view=guide&fullName=${encodeURIComponent(fullName)}`
+    : `/repo/${repoId}?view=guide`;
 
   return (
-    <div className="inline-flex items-center rounded-full border border-border bg-card/60 p-1 text-sm shadow-black/20 shadow-lg backdrop-blur">
-      {tabs.map((tab) => {
-        const isActive = pathname.startsWith(tab.href);
-        return (
-          <Link
-            className={cn(
-              "rounded-full px-6 py-2 font-medium transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            href={tab.href}
-            key={tab.href}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
+    <div className="inline-flex items-center rounded-full border border-border/70 bg-card p-1 text-sm">
+      <Link
+        className={cn(
+          "rounded-full px-6 py-2 font-medium transition-colors",
+          !isGuide
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+        href={timelineHref}
+        replace
+      >
+        {t("timeline", "Timeline")}
+      </Link>
+      <Link
+        className={cn(
+          "rounded-full px-6 py-2 font-medium transition-colors",
+          isGuide
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+        href={guideHref}
+        replace
+      >
+        {t("guide", "Guide")}
+      </Link>
     </div>
   );
 }
