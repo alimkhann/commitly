@@ -4,6 +4,8 @@ Turn a GitHub repo into a structured learning path with hands-on tasks and tiny 
 
 Tutorials tell you what to type. Docs tell you what exists. Neither teaches a real codebase. I built commitly because the fastest way I ever learned a repo was having someone point at files in the right order and refuse to give me the answer.
 
+![commitly landing page](commitly-landing/public/landing.png)
+
 ## How it works
 
 Input: you paste a GitHub repo URL. The backend maps the repo structure, then generates a path of small tasks (read this file, change this function, add this test).
