@@ -2,9 +2,7 @@
 
 Turn a GitHub repo into a structured learning path with hands-on tasks and tiny hints, so you learn by building.
 
-## Why I built this
-
-Tutorials tell you what to type. Docs tell you what exists. Neither teaches a real codebase. Commitly reads a repo and turns it into ordered tasks with just enough hint to keep you moving.
+Tutorials tell you what to type. Docs tell you what exists. Neither teaches a real codebase. I built commitly because the fastest way I ever learned a repo was having someone point at files in the right order and refuse to give me the answer.
 
 ## How it works
 
@@ -36,4 +34,16 @@ supabase/            Edge Functions, migrations, seed
 docs/                product notes
 ```
 
-See `commitly-frontend/README.md` for frontend details.
+See `commitly-frontend/README.md` for frontend details. Local run notes live in `docs/FORDEVS.md`.
+
+## Roadmap
+
+- Better task grounding so generated paths stay honest about hard repos
+- Progress tracking across paths
+- A landing page that shows instead of tells
+
+## Contact
+
+Alimkhan Yergebayev — alimkhan.yergebayev@gmail.com
+
+Project link: [https://github.com/alimkhann/commitly](https://github.com/alimkhann/commitly)
